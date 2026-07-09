@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Shell from '../components/Shell';
 import AddressInput from '../components/AddressInput';
-import DatePicker from '../components/DatePicker';
-import TimePicker from '../components/TimePicker';
+import ScheduleStep from '../components/ScheduleStep';
 import RouteRail from '../components/RouteRail';
 import PhoneInput from '../components/PhoneInput';
 import Icon from '../components/Icon';
@@ -10,19 +9,16 @@ import { api } from '../lib/api';
 
 const STEPS = ['locations', 'when', 'review', 'payment', 'details'];
 
-function combineDateTime(date, time) {
-  if (!date || !time) return null;
-  const d = new Date(date);
-  d.setHours(time.getHours(), time.getMinutes(), 0, 0);
-  return d;
-}
-
 export default function FormFlow({ onBack, onComplete }) {
   const [stepIdx, setStepIdx] = useState(0);
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
-  const [date, setDate] = useState(null);
-  const [time, setTime] = useState(() => { const d = new Date(); d.setHours(8, 0, 0, 0); return d; });
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(8, 0, 0, 0);
+    return d;
+  });
   const [payment, setPayment] = useState('card');
   const [rider, setRider] = useState({ name: '', phone: '', email: '', dialCode: '+1' });
   const [quote, setQuote] = useState(null);
@@ -30,7 +26,6 @@ export default function FormFlow({ onBack, onComplete }) {
   const [error, setError] = useState('');
 
   const step = STEPS[stepIdx];
-  const scheduledAt = useMemo(() => combineDateTime(date, time), [date, time]);
 
   // Fetch fare when entering review. Always attempt — the backend fare model
   // defaults distance when coords are missing, so a typed-only address still
@@ -90,18 +85,7 @@ export default function FormFlow({ onBack, onComplete }) {
         )}
 
         {step === 'when' && (
-          <>
-            <h1 className="title">Pick your time</h1>
-            <p className="subtitle">Rides are scheduled in advance — choose the day and pickup time.</p>
-            <div className="field">
-              <label className="label">Date</label>
-              <DatePicker value={date} onChange={setDate} />
-            </div>
-            <div className="field">
-              <label className="label">Pickup time</label>
-              <TimePicker value={time} onChange={setTime} />
-            </div>
-          </>
+          <ScheduleStep value={scheduledAt} onChange={setScheduledAt} />
         )}
 
         {step === 'review' && (
