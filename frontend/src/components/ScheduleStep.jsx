@@ -24,28 +24,50 @@ function parsePreset(base, preset) {
   return d;
 }
 
-function presetFromDate(d) {
+function formatTime(d) {
   if (!d) return '8:00 AM';
   const h = d.getHours();
   const m = d.getMinutes();
   const ap = h >= 12 ? 'PM' : 'AM';
   let h12 = h % 12; if (h12 === 0) h12 = 12;
-  const label = `${h12}:${String(m).padStart(2, '0')} ${ap}`;
-  return PRESETS.includes(label) ? label : '8:00 AM';
+  return `${h12}:${String(m).padStart(2, '0')} ${ap}`;
+}
+
+// "HH:MM" (24h) <-> Date helpers for the native time input, which lets the
+// rider pick any time instead of being limited to the quick presets.
+function toTimeInputValue(d) {
+  if (!d) return '08:00';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function applyTimeInput(base, hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date(base);
+  d.setHours(h, m, 0, 0);
+  return d;
 }
 
 // value/onChange operate on a single combined Date (date + time).
 export default function ScheduleStep({ value, onChange }) {
   const today = useMemo(() => startOfDay(new Date()), []);
+  const defaultTime = useMemo(() => { const d = new Date(); d.setHours(8, 0, 0, 0); return d; }, []);
+  const time = value || defaultTime;
   const selectedDay = value ? startOfDay(value) : startOfDay(new Date(today.getTime() + 86400000));
   const [weekOffset, setWeekOffset] = useState(0);
-  const preset = presetFromDate(value);
+  const timeLabel = formatTime(time);
+  const [customOpen, setCustomOpen] = useState(() => !PRESETS.includes(timeLabel));
 
   const weekStart = useMemo(() => {
     const d = new Date(today);
     d.setDate(today.getDate() + weekOffset * 7 - d.getDay());
     return d;
   }, [today, weekOffset]);
+
+  const weekEnd = useMemo(() => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + 6);
+    return d;
+  }, [weekStart]);
 
   const days = useMemo(() => {
     const arr = [];
@@ -60,22 +82,38 @@ export default function ScheduleStep({ value, onChange }) {
   const pickDay = (d) => {
     if (d < today) return;
     // keep the current time-of-day, move the date
-    const next = parsePreset(d, preset);
+    const next = new Date(d);
+    next.setHours(time.getHours(), time.getMinutes(), 0, 0);
     onChange(next);
   };
 
   const pickTime = (p) => {
+    setCustomOpen(false);
     onChange(parsePreset(selectedDay, p));
   };
 
-  const weekLabel = weekOffset === 0 ? 'This week' : weekOffset === 1 ? 'Next week' : `In ${weekOffset} weeks`;
+  const pickCustomTime = (hhmm) => {
+    onChange(applyTimeInput(selectedDay, hhmm));
+  };
+
+  // Concrete month + date range (e.g. "Jul 6–12") instead of a relative
+  // "This week / Next week / In N weeks" counter, which reads as a
+  // meaningless "week 13" once the rider pages forward a few times.
+  const weekLabel = useMemo(() => {
+    const startMon = MON[weekStart.getMonth()];
+    const endMon = MON[weekEnd.getMonth()];
+    const yearSuffix = weekEnd.getFullYear() !== today.getFullYear() ? `, ${weekEnd.getFullYear()}` : '';
+    return startMon === endMon
+      ? `${startMon} ${weekStart.getDate()}–${weekEnd.getDate()}${yearSuffix}`
+      : `${startMon} ${weekStart.getDate()} – ${endMon} ${weekEnd.getDate()}${yearSuffix}`;
+  }, [weekStart, weekEnd, today]);
 
   const summaryLabel = () => {
     const isToday = selectedDay.getTime() === today.getTime();
     const isTmrw = selectedDay.getTime() === today.getTime() + 86400000;
     const day = isToday ? 'Today' : isTmrw ? 'Tomorrow'
       : `${DOW_FULL[selectedDay.getDay()]}, ${MON[selectedDay.getMonth()]} ${selectedDay.getDate()}`;
-    return `${day}, ${preset}`;
+    return `${day}, ${timeLabel}`;
   };
 
   return (
@@ -124,11 +162,11 @@ export default function ScheduleStep({ value, onChange }) {
       <div className="rise-2" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 20, padding: 18, boxShadow: 'var(--shadow-card)', marginBottom: 22 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
           <span className="eyebrow">Pickup time</span>
-          <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{preset}</span>
+          <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{timeLabel}</span>
         </div>
         <div style={{ display: 'flex', gap: 7 }}>
           {PRESETS.map((p) => {
-            const on = p === preset;
+            const on = !customOpen && p === timeLabel;
             return (
               <button key={p} onClick={() => pickTime(p)}
                 style={{
@@ -143,6 +181,28 @@ export default function ScheduleStep({ value, onChange }) {
             );
           })}
         </div>
+        <button onClick={() => setCustomOpen((o) => !o)}
+          style={{
+            width: '100%', marginTop: 8, padding: '9px 4px', borderRadius: 11,
+            border: customOpen ? '1.5px solid var(--ink)' : '1.5px dashed var(--line)',
+            background: customOpen ? 'var(--ink)' : 'transparent',
+            color: customOpen ? '#fff' : 'var(--ink-3)',
+            fontSize: 12.5, fontWeight: 600,
+          }}>
+          {customOpen ? 'Using a custom time' : 'Pick a different time'}
+        </button>
+        {customOpen && (
+          <div style={{ marginTop: 12 }}>
+            <input
+              type="time"
+              className="input"
+              value={toTimeInputValue(time)}
+              onChange={(e) => e.target.value && pickCustomTime(e.target.value)}
+              aria-label="Custom pickup time"
+            />
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>Not limited to the presets above \u2014 pick whatever works for your schedule.</p>
+          </div>
+        )}
       </div>
 
       {/* Summary bar */}
