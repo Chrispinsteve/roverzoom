@@ -15,4 +15,12 @@ export default defineConfig({
       '/api': 'http://localhost:4000',
     },
   },
+  preview: {
+    port: 5200,
+    proxy: {
+      // Same forwarding for `vite preview` (serving the production build),
+      // otherwise every /api call 404s against the static file server.
+      '/api': 'http://localhost:4000',
+    },
+  },
 });

@@ -24,15 +24,15 @@ router.post('/', async (req, res) => {
 
   const { distanceMiles, durationMinutes, fare } = estimate(pickup, dropoff);
 
-  // Generate a unique reference (retry a couple of times on the rare collision).
-  let reference = makeReference();
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const exists = await pool.query('SELECT 1 FROM bookings WHERE reference = $1', [reference]);
-    if (exists.rows.length === 0) break;
-    reference = makeReference();
-  }
-
   try {
+    // Generate a unique reference (retry a couple of times on the rare collision).
+    let reference = makeReference();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const exists = await pool.query('SELECT 1 FROM bookings WHERE reference = $1', [reference]);
+      if (exists.rows.length === 0) break;
+      reference = makeReference();
+    }
+
     const result = await pool.query(
       `INSERT INTO bookings (
          reference, pickup_address, pickup_lat, pickup_lng,

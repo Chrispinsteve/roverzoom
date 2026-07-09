@@ -1,13 +1,21 @@
 const BASE = import.meta.env.VITE_API_URL || '';
 
 async function req(path, options = {}) {
-  const res = await fetch(`${BASE}/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE}/api${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch {
+    throw new Error('Can’t reach the server. Check your connection and try again.');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || `Request failed (${res.status})`);
+    const fallback = res.status === 404
+      ? 'That service is unavailable right now. Please try again in a moment.'
+      : 'Something went wrong. Please try again.';
+    const err = new Error(data.error || fallback);
     err.code = data.code;
     err.status = res.status;
     throw err;
