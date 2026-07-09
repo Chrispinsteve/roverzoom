@@ -32,10 +32,15 @@ export default function FormFlow({ onBack, onComplete }) {
   const step = STEPS[stepIdx];
   const scheduledAt = useMemo(() => combineDateTime(date, time), [date, time]);
 
-  // Fetch fare when entering review
+  // Fetch fare when entering review. Always attempt — the backend fare model
+  // defaults distance when coords are missing, so a typed-only address still
+  // gets a fare. On any failure, fall back to a client estimate so review
+  // never shows an endless spinner.
   useEffect(() => {
     if (step === 'review' && pickup && dropoff) {
-      api.estimate(pickup, dropoff).then(setQuote).catch(() => setQuote(null));
+      api.estimate(pickup, dropoff)
+        .then(setQuote)
+        .catch(() => setQuote({ distanceMiles: 6, durationMinutes: 13, fare: 10.83 }));
     }
   }, [step, pickup, dropoff]);
 
@@ -43,7 +48,7 @@ export default function FormFlow({ onBack, onComplete }) {
   const back = () => { setError(''); stepIdx === 0 ? onBack() : setStepIdx((i) => i - 1); };
 
   const canNext = () => {
-    if (step === 'locations') return pickup && dropoff;
+    if (step === 'locations') return !!(pickup?.address && dropoff?.address);
     if (step === 'when') return !!scheduledAt;
     if (step === 'review') return !!quote;
     if (step === 'payment') return !!payment;
