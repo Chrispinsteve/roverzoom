@@ -106,11 +106,15 @@ export default function Landing({ aiEnabled, onContinue, onTalkToBob }) {
           state="idle"
           onClick={aiEnabled ? onTalkToBob : undefined}
         />
-        <p className="landing-bob-sub">
-          {aiEnabled
-            ? '"Pick me up at the office tomorrow at 8am, going to JFK"'
-            : 'AI assistant requires setup'}
-        </p>
+        {aiEnabled ? (
+          <p className="landing-bob-sub">
+            "Pick me up at the office tomorrow at 8am, going to JFK"
+          </p>
+        ) : (
+          <p className="landing-bob-sub" style={{ color: 'var(--ink-4)' }}>
+            AI assistant requires setup
+          </p>
+        )}
       </div>
 
       <p className="center muted" style={{ fontSize: 12.5, marginTop: 'auto', paddingTop: 12, paddingBottom: 8 }}>

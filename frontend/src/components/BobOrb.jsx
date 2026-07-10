@@ -1,110 +1,140 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 
-// Bob — the AI booking assistant. Visual: a realistic floating cosmic cloud
-// (nebula/exploding star) with shifting colors. It pulses gently when idle,
-// intensifies when active (listening/thinking/speaking).
+// Bob — a living cloud of soft smoke, light particles, and moving gradients.
+// Premium. Luxury. Alive. NOT a circle, NOT gaming neon.
 //
-// The effect uses layered radial gradients with CSS animation — no canvas,
-// no external libraries, pure CSS. Colors shift through blues, purples,
-// pinks, and golds like a nebula.
+// Built with layered blurred gradient blobs that drift independently on
+// slow organic timings. Colors: muted blue, dusty purple, soft pink, warm white.
+// The whole thing breathes — a gentle scale pulse that makes it feel alive.
+
+const BLOBS = [
+  // Each blob: position offset, size, colors, animation duration, direction
+  { x: -12, y: -8,  w: 90,  h: 80,  colors: ['#7c8cf8', '#a78bfa'],     dur: 7,  delay: 0,   rotate: true },
+  { x: 14,  y: -6,  w: 85,  h: 75,  colors: ['#c084fc', '#e879a8'],     dur: 9,  delay: 0.5, rotate: true, reverse: true },
+  { x: -4,  y: 10,  w: 95,  h: 70,  colors: ['#93c5fd', '#a5b4fc'],     dur: 8,  delay: 1,   rotate: true },
+  { x: 8,   y: -12, w: 70,  h: 65,  colors: ['#f0abfc', '#fda4af'],     dur: 10, delay: 1.5, rotate: true, reverse: true },
+  { x: 0,   y: 0,   w: 60,  h: 55,  colors: ['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.15)'], dur: 5, delay: 0, rotate: false },
+];
+
+// Floating particles — tiny bright dots that drift upward slowly
+function Particles({ active }) {
+  const particles = useMemo(() =>
+    Array.from({ length: 8 }, (_, i) => ({
+      id: i,
+      x: (Math.random() - 0.5) * 60,
+      delay: Math.random() * 4,
+      dur: 3 + Math.random() * 3,
+      size: 1.5 + Math.random() * 2,
+      color: ['#c4b5fd', '#fbcfe8', '#bfdbfe', '#e9d5ff', '#fecdd3', '#ddd6fe', '#e0e7ff', '#fff'][i],
+    })),
+  []);
+
+  return particles.map((p) => (
+    <span
+      key={p.id}
+      style={{
+        position: 'absolute',
+        width: p.size,
+        height: p.size,
+        borderRadius: '50%',
+        background: p.color,
+        left: `calc(50% + ${p.x}px)`,
+        top: '50%',
+        opacity: active ? 0.8 : 0.4,
+        animation: `bob-float ${p.dur}s ${p.delay}s ease-in-out infinite`,
+        pointerEvents: 'none',
+      }}
+    />
+  ));
+}
 
 export default function BobOrb({ state = 'idle', onClick }) {
-  const [hovered, setHovered] = useState(false);
   const active = state !== 'idle';
-  const label = {
-    idle: 'Talk to Bob',
-    listening: 'Listening…',
-    thinking: 'Thinking…',
-    speaking: 'Bob is speaking…',
-  }[state] || 'Talk to Bob';
+  const breathing = active ? 'bob-breathe-active' : 'bob-breathe';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <button
         onClick={onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        aria-label={label}
+        aria-label="Talk to Bob"
         style={{
           position: 'relative',
-          width: active ? 110 : 90,
-          height: active ? 110 : 90,
-          borderRadius: '50%',
+          width: 120,
+          height: 100,
           border: 'none',
-          cursor: 'pointer',
           background: 'transparent',
-          transition: 'width 0.4s var(--ease), height 0.4s var(--ease)',
-          transform: hovered && !active ? 'scale(1.08)' : 'none',
+          cursor: onClick ? 'pointer' : 'default',
+          animation: `${breathing} 4s ease-in-out infinite`,
         }}
       >
-        {/* Cosmic cloud layers */}
-        <span style={{
-          position: 'absolute', inset: -8, borderRadius: '50%',
-          background: 'radial-gradient(circle at 35% 40%, #7c3aed, #3b82f6 40%, #06b6d4 70%, transparent)',
-          filter: `blur(${active ? 14 : 10}px)`,
-          opacity: active ? 0.9 : 0.7,
-          animation: 'bob-rotate 6s linear infinite',
-        }} />
-        <span style={{
-          position: 'absolute', inset: -6, borderRadius: '50%',
-          background: 'radial-gradient(circle at 65% 60%, #ec4899, #f59e0b 45%, #8b5cf6 80%, transparent)',
-          filter: `blur(${active ? 16 : 12}px)`,
-          opacity: active ? 0.85 : 0.6,
-          animation: 'bob-rotate 8s linear infinite reverse',
-        }} />
-        <span style={{
-          position: 'absolute', inset: -4, borderRadius: '50%',
-          background: 'radial-gradient(circle at 50% 50%, #f472b6, #a78bfa 50%, #38bdf8 90%, transparent)',
-          filter: `blur(${active ? 12 : 8}px)`,
-          opacity: active ? 0.75 : 0.5,
-          animation: 'bob-pulse 3s ease-in-out infinite',
-        }} />
-        {/* Core glow */}
-        <span style={{
-          position: 'absolute', inset: '15%', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.4) 40%, transparent 70%)',
-          animation: active ? 'bob-core-active 1.5s ease-in-out infinite' : 'bob-core 4s ease-in-out infinite',
-        }} />
-
-        {/* Sparkle particles when active */}
-        {active && [0, 1, 2, 3, 4, 5].map((i) => (
-          <span key={i} style={{
-            position: 'absolute',
-            width: 3, height: 3, borderRadius: '50%',
-            background: ['#f472b6', '#a78bfa', '#38bdf8', '#fbbf24', '#34d399', '#f87171'][i],
-            top: '50%', left: '50%',
-            animation: `bob-particle 2s ${i * 0.3}s ease-out infinite`,
-          }} />
+        {/* Smoke blobs */}
+        {BLOBS.map((blob, i) => (
+          <span
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `calc(50% + ${blob.x}px - ${blob.w / 2}px)`,
+              top: `calc(50% + ${blob.y}px - ${blob.h / 2}px)`,
+              width: blob.w,
+              height: blob.h,
+              borderRadius: '42% 58% 55% 45% / 48% 42% 58% 52%',
+              background: `radial-gradient(ellipse at ${30 + i * 10}% ${40 + i * 8}%, ${blob.colors[0]}, ${blob.colors[1]} 70%, transparent)`,
+              filter: `blur(${active ? 16 : 20}px)`,
+              opacity: active ? 0.75 : 0.55,
+              animation: `bob-drift-${i} ${blob.dur}s ${blob.delay}s ease-in-out infinite ${blob.reverse ? 'reverse' : ''}`,
+              mixBlendMode: i === BLOBS.length - 1 ? 'overlay' : 'normal',
+              pointerEvents: 'none',
+              transition: 'opacity 0.6s ease, filter 0.6s ease',
+            }}
+          />
         ))}
+
+        {/* Light particles */}
+        <Particles active={active} />
       </button>
 
-      <span style={{
-        fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
-        animation: active ? 'rz-rise 0.3s var(--ease) both' : 'none',
-      }}>
-        {label}
-      </span>
+      {/* Label */}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Talk to Bob</div>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-4)', marginTop: 2 }}>Your AI Ride Assistant</div>
+      </div>
 
       <style>{`
-        @keyframes bob-rotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        @keyframes bob-breathe {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.04); }
         }
-        @keyframes bob-pulse {
-          0%, 100% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.12); opacity: 0.8; }
+        @keyframes bob-breathe-active {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
         }
-        @keyframes bob-core {
-          0%, 100% { transform: scale(0.9); opacity: 0.7; }
-          50% { transform: scale(1.05); opacity: 1; }
+        @keyframes bob-float {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.4; }
+          50% { transform: translateY(-18px) scale(1.2); opacity: 0.8; }
         }
-        @keyframes bob-core-active {
-          0%, 100% { transform: scale(0.85); opacity: 0.8; }
-          50% { transform: scale(1.15); opacity: 1; }
+        @keyframes bob-drift-0 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          33% { transform: translate(6px, -4px) rotate(8deg) scale(1.06); }
+          66% { transform: translate(-4px, 5px) rotate(-5deg) scale(0.97); }
         }
-        @keyframes bob-particle {
-          0% { transform: translate(0, 0) scale(1); opacity: 1; }
-          100% { transform: translate(${Math.random() > 0.5 ? '' : '-'}${20 + Math.random() * 30}px, -${30 + Math.random() * 40}px) scale(0); opacity: 0; }
+        @keyframes bob-drift-1 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          33% { transform: translate(-7px, 3px) rotate(-6deg) scale(1.04); }
+          66% { transform: translate(5px, -6px) rotate(10deg) scale(0.95); }
+        }
+        @keyframes bob-drift-2 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          33% { transform: translate(4px, 6px) rotate(5deg) scale(1.05); }
+          66% { transform: translate(-6px, -3px) rotate(-8deg) scale(0.96); }
+        }
+        @keyframes bob-drift-3 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+          33% { transform: translate(-5px, -5px) rotate(-7deg) scale(1.03); }
+          66% { transform: translate(7px, 4px) rotate(6deg) scale(0.98); }
+        }
+        @keyframes bob-drift-4 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+          50% { transform: translate(2px, -2px) scale(1.08); opacity: 0.7; }
         }
       `}</style>
     </div>
