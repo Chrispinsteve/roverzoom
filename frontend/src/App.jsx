@@ -8,33 +8,52 @@ import AICheckout from './steps/AICheckout';
 import Confirmation from './steps/Confirmation';
 import { api } from './lib/api';
 
-// Screens: landing → (form | ai → aiCheckout) → confirmation
 export default function App() {
   const [screen, setScreen] = useState('landing');
   const [aiEnabled, setAiEnabled] = useState(false);
   const [draft, setDraft] = useState(null);
   const [booking, setBooking] = useState(null);
+  // Addresses set on the landing page, passed to the form flow
+  const [initPickup, setInitPickup] = useState(null);
+  const [initDropoff, setInitDropoff] = useState(null);
 
   useEffect(() => {
     api.aiStatus().then((s) => setAiEnabled(!!s.configured)).catch(() => setAiEnabled(false));
   }, []);
 
-  const reset = () => { setScreen('landing'); setDraft(null); setBooking(null); };
+  const reset = () => {
+    setScreen('landing');
+    setDraft(null);
+    setBooking(null);
+    setInitPickup(null);
+    setInitDropoff(null);
+  };
 
   if (screen === 'landing') {
     return (
       <Shell step={0} totalSteps={0}>
         <Landing
           aiEnabled={aiEnabled}
-          onPickForm={() => setScreen('form')}
-          onPickAI={() => setScreen('voice')}
+          onContinue={(p, d) => {
+            setInitPickup(p);
+            setInitDropoff(d);
+            setScreen('form');
+          }}
+          onTalkToBob={() => setScreen('voice')}
         />
       </Shell>
     );
   }
 
   if (screen === 'form') {
-    return <FormFlow onBack={reset} onComplete={(b) => { setBooking(b); setScreen('done'); }} />;
+    return (
+      <FormFlow
+        initialPickup={initPickup}
+        initialDropoff={initDropoff}
+        onBack={reset}
+        onComplete={(b) => { setBooking(b); setScreen('done'); }}
+      />
+    );
   }
 
   if (screen === 'voice') {
@@ -42,13 +61,13 @@ export default function App() {
       <VoiceFlow
         onBack={reset}
         onSwitchToText={() => setScreen('ai')}
-        onConfirmDraft={(d) => { setDraft(d); setScreen('aiCheckout'); }}
+        onBookingComplete={(b) => { setBooking(b); setScreen('done'); }}
       />
     );
   }
 
   if (screen === 'ai') {
-    return <AIFlow onBack={reset} onConfirmDraft={(d) => { setDraft(d); setScreen('aiCheckout'); }} />;
+    return <AIFlow onBack={reset} onBookingComplete={(b) => { setBooking(b); setScreen('done'); }} />;
   }
 
   if (screen === 'aiCheckout') {

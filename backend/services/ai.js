@@ -1,15 +1,13 @@
-// Conversational booking parser powered by Claude.
+// Bob — the RoverZoom AI booking assistant, powered by Claude.
 //
-// Uses the Messages API with a single tool ("record_booking") so the model
-// returns STRUCTURED JSON rather than prose we'd have to parse. The model
-// either calls the tool with whatever fields it has extracted (marking
-// missing ones) or asks one concise clarifying question.
-//
-// The API key lives only here, on the server. It is never sent to the client.
+// Bob handles the COMPLETE booking flow conversationally: addresses, date/time,
+// rider details (name, phone, email), payment method, and final confirmation.
+// Uses the Messages API with a single tool ("complete_booking") so the model
+// returns STRUCTURED JSON rather than prose we'd have to parse.
 
 const Anthropic = require('@anthropic-ai/sdk');
 
-const MODEL = 'claude-sonnet-4-6'; // fast + inexpensive; ideal for parsing
+const MODEL = 'claude-sonnet-4-6';
 
 function getClient() {
   const key = process.env.ANTHROPIC_API_KEY;
@@ -17,43 +15,51 @@ function getClient() {
   return new Anthropic({ apiKey: key });
 }
 
-const SYSTEM = `You are the booking assistant for RoverZoom, a premium scheduled-ride service.
-Your job: turn a rider's natural-language request into a structured scheduled booking.
+const SYSTEM = `You are Bob, the friendly and professional AI booking assistant for RoverZoom, a premium scheduled-ride service.
+
+Your job: guide a rider through booking a scheduled ride via natural conversation. You need to collect ALL of these before confirming:
+
+1. PICKUP location (address or recognizable place)
+2. DROPOFF location (destination)
+3. DATE and TIME of pickup (resolve relative times like "tomorrow 8am" to concrete datetimes)
+4. RIDER NAME (their full name)
+5. RIDER PHONE (phone number)
+6. PAYMENT METHOD ("card" or "cash")
+
+Optional: rider email.
 
 Rules:
-- Rides are SCHEDULED in advance. If no date is given, assume the soonest sensible upcoming time and confirm it.
-- Extract: pickup location, dropoff location, and the scheduled date + time.
-- Resolve relative times ("tomorrow at 8am", "in 2 hours", "next Friday evening") into a concrete ISO 8601 datetime using the provided current time.
-- Interpret vague places ("the airport", "my office") by asking a brief clarifying question ONLY if you truly cannot proceed. Prefer to proceed and let the rider correct.
-- Keep replies short, warm, and premium in tone. One question at a time.
-- When you have enough to book (pickup, dropoff, datetime), call the record_booking tool. Otherwise, ask ONE clarifying question and do not call the tool.`;
+- Rides are SCHEDULED in advance, not on-demand.
+- Introduce yourself as Bob on the first message.
+- Be warm, concise, and premium in tone. Short sentences. One question at a time.
+- Ask for the MOST NATURAL information first (usually pickup/dropoff), then date/time, then personal details.
+- Resolve relative times ("tomorrow at 8am", "next Friday evening") into ISO 8601 using the provided current time.
+- If a rider gives multiple pieces at once ("Pick me up at 123 Main tomorrow at 9am, I'm Alex, 555-1234"), extract them all.
+- When you have ALL required fields (pickup, dropoff, datetime, name, phone, payment), call the complete_booking tool. Do NOT call it before you have everything.
+- If something is unclear, ask ONE brief clarifying question.
+- Never ask for information you already have.
+- Keep it conversational. You're a premium concierge, not a form.`;
 
 const TOOL = {
-  name: 'record_booking',
+  name: 'complete_booking',
   description:
-    'Record a scheduled ride once pickup, dropoff, and date/time are known. Only call when you have all three.',
+    'Complete a scheduled ride booking. Call ONLY when you have all required fields: pickup, dropoff, datetime, rider name, phone, and payment method.',
   input_schema: {
     type: 'object',
     properties: {
-      pickup: { type: 'string', description: 'Pickup location as a full address or clear place name' },
-      dropoff: { type: 'string', description: 'Dropoff location as a full address or clear place name' },
-      datetime_iso: {
-        type: 'string',
-        description: 'The scheduled pickup date and time in ISO 8601, resolved to a concrete moment',
-      },
-      confirmation_note: {
-        type: 'string',
-        description: 'A short friendly one-line confirmation to show the rider, e.g. "Got it — booking your ride to JFK tomorrow at 8:00 AM."',
-      },
+      pickup: { type: 'string', description: 'Pickup location as address or place name' },
+      dropoff: { type: 'string', description: 'Dropoff location as address or place name' },
+      datetime_iso: { type: 'string', description: 'Pickup date/time in ISO 8601' },
+      rider_name: { type: 'string', description: 'Rider full name' },
+      rider_phone: { type: 'string', description: 'Rider phone number' },
+      rider_email: { type: 'string', description: 'Rider email (optional, empty string if not given)' },
+      payment_method: { type: 'string', enum: ['card', 'cash'], description: 'Payment method' },
+      confirmation_note: { type: 'string', description: 'A short friendly confirmation message for the rider' },
     },
-    required: ['pickup', 'dropoff', 'datetime_iso', 'confirmation_note'],
+    required: ['pickup', 'dropoff', 'datetime_iso', 'rider_name', 'rider_phone', 'payment_method', 'confirmation_note'],
   },
 };
 
-/**
- * @param {{role:'user'|'assistant', content:string}[]} history
- * @returns {Promise<{type:'question', text:string} | {type:'booking', data:object, note:string}>}
- */
 async function parseBooking(history) {
   const client = getClient();
   if (!client) {
@@ -64,7 +70,6 @@ async function parseBooking(history) {
 
   const now = new Date();
   const messages = history.map((m) => ({ role: m.role, content: m.content }));
-  // Anchor relative-time resolution with the current moment.
   messages.unshift({
     role: 'user',
     content: `(Context: the current date and time is ${now.toString()} / ISO ${now.toISOString()}.)`,
@@ -72,7 +77,7 @@ async function parseBooking(history) {
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 700,
+    max_tokens: 800,
     system: SYSTEM,
     tools: [TOOL],
     messages,
@@ -88,7 +93,7 @@ async function parseBooking(history) {
     .map((b) => b.text)
     .join('\n')
     .trim();
-  return { type: 'question', text: text || 'Could you tell me your pickup, destination, and time?' };
+  return { type: 'question', text: text || "Hey, I'm Bob! Where would you like to go?" };
 }
 
 module.exports = { parseBooking, isConfigured: () => !!process.env.ANTHROPIC_API_KEY };

@@ -2,91 +2,127 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 import { api } from '../lib/api';
 
-// Address field with live search. Key behavior: even if geocoding returns
-// nothing (Nominatim down/rate-limited), the user can still TYPE an address
-// and proceed — we store the raw text with no coords, and the fare model
-// falls back gracefully. The flow must never dead-end here.
+// Address input — the PIVOT of the app. If this fails, booking fails.
+//
+// Rules:
+// 1. When user TYPES, debounce and search. Show dropdown.
+// 2. When user PICKS from dropdown → store address + lat/lng, show green check,
+//    close dropdown, DO NOT re-search (the old bug).
+// 3. If geocoding fails entirely → user can still type a raw address and proceed.
+// 4. When user modifies a previously-picked address → clear the "selected" state
+//    so they know they need to pick again (or continue with typed text).
+
 export default function AddressInput({ label, iconName, placeholder, value, onSelect }) {
   const [query, setQuery] = useState(value?.address || '');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
+  // "confirmed" means the user explicitly picked from the dropdown (has coords).
+  // Distinguished from just typing text (no coords).
+  const [confirmed, setConfirmed] = useState(!!(value?.lat));
   const debounce = useRef(null);
-  // Set right before a programmatic setQuery (initial pre-filled value, or a
-  // dropdown pick) so the effect below can skip re-searching. Comparing
-  // query to value.address doesn't work for this: pick() shows the short
-  // r.label in the field while storing the full r.address, so they never
-  // match and every pick silently re-triggered a search whose result
-  // (address-only, no lat/lng) clobbered the coordinates just selected.
-  const skipNextSearch = useRef(!!value?.address);
+  const justPicked = useRef(false);
+  const wrapperRef = useRef(null);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Search on type (debounced)
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
-    setFailed(false);
-    if (skipNextSearch.current) {
-      skipNextSearch.current = false;
-      setResults([]);
-      setLoading(false);
+
+    // If we just programmatically set the query from a pick, skip searching.
+    if (justPicked.current) {
+      justPicked.current = false;
       return;
     }
+
     if (query.trim().length < 3) {
       setResults([]);
       setLoading(false);
       return;
     }
+
     setLoading(true);
     debounce.current = setTimeout(async () => {
       try {
         const r = await api.geocode(query);
         setResults(r);
-        setOpen(true);
-        setFailed(r.length === 0);
+        setOpen(r.length > 0);
       } catch {
         setResults([]);
-        setFailed(true);
       } finally {
         setLoading(false);
       }
-      // As the user types, keep the parent in sync with a text-only value so
-      // Continue enables even without picking a dropdown result.
+      // Sync the parent with the typed text (no coords) so Continue enables
+      // even without a dropdown pick.
+      setConfirmed(false);
       onSelect({ address: query.trim() });
-    }, 450);
-    return () => debounce.current && clearTimeout(debounce.current);
+    }, 500);
+
+    return () => { if (debounce.current) clearTimeout(debounce.current); };
   }, [query]); // eslint-disable-line
 
+  // User picks a result from the dropdown — this is the critical path.
   const pick = (r) => {
-    skipNextSearch.current = true;
-    onSelect({ address: r.address, lat: r.lat, lng: r.lng });
-    setQuery(r.label);
-    setOpen(false);
+    justPicked.current = true;
+    setQuery(r.label + (r.sublabel ? ', ' + r.sublabel : ''));
     setResults([]);
-    setFailed(false);
+    setOpen(false);
+    setConfirmed(true);
+    setLoading(false);
+    // Store the full address WITH coordinates.
+    onSelect({ address: r.address, lat: r.lat, lng: r.lng });
   };
 
   return (
-    <div className="field">
-      <label className="label">{label}</label>
+    <div className="field" ref={wrapperRef}>
+      {label && <label className="label">{label}</label>}
       <div style={{ position: 'relative' }}>
         <span style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-          <Icon name={iconName} size={20} color="var(--ink-4)" />
+          <Icon name={iconName || 'pin'} size={20} color={confirmed ? 'var(--positive)' : 'var(--ink-4)'} />
         </span>
         <input
           className="input"
-          style={{ paddingLeft: 46 }}
+          style={{
+            paddingLeft: 46,
+            paddingRight: confirmed ? 46 : 16,
+            borderColor: confirmed ? 'var(--positive)' : undefined,
+          }}
           placeholder={placeholder}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => results.length && setOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (confirmed) setConfirmed(false);
+          }}
+          onFocus={() => {
+            if (results.length > 0 && !confirmed) setOpen(true);
+          }}
         />
-        {loading && (
+        {/* Selection indicator */}
+        {confirmed && (
+          <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)' }}>
+            <Icon name="check" size={18} color="var(--positive)" stroke={2.5} />
+          </span>
+        )}
+        {loading && !confirmed && (
           <span style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--ink-4)' }}>…</span>
         )}
       </div>
+
+      {/* Results dropdown */}
       {open && results.length > 0 && (
-        <div className="results">
+        <div className="results" style={{ animation: 'rz-scale-in 0.12s var(--ease) both' }}>
           {results.map((r, i) => (
-            <button key={`${r.lat}-${i}`} className="result-row" onClick={() => pick(r)}>
+            <button key={`${r.lat}-${r.lng}-${i}`} className="result-row" onClick={() => pick(r)}>
               <Icon name="pin" size={18} color="var(--ink-4)" />
               <span style={{ minWidth: 0 }}>
                 <span className="result-title" style={{ display: 'block' }}>{r.label}</span>
@@ -95,11 +131,6 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
             </button>
           ))}
         </div>
-      )}
-      {failed && query.trim().length >= 3 && !loading && (
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-          No matches found — you can type the full address and continue.
-        </p>
       )}
     </div>
   );

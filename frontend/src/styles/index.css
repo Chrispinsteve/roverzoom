@@ -1,9 +1,8 @@
 /* ============================================================
-   RoverZoom — light premium theme.
-   Soft gray canvas, near-black ink, white cards, one accent.
-   Tablet-first: large tap targets, generous spacing.
+   RoverZoom — light premium theme (default).
+   Dark mode via [data-theme="dark"].
    ============================================================ */
-:root {
+:root, [data-theme="light"] {
   --canvas: #f4f4f5;
   --canvas-2: #ececee;
   --card: #ffffff;
@@ -13,7 +12,7 @@
   --ink-4: #a1a1aa;
   --line: #e4e4e7;
   --line-2: #d4d4d8;
-  --accent: #111113;        /* premium mono: black is the accent */
+  --accent: #111113;
   --accent-ink: #ffffff;
   --focus: #2563eb;
   --positive: #16a34a;
@@ -32,6 +31,25 @@
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-theme="dark"] {
+  --canvas: #0c0d0f;
+  --canvas-2: #18191c;
+  --card: #1a1b1e;
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --ink-3: #a1a1aa;
+  --ink-4: #71717a;
+  --line: #27282c;
+  --line-2: #35363a;
+  --accent: #f4f4f5;
+  --accent-ink: #111113;
+  --focus: #60a5fa;
+  --positive: #22c55e;
+  --danger: #ef4444;
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+  --shadow-float: 0 2px 8px rgba(0,0,0,0.3), 0 20px 48px rgba(0,0,0,0.4);
 }
 
 /* --- Entrance motion: screens and elements rise in softly --- */
@@ -127,13 +145,20 @@ input, textarea { font-family: inherit; }
   }
 }
 
-/* Header */
+/* Header — FIXED: never scrolls away */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 16px 24px;
   flex-shrink: 0;
+  background: var(--canvas);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
 }
 .header img { height: 20px; width: auto; display: block; }
 .step-count {
@@ -382,3 +407,118 @@ input, textarea { font-family: inherit; }
 .error-text { color: var(--danger); font-size: 13.5px; margin-top: 8px; }
 .center { text-align: center; }
 .spacer { flex: 1; }
+
+/* ============================================================
+   Landing page — hero + inline inputs + Bob
+   ============================================================ */
+.landing-body {
+  padding-top: 0 !important;
+  gap: 0;
+}
+.landing-hero {
+  text-align: center;
+  padding: 8px 0 0;
+  position: relative;
+}
+.landing-car {
+  width: 82%;
+  max-width: 380px;
+  height: auto;
+  display: block;
+  margin: 0 auto -10px;
+  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.18));
+}
+[data-theme="dark"] .landing-car {
+  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.5));
+}
+.landing-title {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin: 0 0 4px;
+  line-height: 1.1;
+}
+.landing-sub {
+  font-size: 15px;
+  color: var(--ink-3);
+  margin: 0 0 20px;
+}
+.landing-form {
+  padding: 0;
+}
+.landing-where {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+.landing-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 0;
+}
+.landing-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--line-2);
+}
+.landing-divider-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.landing-bob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 4px;
+}
+.landing-bob-sub {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-4);
+  text-align: center;
+  max-width: 300px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   Responsive — phone / tablet / desktop
+   ============================================================ */
+@media (max-width: 480px) {
+  .landing-title { font-size: 26px; }
+  .landing-car { width: 90%; }
+  .stage { border-radius: 0 !important; box-shadow: none !important; border: none !important; }
+  .header { padding: 12px 16px; }
+  .body { padding: 16px 16px 20px; }
+  .title { font-size: 24px; }
+  .btn { padding: 15px; font-size: 15px; }
+}
+
+@media (min-width: 481px) and (max-width: 1024px) {
+  /* Tablet — already the default design target */
+  .landing-car { width: 75%; max-width: 340px; }
+}
+
+@media (min-width: 1025px) {
+  /* Desktop — wider stage, more breathing room */
+  .stage { max-width: 800px; }
+  .landing-title { font-size: 38px; }
+  .landing-car { max-width: 420px; }
+  .body { padding: 24px 36px 32px; }
+}
+
+/* ============================================================
+   Theme toggle button
+   ============================================================ */
+.theme-toggle {
+  transition: transform 0.2s var(--ease);
+}
+.theme-toggle:hover { transform: scale(1.1); }
+.theme-toggle:active { transform: scale(0.95); }

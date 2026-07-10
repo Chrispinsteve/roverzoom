@@ -9,10 +9,11 @@ import { api } from '../lib/api';
 
 const STEPS = ['locations', 'when', 'review', 'payment', 'details'];
 
-export default function FormFlow({ onBack, onComplete }) {
-  const [stepIdx, setStepIdx] = useState(0);
-  const [pickup, setPickup] = useState(null);
-  const [dropoff, setDropoff] = useState(null);
+export default function FormFlow({ initialPickup, initialDropoff, onBack, onComplete }) {
+  const hasInitial = !!(initialPickup?.address && initialDropoff?.address);
+  const [stepIdx, setStepIdx] = useState(hasInitial ? 1 : 0);
+  const [pickup, setPickup] = useState(initialPickup || null);
+  const [dropoff, setDropoff] = useState(initialDropoff || null);
   const [scheduledAt, setScheduledAt] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
