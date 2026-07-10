@@ -13,11 +13,24 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const debounce = useRef(null);
+  // Set right before a programmatic setQuery (initial pre-filled value, or a
+  // dropdown pick) so the effect below can skip re-searching. Comparing
+  // query to value.address doesn't work for this: pick() shows the short
+  // r.label in the field while storing the full r.address, so they never
+  // match and every pick silently re-triggered a search whose result
+  // (address-only, no lat/lng) clobbered the coordinates just selected.
+  const skipNextSearch = useRef(!!value?.address);
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
     setFailed(false);
-    if (query.trim().length < 3 || (value && query === value.address)) {
+    if (skipNextSearch.current) {
+      skipNextSearch.current = false;
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    if (query.trim().length < 3) {
       setResults([]);
       setLoading(false);
       return;
@@ -43,6 +56,7 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   }, [query]); // eslint-disable-line
 
   const pick = (r) => {
+    skipNextSearch.current = true;
     onSelect({ address: r.address, lat: r.lat, lng: r.lng });
     setQuery(r.label);
     setOpen(false);

@@ -164,13 +164,13 @@ export default function ScheduleStep({ value, onChange }) {
           <span className="eyebrow">Pickup time</span>
           <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{timeLabel}</span>
         </div>
-        <div style={{ display: 'flex', gap: 7 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
           {PRESETS.map((p) => {
             const on = !customOpen && p === timeLabel;
             return (
               <button key={p} onClick={() => pickTime(p)}
                 style={{
-                  flex: 1, padding: '10px 4px', borderRadius: 11,
+                  flex: '1 1 72px', padding: '10px 4px', borderRadius: 11,
                   border: on ? '1.5px solid var(--ink)' : '1.5px solid var(--line)',
                   background: on ? 'var(--ink)' : 'var(--card)',
                   color: on ? '#fff' : 'var(--ink-3)',
