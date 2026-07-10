@@ -1,12 +1,11 @@
-// Fare model per the brief: $50 per hour of estimated trip duration.
-// Distance is straight-line (haversine) scaled by a road factor, and duration
-// is derived from an average city speed. Swap in a real routing API later for
-// exact drive distance/time without changing the callers.
+// Fare model: $50 per hour of estimated trip duration.
+// Includes distance cap, human-readable duration, and service-area warning.
 
 const HOURLY_RATE = Number(process.env.HOURLY_RATE) || 50;
-const ROAD_FACTOR = 1.3; // straight-line -> approx road distance
-const AVG_SPEED_MPH = 28; // average incl. stops
-const MIN_FARE = 12; // floor so very short trips aren't trivial
+const ROAD_FACTOR = 1.3;
+const AVG_SPEED_MPH = 28;
+const MIN_FARE = 12;
+const MAX_DISTANCE_MILES = 200; // Service area cap — beyond this, warn the rider.
 
 const EARTH_MILES = 3958.8;
 const toRad = (d) => (d * Math.PI) / 180;
@@ -20,25 +19,37 @@ function haversineMiles(lat1, lng1, lat2, lng2) {
   return EARTH_MILES * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/**
- * @returns {{distanceMiles:number, durationMinutes:number, fare:number}}
- */
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return `${h} hr`;
+  return `${h} hr ${m} min`;
+}
+
 function estimate(pickup, dropoff) {
-  let distanceMiles = 6; // fallback when coords are missing
+  let distanceMiles = 6;
   if (
-    pickup?.lat != null &&
-    pickup?.lng != null &&
-    dropoff?.lat != null &&
-    dropoff?.lng != null
+    pickup?.lat != null && pickup?.lng != null &&
+    dropoff?.lat != null && dropoff?.lng != null
   ) {
     distanceMiles = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) * ROAD_FACTOR;
   }
-  const durationMinutes = Math.max(8, Math.round((distanceMiles / AVG_SPEED_MPH) * 60));
+
+  // Cap at service area max
+  const tooFar = distanceMiles > MAX_DISTANCE_MILES;
+  const cappedMiles = tooFar ? MAX_DISTANCE_MILES : distanceMiles;
+
+  const durationMinutes = Math.max(8, Math.round((cappedMiles / AVG_SPEED_MPH) * 60));
   const fare = Math.max(MIN_FARE, Math.round((durationMinutes / 60) * HOURLY_RATE * 100) / 100);
+
   return {
-    distanceMiles: Math.round(distanceMiles * 10) / 10,
+    distanceMiles: Math.round(cappedMiles * 10) / 10,
     durationMinutes,
+    durationLabel: formatDuration(durationMinutes),
     fare,
+    tooFar,
+    rawDistanceMiles: tooFar ? Math.round(distanceMiles * 10) / 10 : undefined,
   };
 }
 

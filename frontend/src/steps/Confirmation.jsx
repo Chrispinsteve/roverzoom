@@ -3,6 +3,14 @@ import Shell from '../components/Shell';
 import Icon from '../components/Icon';
 import RouteRail from '../components/RouteRail';
 
+function fmtDur(min) {
+  const m = Number(min);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r ? `${h} hr ${r} min` : `${h} hr`;
+}
+
 export default function Confirmation({ booking, onNewBooking }) {
   const [copied, setCopied] = useState(false);
   const when = new Date(booking.scheduled_at);
@@ -48,7 +56,7 @@ export default function Confirmation({ booking, onNewBooking }) {
         <div className="stat-strip rise-3">
           <div className="stat"><div className="k">Date</div><div className="v" style={{ fontSize: 14 }}>{dateStr}</div></div>
           <div className="stat"><div className="k">Time</div><div className="v" style={{ fontSize: 14 }}>{timeStr}</div></div>
-          <div className="stat"><div className="k">Duration</div><div className="v" style={{ fontSize: 14 }}>{booking.duration_minutes} min</div></div>
+          <div className="stat"><div className="k">Duration</div><div className="v" style={{ fontSize: 14 }}>{fmtDur(booking.duration_minutes)}</div></div>
         </div>
 
         <div className="summary rise-3" style={{ marginTop: 4 }}>

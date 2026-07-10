@@ -1,27 +1,75 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AddressInput from '../components/AddressInput';
 import BobOrb from '../components/BobOrb';
-import Icon from '../components/Icon';
+
+// The hero messages cycle through, then rest on "Where To?"
+const SLIDES = [
+  { text: 'Schedule your Ride', sub: '' },
+  { text: 'Premium Chauffeur Service', sub: '' },
+  { text: 'Fixed Pricing', sub: 'No Surge' },
+  { text: 'Professional Drivers', sub: '' },
+  { text: 'Where To?', sub: '', final: true },
+];
+
+const HOLD_MS = 2200; // how long each slide stays visible
+const FADE_MS = 600;  // transition duration
 
 export default function Landing({ aiEnabled, onContinue, onTalkToBob }) {
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
 
+  const slide = SLIDES[slideIdx];
+  const isFinal = slide.final;
   const canContinue = !!(pickup?.address && dropoff?.address);
+
+  // Cycle through slides, stop on the last one
+  useEffect(() => {
+    if (isFinal) return;
+    const holdTimer = setTimeout(() => {
+      setVisible(false); // fade out
+      setTimeout(() => {
+        setSlideIdx((i) => i + 1);
+        setVisible(true); // fade in next
+      }, FADE_MS);
+    }, HOLD_MS);
+    return () => clearTimeout(holdTimer);
+  }, [slideIdx, isFinal]);
 
   return (
     <div className="body landing-body">
-      {/* Hero section with car */}
-      <div className="landing-hero rise">
-        <img src="/car.png" alt="" className="landing-car" />
-        <h1 className="landing-title">Schedule your Ride</h1>
-        <p className="landing-sub">Premium chauffeur service, on your time.</p>
+      {/* Cycling hero text */}
+      <div className="hero-text-zone">
+        <div
+          className="hero-slide"
+          style={{
+            opacity: visible ? 1 : 0,
+            transform: visible ? 'none' : 'translateY(-8px)',
+            transition: `opacity ${FADE_MS}ms var(--ease), transform ${FADE_MS}ms var(--ease)`,
+          }}
+        >
+          <h1 className="hero-headline">{slide.text}</h1>
+          {slide.sub && <p className="hero-subline">{slide.sub}</p>}
+        </div>
+        {/* Dots indicator */}
+        <div className="hero-dots">
+          {SLIDES.map((_, i) => (
+            <span
+              key={i}
+              className={`hero-dot ${i === slideIdx ? 'active' : ''}`}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Where To — address inputs */}
-      <div className="landing-form rise-1">
-        <h2 className="landing-where">Where to?</h2>
+      {/* Car — blends into the canvas */}
+      <div className="landing-car-wrap">
+        <img src="/car.png" alt="" className="landing-car" draggable="false" />
+      </div>
 
+      {/* Inputs — always visible, ready when the hero lands on "Where To?" */}
+      <div className="landing-form">
         <AddressInput
           label="Pickup"
           iconName="pin"
@@ -36,9 +84,8 @@ export default function Landing({ aiEnabled, onContinue, onTalkToBob }) {
           value={dropoff}
           onSelect={setDropoff}
         />
-
         <button
-          className="btn rise-2"
+          className="btn"
           disabled={!canContinue}
           onClick={() => onContinue(pickup, dropoff)}
           style={{ marginTop: 8 }}
@@ -47,15 +94,14 @@ export default function Landing({ aiEnabled, onContinue, onTalkToBob }) {
         </button>
       </div>
 
-      {/* Divider */}
-      <div className="landing-divider rise-2">
+      {/* Divider + Bob */}
+      <div className="landing-divider">
         <span className="landing-divider-line" />
         <span className="landing-divider-text">or</span>
         <span className="landing-divider-line" />
       </div>
 
-      {/* Bob AI assistant */}
-      <div className="landing-bob rise-3">
+      <div className="landing-bob">
         <BobOrb
           state="idle"
           onClick={aiEnabled ? onTalkToBob : undefined}

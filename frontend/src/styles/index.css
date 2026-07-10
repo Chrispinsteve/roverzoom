@@ -415,37 +415,99 @@ input, textarea { font-family: inherit; }
   padding-top: 0 !important;
   gap: 0;
 }
-.landing-hero {
+
+/* Cycling hero text */
+.hero-text-zone {
   text-align: center;
-  padding: 8px 0 0;
-  position: relative;
+  padding: 28px 0 12px;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-.landing-car {
-  width: 82%;
-  max-width: 380px;
-  height: auto;
-  display: block;
-  margin: 0 auto -10px;
-  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.18));
+.hero-slide {
+  will-change: opacity, transform;
 }
-[data-theme="dark"] .landing-car {
-  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.5));
-}
-.landing-title {
-  font-size: 32px;
+.hero-headline {
+  font-size: 34px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ink);
-  margin: 0 0 4px;
-  line-height: 1.1;
+  margin: 0;
+  line-height: 1.15;
 }
-.landing-sub {
-  font-size: 15px;
+.hero-subline {
+  font-size: 18px;
+  font-weight: 500;
   color: var(--ink-3);
-  margin: 0 0 20px;
+  margin: 6px 0 0;
+}
+.hero-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.hero-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-2);
+  transition: background 0.3s, transform 0.3s;
+}
+.hero-dot.active {
+  background: var(--ink);
+  transform: scale(1.3);
+}
+
+/* Car hero section */
+.landing-hero {
+  text-align: center;
+  padding: 0;
+  position: relative;
+  overflow: visible;
+}
+.landing-car-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-bottom: -8px; /* gentle overlap — text starts just as the car fades */
+}
+.landing-car {
+  width: 88%;
+  max-width: 440px;
+  height: auto;
+  display: block;
+  /* NO drop-shadow filter — that looked artificial. 
+     The ambient shadow is a separate element below. */
+  position: relative;
+  z-index: 1;
+}
+/* Ambient ground shadow — the subtle dark ellipse beneath the car.
+   This is what makes it feel like it's sitting ON the surface. */
+.landing-car-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70%;
+  height: 28px;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.04) 50%, transparent 80%);
+  filter: blur(10px);
+  z-index: 0;
+  pointer-events: none;
+}
+[data-theme="dark"] .landing-car-wrap::after {
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 50%, transparent 80%);
+}
+[data-theme="dark"] .landing-car {
+  /* In dark mode, the car is already dark — just subtle glow lift */
+  filter: brightness(1.05);
 }
 .landing-form {
   padding: 0;
+  margin-top: 4px;
 }
 .landing-where {
   font-size: 22px;
@@ -492,8 +554,10 @@ input, textarea { font-family: inherit; }
    Responsive — phone / tablet / desktop
    ============================================================ */
 @media (max-width: 480px) {
-  .landing-title { font-size: 26px; }
-  .landing-car { width: 90%; }
+  .hero-headline { font-size: 26px; }
+  .hero-text-zone { min-height: 90px; padding-top: 18px; }
+  .landing-car { width: 95%; max-width: none; }
+  .landing-car-wrap { margin-bottom: -20px; }
   .stage { border-radius: 0 !important; box-shadow: none !important; border: none !important; }
   .header { padding: 12px 16px; }
   .body { padding: 16px 16px 20px; }
@@ -502,15 +566,13 @@ input, textarea { font-family: inherit; }
 }
 
 @media (min-width: 481px) and (max-width: 1024px) {
-  /* Tablet — already the default design target */
-  .landing-car { width: 75%; max-width: 340px; }
+  .landing-car { width: 80%; max-width: 400px; }
 }
 
 @media (min-width: 1025px) {
-  /* Desktop — wider stage, more breathing room */
   .stage { max-width: 800px; }
-  .landing-title { font-size: 38px; }
-  .landing-car { max-width: 420px; }
+  .hero-headline { font-size: 42px; }
+  .landing-car { max-width: 480px; }
   .body { padding: 24px 36px 32px; }
 }
 

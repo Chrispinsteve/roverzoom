@@ -36,7 +36,7 @@ export default function FormFlow({ initialPickup, initialDropoff, onBack, onComp
     if (step === 'review' && pickup && dropoff) {
       api.estimate(pickup, dropoff)
         .then(setQuote)
-        .catch(() => setQuote({ distanceMiles: 6, durationMinutes: 13, fare: 10.83 }));
+        .catch(() => setQuote({ distanceMiles: 6, durationMinutes: 13, durationLabel: '13 min', fare: 10.83, tooFar: false }));
     }
   }, [step, pickup, dropoff]);
 
@@ -100,15 +100,20 @@ export default function FormFlow({ initialPickup, initialDropoff, onBack, onComp
 
             {quote ? (
               <>
+                {quote.tooFar && (
+                  <div className="rise-1" style={{ padding: '12px 16px', background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 'var(--r-md)', marginBottom: 16, fontSize: 13.5, color: 'var(--danger)', lineHeight: 1.5 }}>
+                    This trip is {quote.rawDistanceMiles} mi — beyond our typical service area ({200} mi). The fare shown is capped. Please contact us for long-distance arrangements.
+                  </div>
+                )}
                 <div className="stat-strip rise-2">
                   <div className="stat"><div className="k">Distance</div><div className="v">{quote.distanceMiles} mi</div></div>
-                  <div className="stat"><div className="k">Duration</div><div className="v">{quote.durationMinutes} min</div></div>
+                  <div className="stat"><div className="k">Duration</div><div className="v">{quote.durationLabel || quote.durationMinutes + ' min'}</div></div>
                   <div className="stat"><div className="k">Rate</div><div className="v">$50/hr</div></div>
                 </div>
                 <div className="fare-hero rise-3">
                   <div className="eyebrow" style={{ marginBottom: 6 }}>Estimated fare</div>
                   <div className="fare-amount">${quote.fare.toFixed(2)}</div>
-                  <div className="fare-math">{quote.durationMinutes} min × $50 / hour</div>
+                  <div className="fare-math">{quote.durationLabel || quote.durationMinutes + ' min'} × $50 / hour</div>
                 </div>
                 <p className="muted rise-3" style={{ fontSize: 12.5, marginTop: 14 }}>Tolls and extra fees may apply.</p>
               </>
