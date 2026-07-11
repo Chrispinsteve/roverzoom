@@ -1,6 +1,6 @@
 const BASE = import.meta.env.VITE_API_URL || '';
 
-async function req(path, options = {}) {
+export async function req(path, options = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/api${path}`, {

@@ -726,6 +726,39 @@ input, textarea { font-family: inherit; }
 }
 .drv-danger-btn:hover { box-shadow: 0 8px 20px rgba(239,68,68,0.18); }
 
+/* Schedule screen: My Schedule / Available Trips tabs + agenda rows */
+.drv-tabs {
+  display: flex; gap: 4px; margin-bottom: 20px;
+  background: var(--canvas); padding: 4px; border-radius: var(--r-md); border: 1px solid var(--line);
+}
+.drv-tab {
+  flex: 1; padding: 10px; border-radius: var(--r-sm);
+  font-size: 14px; font-weight: 600; color: var(--ink-3);
+}
+.drv-tab.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-card); }
+
+.drv-trip-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 14px 16px; margin-bottom: 10px; text-align: left;
+}
+.drv-trip-row:disabled { opacity: 0.5; }
+.drv-trip-body { flex: 1; min-width: 0; }
+.drv-trip-time { font-size: 13px; font-weight: 700; color: var(--ink); }
+.drv-trip-route {
+  font-size: 14px; color: var(--ink-2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.drv-trip-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.drv-trip-claim {
+  flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--ink);
+  padding: 8px 14px; border: 1.5px solid var(--line-2); border-radius: var(--r-sm);
+}
+.drv-trip-status {
+  flex-shrink: 0; font-size: 11.5px; font-weight: 600; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+
 /* ============================================================
    Theme toggle button
    ============================================================ */

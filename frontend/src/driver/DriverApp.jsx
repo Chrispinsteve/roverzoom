@@ -6,6 +6,7 @@ import NavigateToPickup from './screens/NavigateToPickup';
 import PassengerPickup from './screens/PassengerPickup';
 import OnTrip from './screens/OnTrip';
 import TripComplete from './screens/TripComplete';
+import Schedule from './screens/Schedule';
 
 const DRIVER = { name: 'Michael Anderson', rating: 4.98 };
 
@@ -60,8 +61,13 @@ export default function DriverApp({ onExit }) {
         payoutDate={payoutDate}
         onToggleOnline={() => setOnline((v) => !v)}
         onExit={onExit}
+        onOpenSchedule={() => setStage('schedule')}
       />
     );
+  }
+
+  if (stage === 'schedule') {
+    return <Schedule onBack={() => setStage('dashboard')} />;
   }
 
   if (stage === 'request') {

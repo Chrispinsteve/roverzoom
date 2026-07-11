@@ -5,6 +5,7 @@ const cors = require('cors');
 const quoteRoutes = require('./routes/quote');
 const bookingRoutes = require('./routes/bookings');
 const aiRoutes = require('./routes/ai');
+const driverRoutes = require('./routes/driver');
 
 const app = express();
 app.use(cors());
@@ -14,6 +15,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, service: 'roverzoom-ap
 app.use('/api', quoteRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/driver', driverRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars

@@ -52,9 +52,16 @@ function MenuButton({ onExit }) {
   );
 }
 
-export default function Dashboard({ driver, online, earningsToday, ridesCompleted, payoutDate, onToggleOnline, onExit }) {
+export default function Dashboard({ driver, online, earningsToday, ridesCompleted, payoutDate, onToggleOnline, onExit, onOpenSchedule }) {
   return (
-    <DriverShell rightSlot={<MenuButton onExit={onExit} />}>
+    <DriverShell rightSlot={
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="drv-icon-btn" aria-label="Schedule" onClick={onOpenSchedule}>
+          <Icon name="calendar" size={18} color="var(--ink)" />
+        </button>
+        <MenuButton onExit={onExit} />
+      </div>
+    }>
       <div className="body">
         <div className="drv-profile rise">
           <Avatar name={driver.name} size={56} />
