@@ -605,6 +605,128 @@ input, textarea { font-family: inherit; }
 }
 
 /* ============================================================
+   Driver mode — always dark (scoped via data-theme="dark" on
+   DriverShell's wrapper). Reuses .stage/.header/.body/.btn/.summary/
+   .stat-strip/.route-rail/.eyebrow from above; only driver-specific
+   pieces are defined here.
+   ============================================================ */
+.drv-icon-btn {
+  width: 40px; height: 40px; min-width: 40px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1.5px solid var(--line-2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.drv-icon-btn:active { transform: scale(0.92); }
+
+.drv-profile { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.drv-profile-name { font-size: 18px; font-weight: 700; color: var(--ink); }
+.drv-profile-meta { display: flex; align-items: center; gap: 10px; margin-top: 3px; font-size: 13.5px; color: var(--ink-3); }
+.drv-verified { display: flex; align-items: center; gap: 4px; }
+
+.drv-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 16px 18px 15px;
+  box-shadow: var(--shadow-card); margin-bottom: 12px;
+}
+.drv-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+.drv-card-label { font-size: 13px; font-weight: 500; color: var(--ink-3); }
+.drv-card-icon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--canvas); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.drv-card-value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.drv-card-sub { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+
+.drv-go-btn { display: flex; align-items: center; justify-content: center; gap: 9px; }
+.drv-go-caption { text-align: center; font-size: 13px; color: var(--positive); margin: 10px 0 0; }
+
+.drv-rail-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+
+/* Decorative schematic route map (no real map provider wired up) */
+.drv-map {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #14161a 0%, #1c1e22 100%);
+  overflow: hidden;
+}
+.drv-map-svg { width: 100%; height: 100%; display: block; }
+.drv-map-route-shadow { fill: none; stroke: rgba(0,0,0,0.5); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.drv-map-route { fill: none; stroke: rgba(255,255,255,0.9); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.drv-map-label {
+  position: absolute; transform: translate(-50%, -50%);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(255,255,255,0.32);
+}
+.drv-map-car {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 28px; height: 28px; border-radius: 50%; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.drv-map-square {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 12px; height: 12px; border-radius: 3px; background: #fff;
+  box-shadow: 0 0 0 5px rgba(255,255,255,0.15);
+}
+.drv-map-fabs {
+  position: absolute; top: 14px; right: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.drv-map-fab {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(12,13,15,0.6); border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Turn-by-turn instruction banner */
+.drv-instruction {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 15px 18px;
+  box-shadow: var(--shadow-card); margin-bottom: 16px;
+}
+.drv-instruction-icon {
+  width: 42px; height: 42px; min-width: 42px; border-radius: 50%;
+  background: var(--ink); display: flex; align-items: center; justify-content: center;
+}
+.drv-instruction-body { flex: 1; min-width: 0; }
+.drv-instruction-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.drv-instruction-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.drv-instruction-meta { font-size: 14px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+.drv-instruction-line { font-size: 13.5px; color: var(--ink-3); margin-top: 2px; }
+
+/* Passenger identity row */
+.drv-passenger-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 14px 16px;
+  box-shadow: var(--shadow-card); margin-bottom: 16px;
+}
+.drv-passenger-info { flex: 1; min-width: 0; }
+.drv-passenger-name { font-size: 15.5px; font-weight: 600; color: var(--ink); }
+.drv-passenger-rating { font-size: 13px; color: var(--ink-3); margin-top: 2px; }
+.drv-passenger-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.drv-passenger-right { text-align: right; flex-shrink: 0; }
+.drv-eta-value { font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+/* Positive checkmark burst (pickup / trip complete) */
+.drv-check-pop {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--positive); display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 16px; animation: rz-pop 0.5s var(--ease-spring) both;
+}
+
+.drv-danger-btn {
+  background: transparent; color: var(--danger);
+  border: 1.5px solid var(--danger);
+}
+.drv-danger-btn:hover { box-shadow: 0 8px 20px rgba(239,68,68,0.18); }
+
+/* ============================================================
    Theme toggle button
    ============================================================ */
 .theme-toggle {

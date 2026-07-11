@@ -26,13 +26,24 @@ const P = {
   headset: 'M4 13v-1a8 8 0 0 1 16 0v1M4 13a2 2 0 0 0 2 2h1v-5H6a2 2 0 0 0-2 2v1zM20 13a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2v1zM18 15v1a3 3 0 0 1-3 3h-3',
   clockCheck: 'M12 7v5l2 1M20.5 12a8.5 8.5 0 1 1-5-7.7M16 15l2 2 4-4',
   car: 'M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11M5 11h14v5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-5zM7.5 14h.01M16.5 14h.01',
+  gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2.1-1.6-2-3.4-2.5 1a7.7 7.7 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.7 7.7 0 0 0-1.7 1l-2.5-1-2 3.4L6 10a7.6 7.6 0 0 0-.1 1 7.6 7.6 0 0 0 .1 1l-2.1 1.6 2 3.4 2.5-1a7.7 7.7 0 0 0 1.7 1l.4 2.9h4l.4-2.9a7.7 7.7 0 0 0 1.7-1l2.5 1 2-3.4L19.4 13z',
+  menu: 'M4 7h16M4 12h16M4 17h16',
+  power: 'M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0',
+  bars: 'M6 20V12M12 20V8M18 20V4',
+  wallet: 'M3 7a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zM3 10h18M16 14h.01',
+  phone: 'M5 4h3l2 5-2.2 1.3a11.5 11.5 0 0 0 5.9 5.9L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
+  message: 'M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
+  arrowUp: 'M12 19V5M5 12l7-7 7 7',
+  star: 'M12 2.5l3 6.5 7 .9-5.2 4.9 1.4 6.9L12 17.8 5.8 21.7l1.4-6.9L2 9.9l7-.9L12 2.5z',
+  play: 'M8 5.5l11 6.5-11 6.5v-13z',
+  navArrow: 'M3 11l17.5-8-8 17.5-2-7.5-7.5-2z',
 };
 
-export default function Icon({ name, size = 22, color = 'currentColor', stroke = 1.8 }) {
+export default function Icon({ name, size = 22, color = 'currentColor', stroke = 1.8, filled = false }) {
   const d = P[name];
   if (!d) return null;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : 'none'} stroke={color}
       strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
       aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
       <path d={d} />
