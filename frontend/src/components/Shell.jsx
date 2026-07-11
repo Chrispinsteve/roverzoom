@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import Icon from './Icon';
 
 export default function Shell({ step, totalSteps, children }) {
   const [theme, setTheme] = useState(() => {
-    // Read what the blocking script already set (prevents mismatch)
     if (typeof document !== 'undefined') {
       return document.documentElement.getAttribute('data-theme') || 'light';
     }
@@ -12,7 +12,6 @@ export default function Shell({ step, totalSteps, children }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('rz-theme', theme);
-    // Update meta theme-color for mobile browser chrome
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c0d0f' : '#f4f4f5');
   }, [theme]);
@@ -33,7 +32,12 @@ export default function Shell({ step, totalSteps, children }) {
               className="theme-toggle"
               aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
             >
-              {theme === 'light' ? '🌙' : '☀️'}
+              <Icon
+                name={theme === 'light' ? 'moon' : 'sun'}
+                size={20}
+                color="var(--ink)"
+                stroke={1.8}
+              />
             </button>
           </div>
         </div>

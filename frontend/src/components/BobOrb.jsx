@@ -19,13 +19,13 @@ const BLOBS = [
 // Floating particles — tiny bright dots that drift upward slowly
 function Particles({ active }) {
   const particles = useMemo(() =>
-    Array.from({ length: 8 }, (_, i) => ({
+    Array.from({ length: 16 }, (_, i) => ({
       id: i,
-      x: (Math.random() - 0.5) * 60,
+      x: (Math.random() - 0.5) * 80,
       delay: Math.random() * 4,
       dur: 3 + Math.random() * 3,
-      size: 1.5 + Math.random() * 2,
-      color: ['#c4b5fd', '#fbcfe8', '#bfdbfe', '#e9d5ff', '#fecdd3', '#ddd6fe', '#e0e7ff', '#fff'][i],
+      size: 2 + Math.random() * 2.5,
+      color: ['#c4b5fd','#fbcfe8','#bfdbfe','#e9d5ff','#fecdd3','#ddd6fe','#e0e7ff','#fff','#c7d2fe','#fce7f3','#a5b4fc','#f9a8d4','#bae6fd','#d8b4fe','#fda4af','#e2e8f0'][i],
     })),
   []);
 
@@ -40,7 +40,7 @@ function Particles({ active }) {
         background: p.color,
         left: `calc(50% + ${p.x}px)`,
         top: '50%',
-        opacity: active ? 0.8 : 0.4,
+        opacity: active ? 0.9 : 0.55,
         animation: `bob-float ${p.dur}s ${p.delay}s ease-in-out infinite`,
         pointerEvents: 'none',
       }}
@@ -59,8 +59,8 @@ export default function BobOrb({ state = 'idle', onClick }) {
         aria-label="Talk to Bob"
         style={{
           position: 'relative',
-          width: 120,
-          height: 100,
+          width: 100,
+          height: 80,
           border: 'none',
           background: 'transparent',
           cursor: onClick ? 'pointer' : 'default',
@@ -110,7 +110,7 @@ export default function BobOrb({ state = 'idle', onClick }) {
         }
         @keyframes bob-float {
           0%, 100% { transform: translateY(0) scale(1); opacity: 0.4; }
-          50% { transform: translateY(-18px) scale(1.2); opacity: 0.8; }
+          50% { transform: translateY(-24px) scale(1.2); opacity: 0.8; }
         }
         @keyframes bob-drift-0 {
           0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }

@@ -160,14 +160,14 @@ input, textarea { font-family: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 10px 24px;
   flex-shrink: 0;
   background: var(--canvas);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
-.header img { height: 20px; width: auto; display: block; }
+.header img { height: 18px; width: auto; display: block; }
 .step-count {
   font-size: 13px;
   font-weight: 500;
@@ -215,7 +215,7 @@ input, textarea { font-family: inherit; }
 }
 
 /* Inputs */
-.field { margin-bottom: 18px; }
+.field { margin-bottom: 12px; }
 .label {
   display: block;
   font-size: 13px;
@@ -427,8 +427,8 @@ input, textarea { font-family: inherit; }
 /* Cycling hero text */
 .hero-text-zone {
   text-align: center;
-  padding: 28px 0 12px;
-  min-height: 110px;
+  padding: 12px 0 4px;
+  min-height: 68px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -438,7 +438,7 @@ input, textarea { font-family: inherit; }
   will-change: opacity, transform;
 }
 .hero-headline {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ink);
@@ -446,15 +446,15 @@ input, textarea { font-family: inherit; }
   line-height: 1.15;
 }
 .hero-subline {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--ink-3);
-  margin: 6px 0 0;
+  margin: 4px 0 0;
 }
 .hero-dots {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 7px;
+  margin-top: 10px;
 }
 .hero-dot {
   width: 6px;
@@ -479,43 +479,39 @@ input, textarea { font-family: inherit; }
   position: relative;
   display: flex;
   justify-content: center;
-  margin-bottom: -8px; /* gentle overlap — text starts just as the car fades */
+  margin-bottom: -12px;
 }
 .landing-car {
-  width: 88%;
-  max-width: 440px;
+  width: 72%;
+  max-width: 320px;
   height: auto;
   display: block;
-  /* NO drop-shadow filter — that looked artificial. 
-     The ambient shadow is a separate element below. */
   position: relative;
   z-index: 1;
 }
-/* Ambient ground shadow — the subtle dark ellipse beneath the car.
-   This is what makes it feel like it's sitting ON the surface. */
+/* Ambient ground shadow */
 .landing-car-wrap::after {
   content: '';
   position: absolute;
-  bottom: 12px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  width: 70%;
-  height: 28px;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.04) 50%, transparent 80%);
-  filter: blur(10px);
+  width: 60%;
+  height: 20px;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.03) 50%, transparent 80%);
+  filter: blur(8px);
   z-index: 0;
   pointer-events: none;
 }
 [data-theme="dark"] .landing-car-wrap::after {
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.10) 50%, transparent 80%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.08) 50%, transparent 80%);
 }
 [data-theme="dark"] .landing-car {
-  /* In dark mode, the car is already dark — just subtle glow lift */
   filter: brightness(1.05);
 }
 .landing-form {
   padding: 0;
-  margin-top: 4px;
+  margin-top: 0;
 }
 .landing-where {
   font-size: 22px;
@@ -528,7 +524,7 @@ input, textarea { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 20px 0;
+  margin: 12px 0;
 }
 .landing-divider-line {
   flex: 1;
@@ -546,7 +542,7 @@ input, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0 4px;
+  padding: 0 0 4px;
 }
 .landing-bob-sub {
   font-size: 13px;

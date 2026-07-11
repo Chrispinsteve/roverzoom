@@ -117,9 +117,6 @@ export default function Landing({ aiEnabled, onContinue, onTalkToBob }) {
         )}
       </div>
 
-      <p className="center muted" style={{ fontSize: 12.5, marginTop: 'auto', paddingTop: 12, paddingBottom: 8 }}>
-        No account required · Fixed fare, no surge
-      </p>
     </div>
   );
 }
