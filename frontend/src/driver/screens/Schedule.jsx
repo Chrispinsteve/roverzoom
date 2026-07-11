@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import DriverShell from '../DriverShell';
+import MonthCalendar from '../components/MonthCalendar';
 import { driverApi } from '../../lib/driverApi';
 import { getDriverId } from '../driverSession';
 
@@ -59,6 +60,7 @@ export default function Schedule({ onBack }) {
   const [available, setAvailable] = useState(null);
   const [error, setError] = useState('');
   const [claimingId, setClaimingId] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null); // date key from MonthCalendar, or null
   const driverId = getDriverId();
 
   const load = async () => {
@@ -96,12 +98,34 @@ export default function Schedule({ onBack }) {
     }
   };
 
-  const list = tab === 'mine' ? mine : available;
+  // Confirmed = already assigned to this driver (My Schedule). Pending =
+  // still unclaimed by anyone (Available Trips). A day can be both.
+  const confirmedDates = new Set((mine || []).filter((b) => b.status !== 'canceled').map((b) => new Date(b.scheduled_at).toDateString()));
+  const pendingDates = new Set((available || []).map((b) => new Date(b.scheduled_at).toDateString()));
+
+  const baseList = tab === 'mine' ? mine : available;
+  const list = selectedDate ? (baseList || []).filter((b) => new Date(b.scheduled_at).toDateString() === selectedDate) : baseList;
 
   return (
     <DriverShell onBack={onBack}>
       <div className="body">
         <h1 className="title rise" style={{ fontSize: 26 }}>Schedule</h1>
+
+        <div className="rise-1">
+          <MonthCalendar
+            confirmedDates={confirmedDates}
+            pendingDates={pendingDates}
+            selectedKey={selectedDate}
+            onSelectDate={setSelectedDate}
+          />
+        </div>
+
+        {selectedDate && (
+          <div className="drv-cal-filter-chip rise-1">
+            Showing {new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+            <button onClick={() => setSelectedDate(null)}>Clear</button>
+          </div>
+        )}
 
         <div className="drv-tabs rise-1">
           <button className={`drv-tab ${tab === 'mine' ? 'active' : ''}`} onClick={() => setTab('mine')}>My Schedule</button>
@@ -114,7 +138,7 @@ export default function Schedule({ onBack }) {
 
         {list && list.length === 0 && (
           <p className="muted center" style={{ marginTop: 24 }}>
-            {tab === 'mine' ? 'No upcoming trips yet.' : 'No trips available right now.'}
+            {selectedDate ? 'No trips on this date.' : (tab === 'mine' ? 'No upcoming trips yet.' : 'No trips available right now.')}
           </p>
         )}
 
