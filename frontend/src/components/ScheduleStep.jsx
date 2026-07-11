@@ -142,7 +142,7 @@ export default function ScheduleStep({ value, onChange }) {
             return (
               <button key={i} disabled={past} onClick={() => pickDay(d)}
                 style={{
-                  padding: '9px 0', borderRadius: 12, border: 'none',
+                  padding: '12px 0', borderRadius: 12, minHeight: 48, border: 'none',
                   background: on ? 'var(--ink)' : 'transparent',
                   cursor: past ? 'default' : 'pointer', opacity: past ? 0.3 : 1,
                 }}>
@@ -170,7 +170,7 @@ export default function ScheduleStep({ value, onChange }) {
             return (
               <button key={p} onClick={() => pickTime(p)}
                 style={{
-                  flex: '1 1 72px', padding: '10px 4px', borderRadius: 11,
+                  flex: '1 1 72px', padding: '12px 6px', borderRadius: 11, minHeight: 48,
                   border: on ? '1.5px solid var(--ink)' : '1.5px solid var(--line)',
                   background: on ? 'var(--ink)' : 'var(--card)',
                   color: on ? '#fff' : 'var(--ink-3)',
@@ -183,7 +183,7 @@ export default function ScheduleStep({ value, onChange }) {
         </div>
         <button onClick={() => setCustomOpen((o) => !o)}
           style={{
-            width: '100%', marginTop: 8, padding: '9px 4px', borderRadius: 11,
+            width: '100%', marginTop: 8, padding: '12px 6px', borderRadius: 11, minHeight: 48,
             border: customOpen ? '1.5px solid var(--ink)' : '1.5px dashed var(--line)',
             background: customOpen ? 'var(--ink)' : 'transparent',
             color: customOpen ? '#fff' : 'var(--ink-3)',

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 
-export default function Shell({ step, totalSteps, children, noPadHeader }) {
+export default function Shell({ step, totalSteps, children }) {
   const [theme, setTheme] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('rz-theme') || 'light';
+    // Read what the blocking script already set (prevents mismatch)
+    if (typeof document !== 'undefined') {
+      return document.documentElement.getAttribute('data-theme') || 'light';
     }
     return 'light';
   });
@@ -11,6 +12,9 @@ export default function Shell({ step, totalSteps, children, noPadHeader }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('rz-theme', theme);
+    // Update meta theme-color for mobile browser chrome
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c0d0f' : '#f4f4f5');
   }, [theme]);
 
   const toggle = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
@@ -23,17 +27,11 @@ export default function Shell({ step, totalSteps, children, noPadHeader }) {
         <div className="header">
           <img src={logoSrc} alt="RoverZoom" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {totalSteps > 0 && <span className="step-count">Step {step} of {totalSteps}</span>}
+            {totalSteps > 0 && <span className="step-count">{step} / {totalSteps}</span>}
             <button
               onClick={toggle}
+              className="theme-toggle"
               aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-              style={{
-                width: 38, height: 38, borderRadius: 10,
-                border: '1.5px solid var(--line-2)',
-                background: 'var(--card)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', fontSize: 18,
-              }}
             >
               {theme === 'light' ? '🌙' : '☀️'}
             </button>

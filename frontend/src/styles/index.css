@@ -101,7 +101,14 @@
 .route-rail .rail-value { font-size: 15px; font-weight: 500; color: var(--ink); }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body, #root { height: 100%; margin: 0; }
+
+/* Smooth 200ms theme transition on EVERY element */
+*, *::before, *::after {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease,
+              box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+html, body, #root { height: 100%; margin: 0; overflow-x: hidden; }
 /* Safety net: a single overflowing element inside any screen should clip
    locally, not drag the whole app into horizontal scroll on phones. */
 html, body { overflow-x: hidden; }
@@ -116,33 +123,33 @@ body {
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
 input, textarea { font-family: inherit; }
 
-/* App frame: centered column that scales up to a tablet card on wide screens */
+/* ============================================================
+   LAYOUT — Tablet Landscape is the DEFAULT design target.
+   Adapts: portrait → phone → desktop.
+   ============================================================ */
 .app {
   min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  overflow-x: hidden; /* NEVER horizontal scroll */
 }
 
 .stage {
   width: 100%;
-  max-width: 720px;
+  max-width: 860px;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--canvas);
   position: relative;
-}
-
-@media (min-width: 760px) {
-  .app { padding: 32px 0; }
-  .stage {
-    min-height: min(940px, calc(100dvh - 64px));
-    border-radius: 32px;
-    box-shadow: var(--shadow-pop);
-    overflow: hidden;
-    border: 1px solid var(--line);
-  }
+  /* Card treatment — the default for tablets */
+  border-radius: 28px;
+  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--line);
+  margin: 20px auto;
+  min-height: min(960px, calc(100dvh - 40px));
+  overflow: hidden;
 }
 
 /* Header — FIXED: never scrolls away */
@@ -233,16 +240,16 @@ input, textarea { font-family: inherit; }
   box-shadow: 0 0 0 4px rgba(17,17,19,0.06);
 }
 
-/* Buttons */
+/* Buttons — ALL interactive elements ≥ 48px touch target */
 .btn {
   width: 100%;
   padding: 17px;
+  min-height: 52px;
   background: var(--ink);
   color: var(--accent-ink);
   border-radius: var(--r-md);
   font-size: 16px;
   font-weight: 600;
-  transition: transform 0.12s var(--ease), opacity 0.15s;
 }
 .btn:active { transform: scale(0.985); }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -256,7 +263,8 @@ input, textarea { font-family: inherit; }
 .btn-back {
   flex: 0 0 auto;
   width: 56px;
-  padding: 17px 0;
+  min-height: 52px;
+  padding: 14px 0;
   background: var(--card);
   border: 1.5px solid var(--line-2);
   color: var(--ink-2);
@@ -325,6 +333,7 @@ input, textarea { font-family: inherit; }
   display: flex; align-items: center; gap: 12px;
   width: 100%; padding: 14px 16px; text-align: left;
   border-bottom: 1px solid var(--line);
+  min-height: 48px;
 }
 .result-row:last-child { border-bottom: none; }
 .result-row:hover { background: var(--canvas); }
@@ -383,9 +392,8 @@ input, textarea { font-family: inherit; }
 }
 .id-chip .id-val { font-size: 18px; font-weight: 700; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
 .id-chip .copy-btn {
-  width: 38px; height: 38px; border-radius: 10px;
+  width: 48px; height: 48px; border-radius: 12px;
   border: 1px solid var(--line-2); display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s, transform 0.1s;
 }
 .id-chip .copy-btn:active { transform: scale(0.92); }
 
@@ -551,36 +559,71 @@ input, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   Responsive — phone / tablet / desktop
+   RESPONSIVE BREAKPOINTS
+   Priority: 1. Tablet Landscape (DEFAULT — no query needed)
+             2. Tablet Portrait (≤ 900px)
+             3. Phone (≤ 600px)
+             4. Desktop (≥ 1400px)
    ============================================================ */
-@media (max-width: 480px) {
-  .hero-headline { font-size: 26px; }
-  .hero-text-zone { min-height: 90px; padding-top: 18px; }
-  .landing-car { width: 95%; max-width: none; }
-  .landing-car-wrap { margin-bottom: -20px; }
-  .stage { border-radius: 0 !important; box-shadow: none !important; border: none !important; }
+
+/* 2. TABLET PORTRAIT */
+@media (max-width: 900px) {
+  .stage {
+    max-width: 720px;
+    margin: 16px auto;
+  }
+  .landing-car { width: 80%; max-width: 380px; }
+}
+
+/* 3. PHONE */
+@media (max-width: 600px) {
+  .stage {
+    max-width: 100%;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0;
+    min-height: 100dvh;
+  }
   .header { padding: 12px 16px; }
   .body { padding: 16px 16px 20px; }
   .title { font-size: 24px; }
-  .btn { padding: 15px; font-size: 15px; }
+  .hero-headline { font-size: 26px; }
+  .hero-text-zone { min-height: 85px; padding-top: 16px; }
+  .landing-car { width: 95%; max-width: none; }
+  .landing-car-wrap { margin-bottom: -16px; }
+  .btn { padding: 15px; font-size: 15px; min-height: 48px; }
+  .option { padding: 16px 14px; }
+  .stat-strip .stat { padding: 14px 10px; }
+  .stat-strip .stat .v { font-size: 15px; }
+  .summary { padding: 2px 16px; }
 }
 
-@media (min-width: 481px) and (max-width: 1024px) {
-  .landing-car { width: 80%; max-width: 400px; }
-}
-
-@media (min-width: 1025px) {
-  .stage { max-width: 800px; }
+/* 4. DESKTOP (wide) */
+@media (min-width: 1400px) {
+  .stage { max-width: 920px; }
   .hero-headline { font-size: 42px; }
-  .landing-car { max-width: 480px; }
-  .body { padding: 24px 36px 32px; }
+  .hero-subline { font-size: 20px; }
+  .landing-car { max-width: 500px; }
+  .body { padding: 24px 40px 32px; }
 }
 
 /* ============================================================
    Theme toggle button
    ============================================================ */
 .theme-toggle {
-  transition: transform 0.2s var(--ease);
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  flex-shrink: 0;
 }
-.theme-toggle:hover { transform: scale(1.1); }
-.theme-toggle:active { transform: scale(0.95); }
+.theme-toggle:active { transform: scale(0.92); }
