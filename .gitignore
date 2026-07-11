@@ -3,3 +3,5 @@ dist/
 .env
 .env.example/frontend
 frontend/.env.example
+.env.example/backend
+.env.example/
