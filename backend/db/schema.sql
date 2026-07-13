@@ -278,15 +278,21 @@ ALTER TABLE drivers ADD CONSTRAINT drivers_auth_user_id_fkey
 -- Creates the drivers row atomically with the auth.users row on signup, so
 -- there's never an auth account with no matching driver profile. Reads
 -- name/phone/vehicle_* from raw_user_meta_data (populated via
--- supabase.auth.signUp({ options: { data: {...} } })) — but NEVER status,
--- rating, rides_completed, or is_online from there: that field is entirely
+-- supabase.auth.signUp({ options: { data: {...} } })) — but NEVER rating,
+-- rides_completed, or is_online from there: that field is entirely
 -- client-controlled via the public signUp() API, so those columns must
 -- always take their DEFAULTs (explicit whitelist below), or anyone could
--- pass status:'active' at signup and self-activate their own account.
+-- pass arbitrary values at signup.
+--
+-- status is explicitly set to 'active' (not left at its pending_verification
+-- DEFAULT) — TEMPORARY stance: there's no admin dashboard yet to approve
+-- anyone, so gating signup on manual review would just block the stated
+-- goal of "sign up and see the calendar" with no way to unblock it. Revisit
+-- once an admin dashboard exists to actually do the approving.
 CREATE OR REPLACE FUNCTION handle_new_driver()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO drivers (auth_user_id, name, phone, email, vehicle_make, vehicle_model, vehicle_color, vehicle_plate)
+  INSERT INTO drivers (auth_user_id, name, phone, email, vehicle_make, vehicle_model, vehicle_color, vehicle_plate, status)
   VALUES (
     NEW.id,
     NEW.raw_user_meta_data->>'name',
@@ -295,9 +301,8 @@ BEGIN
     NEW.raw_user_meta_data->>'vehicle_make',
     NEW.raw_user_meta_data->>'vehicle_model',
     NEW.raw_user_meta_data->>'vehicle_color',
-    NEW.raw_user_meta_data->>'vehicle_plate'
-    -- status/rating/rides_completed/is_online intentionally omitted — they
-    -- take their column DEFAULTs (pending_verification / 5.00 / 0 / false).
+    NEW.raw_user_meta_data->>'vehicle_plate',
+    'active'
   );
   RETURN NEW;
 EXCEPTION
@@ -305,6 +310,12 @@ EXCEPTION
     RAISE EXCEPTION 'phone_or_email_already_registered';
   WHEN not_null_violation THEN
     RAISE EXCEPTION 'missing_required_driver_field';
+  WHEN OTHERS THEN
+    -- Catch-all so a failure NEVER again surfaces as an anonymous "database
+    -- error saving new user" with no way to tell what actually broke — the
+    -- real SQLSTATE/message is now always in the Postgres log next to this
+    -- trigger's own name, whatever the cause turns out to be.
+    RAISE EXCEPTION 'driver_creation_failed: % (%)', SQLERRM, SQLSTATE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
