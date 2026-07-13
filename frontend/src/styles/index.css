@@ -832,7 +832,6 @@ input, textarea { font-family: inherit; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
 }
-.drv-signup-mark-img { width: 32px; height: 32px; filter: invert(1); }
 @keyframes drv-pulse {
   0%, 100% { opacity: 0.55; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.08); }
