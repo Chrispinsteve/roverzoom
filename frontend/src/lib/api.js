@@ -4,8 +4,8 @@ export async function req(path, options = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/api${path}`, {
-      headers: { 'Content-Type': 'application/json' },
       ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     });
   } catch {
     throw new Error('Can’t reach the server. Check your connection and try again.');

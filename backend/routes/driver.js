@@ -1,20 +1,20 @@
 const express = require('express');
 const supabase = require('../db/supabase');
+const { requireDriver, requireActiveDriver } = require('../middleware/requireDriver');
 
 const router = express.Router();
 
 const AVAILABLE_WINDOW_DAYS = 7;
 
-// GET /api/driver/schedule?driverId= — this driver's own upcoming + recent bookings
-router.get('/schedule', async (req, res) => {
-  const { driverId } = req.query;
-  if (!driverId) return res.status(400).json({ error: 'driverId is required.' });
-
+// GET /api/driver/schedule — this driver's own upcoming + recent bookings.
+// requireDriver only: a pending/suspended driver can see their own (likely
+// empty) schedule — harmless, no need to also gate on active.
+router.get('/schedule', requireDriver, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
-      .eq('driver_id', driverId)
+      .eq('driver_id', req.driver.id)
       .order('scheduled_at', { ascending: true });
     if (error) throw error;
     res.json(data);
@@ -24,11 +24,9 @@ router.get('/schedule', async (req, res) => {
   }
 });
 
-// GET /api/driver/available-trips?driverId= — unclaimed upcoming bookings, browsable window
-router.get('/available-trips', async (req, res) => {
-  const { driverId } = req.query;
-  if (!driverId) return res.status(400).json({ error: 'driverId is required.' });
-
+// GET /api/driver/available-trips — unclaimed upcoming bookings, browsable window.
+// requireActiveDriver: a pending/suspended driver shouldn't be able to browse.
+router.get('/available-trips', requireDriver, requireActiveDriver, async (req, res) => {
   try {
     const now = new Date().toISOString();
     const windowEnd = new Date(Date.now() + AVAILABLE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -48,16 +46,15 @@ router.get('/available-trips', async (req, res) => {
   }
 });
 
-// POST /api/driver/bookings/:bookingId/claim — instant guarded assignment, no offer/countdown
-router.post('/bookings/:bookingId/claim', async (req, res) => {
+// POST /api/driver/bookings/:bookingId/claim — instant guarded assignment, no offer/countdown.
+// requireActiveDriver: a pending/suspended driver shouldn't be able to claim.
+router.post('/bookings/:bookingId/claim', requireDriver, requireActiveDriver, async (req, res) => {
   const { bookingId } = req.params;
-  const { driverId } = req.body || {};
-  if (!driverId) return res.status(400).json({ error: 'driverId is required.' });
 
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .update({ driver_id: driverId, status: 'driver_assigned', accepted_at: new Date().toISOString() })
+      .update({ driver_id: req.driver.id, status: 'driver_assigned', accepted_at: new Date().toISOString() })
       .eq('id', bookingId)
       .is('driver_id', null)
       .select()

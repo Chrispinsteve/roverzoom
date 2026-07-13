@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+import DriverShell from './DriverShell';
+import { useDriverAuth } from './useDriverAuth';
+import { supabase } from '../lib/supabaseClient';
+import Login from './screens/Login';
+import Signup from './screens/Signup';
+import CheckEmail from './screens/CheckEmail';
+import PendingVerification from './screens/PendingVerification';
+import Suspended from './screens/Suspended';
 import Dashboard from './screens/Dashboard';
 import NewRideRequest from './screens/NewRideRequest';
 import RideDetails from './screens/RideDetails';
@@ -8,15 +16,15 @@ import OnTrip from './screens/OnTrip';
 import TripComplete from './screens/TripComplete';
 import Schedule from './screens/Schedule';
 
-const DRIVER = { name: 'Michael Anderson', rating: 4.98 };
-
 function nextPayoutLabel() {
   const d = new Date();
   d.setDate(d.getDate() + 10);
   return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-// Static mock ride — this is a UI-only build, no backend/auth wired up yet.
+// Static mock ride — the lifecycle screens (request -> ... -> complete)
+// aren't wired to real dispatch/claim data yet; only the auth gate and the
+// Dashboard/Schedule screens use real data so far.
 const RIDE = {
   passenger: { name: 'James Carter', rating: 4.95 },
   pickup: { address: '123 Main St, Miami, FL', detail: 'Apt 4B, Main Entrance', distanceAway: '0.4 mi away' },
@@ -30,7 +38,34 @@ const RIDE = {
   paymentMethod: 'Card',
 };
 
+function AuthLoading() {
+  return (
+    <DriverShell>
+      <div className="body">
+        <p className="muted center" style={{ marginTop: 60 }}>Loading…</p>
+      </div>
+    </DriverShell>
+  );
+}
+
+function NoDriverProfile({ onLogout }) {
+  return (
+    <DriverShell>
+      <div className="body">
+        <p className="error-text center" style={{ marginTop: 60 }}>
+          We couldn’t find a driver profile for this account. Contact support if this keeps happening.
+        </p>
+        <button className="btn btn-ghost" onClick={onLogout} style={{ marginTop: 16 }}>Log Out</button>
+      </div>
+    </DriverShell>
+  );
+}
+
 export default function DriverApp({ onExit }) {
+  const { loading, session, driver } = useDriverAuth();
+  const [authStage, setAuthStage] = useState('login'); // 'login' | 'signup' | 'checkEmail'
+  const [signedUpEmail, setSignedUpEmail] = useState('');
+
   const [stage, setStage] = useState('dashboard');
   const [online, setOnline] = useState(false);
   const [earningsToday, setEarningsToday] = useState(215.40);
@@ -51,16 +86,40 @@ export default function DriverApp({ onExit }) {
     setStage('complete');
   };
 
+  const logout = () => supabase.auth.signOut();
+
+  if (loading) return <AuthLoading />;
+
+  if (!session) {
+    if (authStage === 'signup') {
+      return (
+        <Signup
+          onSwitchToLogin={() => setAuthStage('login')}
+          onSignedUp={(email) => { setSignedUpEmail(email); setAuthStage('checkEmail'); }}
+        />
+      );
+    }
+    if (authStage === 'checkEmail') {
+      return <CheckEmail email={signedUpEmail} onSwitchToLogin={() => setAuthStage('login')} />;
+    }
+    return <Login onSwitchToSignup={() => setAuthStage('signup')} />;
+  }
+
+  if (!driver) return <NoDriverProfile onLogout={logout} />;
+  if (driver.status === 'pending_verification') return <PendingVerification onLogout={logout} />;
+  if (driver.status === 'suspended') return <Suspended onLogout={logout} />;
+
   if (stage === 'dashboard') {
     return (
       <Dashboard
-        driver={DRIVER}
+        driver={driver}
         online={online}
         earningsToday={earningsToday}
         ridesCompleted={ridesCompleted}
         payoutDate={payoutDate}
         onToggleOnline={() => setOnline((v) => !v)}
         onExit={onExit}
+        onLogout={logout}
         onOpenSchedule={() => setStage('schedule')}
       />
     );

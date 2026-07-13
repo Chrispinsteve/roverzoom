@@ -188,18 +188,11 @@ CREATE TABLE driver_payouts (
 CREATE INDEX idx_driver_payouts_driver_id ON driver_payouts(driver_id);
 
 -- --- Row Level Security ----------------------------------------------------
--- Stub-auth phase: RLS stays ENABLED (never disabled) with narrow, explicitly
--- permissive SELECT policies rather than no RLS at all — this is safer to
--- tighten later (to auth_user_id = auth.uid()) than flipping RLS on from
--- scratch once real driver auth exists. All writes go through the
--- service-role Express API, which bypasses RLS entirely, so client-side
--- write policies are intentionally omitted (== denied).
---
--- Known accepted tradeoff: Realtime postgres_changes broadcasts full rows to
--- any client whose SELECT policy passes, so during this permissive phase any
--- anon client could subscribe to all ride_offers, not just their own. Low
--- severity pre-launch (no rider PII on these tables, small trusted driver
--- pool) — tighten alongside real auth.
+-- All writes go through the service-role Express API, which bypasses RLS
+-- entirely, so client-side write policies are intentionally omitted on every
+-- table below (== denied). SELECT policies are real auth now — see the
+-- "Driver side (Phase: authentication)" section further down for the
+-- auth_user_id FK and the trigger that populates it on signup.
 
 ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
@@ -207,20 +200,27 @@ ALTER TABLE ride_offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE driver_earnings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE driver_payouts ENABLE ROW LEVEL SECURITY;
 
--- drivers has no stub-phase client policy: the frontend never queries this
--- table directly (only via the service-role-backed GET /api/driver/me),
--- so until real auth lands, auth.uid() is always null and this policy
--- always evaluates false — correct, since there's no legitimate anon
--- client read path for driver profile data.
+-- drivers: the frontend's useDriverAuth() hook queries this table directly
+-- (anon key) to resolve "who am I" right after login — this is the one
+-- legitimate client read path for driver profile data, scoped to the caller's
+-- own row via auth_user_id.
 DROP POLICY IF EXISTS drivers_select_own ON drivers;
 CREATE POLICY drivers_select_own ON drivers FOR SELECT
   USING (auth_user_id = auth.uid());
 
+-- bookings/ride_offers: scoped to the requesting driver's own rows. Realtime
+-- postgres_changes only ever needs to reach "my own ride_offers" and "my own
+-- assigned booking" — never a browse-all-bookings view (that's the
+-- service-role-backed GET /api/driver/available-trips instead).
 DROP POLICY IF EXISTS bookings_select_stub ON bookings;
-CREATE POLICY bookings_select_stub ON bookings FOR SELECT USING (true);
+DROP POLICY IF EXISTS bookings_select_own ON bookings;
+CREATE POLICY bookings_select_own ON bookings FOR SELECT
+  USING (driver_id IN (SELECT id FROM drivers WHERE auth_user_id = auth.uid()));
 
 DROP POLICY IF EXISTS ride_offers_select_stub ON ride_offers;
-CREATE POLICY ride_offers_select_stub ON ride_offers FOR SELECT USING (true);
+DROP POLICY IF EXISTS ride_offers_select_own ON ride_offers;
+CREATE POLICY ride_offers_select_own ON ride_offers FOR SELECT
+  USING (driver_id IN (SELECT id FROM drivers WHERE auth_user_id = auth.uid()));
 
 -- --- accept_ride_offer(): the one place that needs a real transaction ------
 -- Atomically: claim the offer, assign the booking, supersede sibling offers.
@@ -256,3 +256,60 @@ BEGIN
   RETURN v_booking;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- Driver side (Phase: authentication)
+--
+-- Real Supabase Auth (email+password) for drivers, replacing the stub
+-- identity. Self-registration lands as pending_verification; ops flips to
+-- active/suspended manually until an admin dashboard exists.
+-- ============================================================
+
+ALTER TABLE drivers DROP CONSTRAINT IF EXISTS drivers_auth_user_id_fkey;
+ALTER TABLE drivers ADD CONSTRAINT drivers_auth_user_id_fkey
+  FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+-- ON DELETE SET NULL, not CASCADE — deleting an auth account shouldn't take
+-- a driver's earnings/booking history with it.
+
+-- Creates the drivers row atomically with the auth.users row on signup, so
+-- there's never an auth account with no matching driver profile. Reads
+-- name/phone/vehicle_* from raw_user_meta_data (populated via
+-- supabase.auth.signUp({ options: { data: {...} } })) — but NEVER status,
+-- rating, rides_completed, or is_online from there: that field is entirely
+-- client-controlled via the public signUp() API, so those columns must
+-- always take their DEFAULTs (explicit whitelist below), or anyone could
+-- pass status:'active' at signup and self-activate their own account.
+CREATE OR REPLACE FUNCTION handle_new_driver()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO drivers (auth_user_id, name, phone, email, vehicle_make, vehicle_model, vehicle_color, vehicle_plate)
+  VALUES (
+    NEW.id,
+    NEW.raw_user_meta_data->>'name',
+    NEW.raw_user_meta_data->>'phone',
+    NEW.email, -- from the real auth row, never from client-controlled metadata
+    NEW.raw_user_meta_data->>'vehicle_make',
+    NEW.raw_user_meta_data->>'vehicle_model',
+    NEW.raw_user_meta_data->>'vehicle_color',
+    NEW.raw_user_meta_data->>'vehicle_plate'
+    -- status/rating/rides_completed/is_online intentionally omitted — they
+    -- take their column DEFAULTs (pending_verification / 5.00 / 0 / false).
+  );
+  RETURN NEW;
+EXCEPTION
+  WHEN unique_violation THEN
+    RAISE EXCEPTION 'phone_or_email_already_registered';
+  WHEN not_null_violation THEN
+    RAISE EXCEPTION 'missing_required_driver_field';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- An exception here rolls back the WHOLE transaction, including the
+-- auth.users insert — correct (no orphaned auth account with no driver
+-- row), but it surfaces to signUp() as a generic error unless the frontend
+-- validates required fields client-side first and maps these two codes to
+-- real copy.
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_driver();

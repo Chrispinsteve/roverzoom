@@ -16,7 +16,7 @@ function StatCard({ icon, label, value, sub }) {
   );
 }
 
-function MenuButton({ onExit }) {
+function MenuButton({ onExit, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -27,6 +27,8 @@ function MenuButton({ onExit }) {
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
+  const itemStyle = { display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', borderRadius: 'var(--r-sm)', fontSize: 14.5, fontWeight: 500, color: 'var(--ink)', textAlign: 'left' };
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       {open && (
@@ -36,12 +38,13 @@ function MenuButton({ onExit }) {
           borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-pop)', padding: 6,
           animationDuration: '0.18s',
         }}>
-          <button
-            onClick={() => { setOpen(false); onExit(); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', borderRadius: 'var(--r-sm)', fontSize: 14.5, fontWeight: 500, color: 'var(--ink)', textAlign: 'left' }}
-          >
+          <button onClick={() => { setOpen(false); onExit(); }} style={itemStyle}>
             <Icon name="arrowLeft" size={17} color="var(--ink-2)" />
             Exit driver mode
+          </button>
+          <button onClick={() => { setOpen(false); onLogout(); }} style={itemStyle}>
+            <Icon name="power" size={17} color="var(--ink-2)" />
+            Log out
           </button>
         </div>
       )}
@@ -52,14 +55,14 @@ function MenuButton({ onExit }) {
   );
 }
 
-export default function Dashboard({ driver, online, earningsToday, ridesCompleted, payoutDate, onToggleOnline, onExit, onOpenSchedule }) {
+export default function Dashboard({ driver, online, earningsToday, ridesCompleted, payoutDate, onToggleOnline, onExit, onLogout, onOpenSchedule }) {
   return (
     <DriverShell rightSlot={
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="drv-icon-btn" aria-label="Schedule" onClick={onOpenSchedule}>
           <Icon name="calendar" size={18} color="var(--ink)" />
         </button>
-        <MenuButton onExit={onExit} />
+        <MenuButton onExit={onExit} onLogout={onLogout} />
       </div>
     }>
       <div className="body">

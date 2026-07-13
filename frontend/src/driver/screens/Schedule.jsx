@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import DriverShell from '../DriverShell';
 import MonthCalendar from '../components/MonthCalendar';
 import { driverApi } from '../../lib/driverApi';
-import { getDriverId } from '../driverSession';
 
 const STATUS_LABEL = {
   confirmed: 'Pending dispatch',
@@ -61,18 +60,13 @@ export default function Schedule({ onBack }) {
   const [error, setError] = useState('');
   const [claimingId, setClaimingId] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null); // date key from MonthCalendar, or null
-  const driverId = getDriverId();
 
   const load = async () => {
-    if (!driverId) {
-      setError('No driver id configured — set VITE_DEV_DRIVER_ID in frontend/.env.');
-      return;
-    }
     setError('');
     try {
       const [schedule, trips] = await Promise.all([
-        driverApi.getSchedule(driverId),
-        driverApi.getAvailableTrips(driverId),
+        driverApi.getSchedule(),
+        driverApi.getAvailableTrips(),
       ]);
       setMine(schedule);
       setAvailable(trips);
@@ -87,7 +81,7 @@ export default function Schedule({ onBack }) {
     setClaimingId(bookingId);
     setError('');
     try {
-      await driverApi.claimBooking(bookingId, driverId);
+      await driverApi.claimBooking(bookingId);
       await load();
       setTab('mine');
     } catch (e) {
