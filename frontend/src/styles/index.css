@@ -52,6 +52,18 @@
   --shadow-float: 0 2px 8px rgba(0,0,0,0.3), 0 20px 48px rgba(0,0,0,0.4);
 }
 
+/* `color` is inherited as a computed value, not a live variable — so a
+   nested [data-theme] scope (e.g. driver mode forcing dark inside the rider
+   app's own light/dark tree) fixes every background/border var correctly via
+   cascade, but text color would otherwise keep whatever body{color} resolved
+   to at the OUTER theme, since descendants that don't redeclare `color`
+   inherit that stale resolved value rather than re-evaluating var(--ink).
+   Re-asserting color here on any element carrying a data-theme attribute
+   fixes it for every nested scope, current and future, in one place. */
+[data-theme="light"], [data-theme="dark"] {
+  color: var(--ink);
+}
+
 /* --- Entrance motion: screens and elements rise in softly --- */
 @keyframes rz-rise {
   from { opacity: 0; transform: translateY(10px); }
@@ -799,6 +811,40 @@ input, textarea { font-family: inherit; }
   padding: 0 2px 14px; font-size: 13px; color: var(--ink-3);
 }
 .drv-cal-filter-chip button { color: var(--ink); font-weight: 600; text-decoration: underline; }
+
+/* Signup hero: a tech-badge treatment built around the logo mark — dark
+   beveled tile + a soft breathing glow, echoing the mark's geometry rather
+   than the rider app's colorful Bob-orb style (driver mode stays monochrome). */
+.drv-signup-hero {
+  position: relative; display: flex; justify-content: center; align-items: center;
+  height: 120px; margin-bottom: 4px;
+  isolation: isolate; /* contain the glow's stacking so it can't paint over the title below */
+}
+.drv-signup-glow {
+  position: absolute; width: 220px; height: 220px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 45%, transparent 72%);
+  animation: drv-pulse 4s ease-in-out infinite;
+}
+.drv-signup-mark {
+  position: relative; width: 76px; height: 76px; border-radius: 22px;
+  background: linear-gradient(155deg, #202226 0%, #101114 100%);
+  border: 1px solid var(--line-2);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.drv-signup-mark-img { width: 32px; height: 32px; filter: invert(1); }
+@keyframes drv-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+/* Icon-prefixed inputs (Signup's "Your Details" section) */
+.drv-input-icon-wrap { position: relative; display: flex; align-items: center; }
+.drv-input-icon-wrap svg { position: absolute; left: 16px; pointer-events: none; }
+.drv-input-with-icon { padding-left: 44px; }
+
+/* Vehicle fields: 2-column grid instead of 4 stacked full-width rows */
+.drv-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 
 /* ============================================================
    Theme toggle button

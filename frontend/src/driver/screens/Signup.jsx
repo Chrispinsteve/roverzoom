@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import DriverShell from '../DriverShell';
+import Icon from '../../components/Icon';
 import { supabase } from '../../lib/supabaseClient';
 
 // The trigger that creates the drivers row (handle_new_driver in schema.sql)
@@ -26,6 +27,28 @@ const emptyForm = {
   name: '', email: '', password: '', phone: '',
   vehicleMake: '', vehicleModel: '', vehicleColor: '', vehiclePlate: '',
 };
+
+function SectionHeader({ icon, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 14px' }}>
+      <Icon name={icon} size={14} color="var(--ink-4)" />
+      <span className="eyebrow">{children}</span>
+      <span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+    </div>
+  );
+}
+
+function IconField({ icon, label, ...inputProps }) {
+  return (
+    <div className="field">
+      <label className="label">{label}</label>
+      <div className="drv-input-icon-wrap">
+        <Icon name={icon} size={16} color="var(--ink-4)" />
+        <input className="input drv-input-with-icon" {...inputProps} />
+      </div>
+    </div>
+  );
+}
 
 export default function Signup({ onSwitchToLogin, onSignedUp }) {
   const [form, setForm] = useState(emptyForm);
@@ -65,50 +88,55 @@ export default function Signup({ onSwitchToLogin, onSignedUp }) {
   return (
     <DriverShell onBack={onSwitchToLogin}>
       <div className="body">
-        <h1 className="title" style={{ fontSize: 26 }}>Become a Driver</h1>
-        <p className="subtitle">Apply to drive with RoverZoom.</p>
-
-        <div className="field">
-          <label className="label">Full name</label>
-          <input className="input" placeholder="Alex Rivera" value={form.name} onChange={set('name')} />
-        </div>
-        <div className="field">
-          <label className="label">Email</label>
-          <input className="input" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} />
-        </div>
-        <div className="field">
-          <label className="label">Password</label>
-          <input className="input" type="password" placeholder="At least 8 characters" value={form.password} onChange={set('password')} />
-        </div>
-        <div className="field">
-          <label className="label">Phone number</label>
-          <input className="input" type="tel" placeholder="+1 555 555 0100" value={form.phone} onChange={set('phone')} />
+        <div className="drv-signup-hero rise">
+          <div className="drv-signup-glow" />
+          <div className="drv-signup-mark">
+            <img src="/logo-mark.png" alt="" className="drv-signup-mark-img" />
+          </div>
         </div>
 
-        <div className="field">
-          <label className="label">Vehicle make</label>
-          <input className="input" placeholder="Genesis" value={form.vehicleMake} onChange={set('vehicleMake')} />
+        <h1 className="title center rise-1" style={{ fontSize: 25 }}>Become a Driver</h1>
+        <p className="subtitle center rise-1" style={{ marginBottom: 8 }}>
+          Join RoverZoom's driver network — apply in a couple of minutes.
+        </p>
+
+        <div className="rise-1">
+          <SectionHeader icon="user">Your Details</SectionHeader>
+          <IconField icon="user" label="Full name" placeholder="Alex Rivera" value={form.name} onChange={set('name')} />
+          <IconField icon="mail" label="Email" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} />
+          <IconField icon="lock" label="Password" type="password" placeholder="At least 8 characters" value={form.password} onChange={set('password')} />
+          <IconField icon="phone" label="Phone number" type="tel" placeholder="+1 555 555 0100" value={form.phone} onChange={set('phone')} />
         </div>
-        <div className="field">
-          <label className="label">Vehicle model</label>
-          <input className="input" placeholder="G90" value={form.vehicleModel} onChange={set('vehicleModel')} />
-        </div>
-        <div className="field">
-          <label className="label">Vehicle color</label>
-          <input className="input" placeholder="Black" value={form.vehicleColor} onChange={set('vehicleColor')} />
-        </div>
-        <div className="field">
-          <label className="label">License plate</label>
-          <input className="input" placeholder="RZ-0001" value={form.vehiclePlate} onChange={set('vehiclePlate')} />
+
+        <div className="rise-2">
+          <SectionHeader icon="car">Your Vehicle</SectionHeader>
+          <div className="drv-field-grid">
+            <div className="field">
+              <label className="label">Make</label>
+              <input className="input" placeholder="Genesis" value={form.vehicleMake} onChange={set('vehicleMake')} />
+            </div>
+            <div className="field">
+              <label className="label">Model</label>
+              <input className="input" placeholder="G90" value={form.vehicleModel} onChange={set('vehicleModel')} />
+            </div>
+            <div className="field">
+              <label className="label">Color</label>
+              <input className="input" placeholder="Black" value={form.vehicleColor} onChange={set('vehicleColor')} />
+            </div>
+            <div className="field">
+              <label className="label">License plate</label>
+              <input className="input" placeholder="RZ-0001" value={form.vehiclePlate} onChange={set('vehiclePlate')} />
+            </div>
+          </div>
         </div>
 
         {error && <p className="error-text">{error}</p>}
 
-        <button className="btn" disabled={!canSubmit || submitting} onClick={submit} style={{ marginTop: 8 }}>
+        <button className="btn rise-3" disabled={!canSubmit || submitting} onClick={submit} style={{ marginTop: 8 }}>
           {submitting ? 'Creating account…' : 'Create Account'}
         </button>
 
-        <p className="center muted" style={{ marginTop: 18, fontSize: 14 }}>
+        <p className="center muted rise-3" style={{ marginTop: 18, fontSize: 14 }}>
           Already have an account?{' '}
           <button onClick={onSwitchToLogin} style={{ color: 'var(--ink)', fontWeight: 600, textDecoration: 'underline' }}>
             Log in

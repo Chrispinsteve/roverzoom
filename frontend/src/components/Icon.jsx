@@ -37,6 +37,8 @@ const P = {
   star: 'M12 2.5l3 6.5 7 .9-5.2 4.9 1.4 6.9L12 17.8 5.8 21.7l1.4-6.9L2 9.9l7-.9L12 2.5z',
   play: 'M8 5.5l11 6.5-11 6.5v-13z',
   navArrow: 'M3 11l17.5-8-8 17.5-2-7.5-7.5-2z',
+  lock: 'M7 11V7a5 5 0 0 1 10 0v4M5 11h14v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9zM12 15v3',
+  mail: 'M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM3 7l9 6 9-6',
 };
 
 export default function Icon({ name, size = 22, color = 'currentColor', stroke = 1.8, filled = false }) {
