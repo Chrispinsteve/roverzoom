@@ -228,7 +228,11 @@ CREATE POLICY ride_offers_select_own ON ride_offers FOR SELECT
 -- exception rolls back the whole call (including the first update), so this
 -- driver's own offer never ends up stuck "accepted" for a ride they didn't
 -- get. SECURITY DEFINER so it can run as the table owner regardless of the
--- caller's RLS-visible rows.
+-- caller's RLS-visible rows. SET search_path = public is required alongside
+-- SECURITY DEFINER — without it, unqualified table names resolve using the
+-- caller's search_path, not the owner's, which can fail outright or (worse)
+-- resolve to the wrong object; this is standard Postgres/Supabase guidance
+-- for SECURITY DEFINER functions, not optional hardening.
 CREATE OR REPLACE FUNCTION accept_ride_offer(p_offer_id UUID, p_driver_id UUID)
 RETURNS bookings AS $$
 DECLARE
@@ -255,7 +259,7 @@ BEGIN
 
   RETURN v_booking;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================
 -- Driver side (Phase: authentication)
@@ -302,7 +306,7 @@ EXCEPTION
   WHEN not_null_violation THEN
     RAISE EXCEPTION 'missing_required_driver_field';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- An exception here rolls back the WHOLE transaction, including the
 -- auth.users insert — correct (no orphaned auth account with no driver

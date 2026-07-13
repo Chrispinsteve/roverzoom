@@ -3,18 +3,23 @@ import DriverShell from '../DriverShell';
 import { supabase } from '../../lib/supabaseClient';
 
 // The trigger that creates the drivers row (handle_new_driver in schema.sql)
-// raises two distinguishable errors on failure; map them to real copy rather
-// than showing Supabase's generic "Database error saving new user".
+// raises two distinguishable errors on failure, but GoTrue often wraps the
+// real Postgres error in a generic/empty body rather than forwarding the
+// message verbatim — so this only ever shows either specific, recognized
+// copy or a safe generic fallback, never the raw error text (which might be
+// "{}", a stack trace, etc.).
 function mapSignupError(message) {
-  if (!message) return 'Something went wrong creating your account. Please try again.';
-  const m = message.toLowerCase();
+  const m = (message || '').toLowerCase();
   if (m.includes('already_registered') || m.includes('already registered') || m.includes('duplicate') || m.includes('unique')) {
     return 'That email or phone number is already registered. Try logging in instead.';
   }
   if (m.includes('missing_required_driver_field') || m.includes('not null') || m.includes('not_null')) {
     return 'Please fill in all required fields.';
   }
-  return message;
+  if (m.includes('password')) {
+    return message; // e.g. "Password should be at least 6 characters" — genuinely useful as-is
+  }
+  return 'Something went wrong creating your account. Please try again in a moment.';
 }
 
 const emptyForm = {
