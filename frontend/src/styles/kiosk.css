@@ -25,6 +25,12 @@
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
 
   font-family: var(--body);
+  /* Without this, text elements that don't set their own `color` (e.g.
+     .k-q, .k-flow-title) inherit body's ALREADY-RESOLVED color from
+     styles/index.css's [data-theme] rules instead of this scope's --ink.
+     On a device in system dark mode that resolves to light/white text —
+     invisible on this scope's fixed-white .k-flow background. */
+  color: var(--ink);
 }
 .kiosk-root *{ box-sizing:border-box; }
 .kiosk-root button{ font-family:inherit; cursor:pointer; border:none; background:none; font-size:inherit; color:inherit; }
