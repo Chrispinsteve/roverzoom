@@ -29,8 +29,18 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
     }
   };
 
+  const footer = (
+    <div className="k-footer-bar">
+      <div className="k-footer-inner">
+        <button className="k-next-btn" disabled={!booking.payment || submitting} onClick={submit}>
+          {submitting ? 'Confirming…' : 'Confirm booking'}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <FlowShell title="Payment" step={3} totalSteps={3} onBack={onBack}>
+    <FlowShell title="Payment" step={3} totalSteps={3} onBack={onBack} footer={footer}>
       <span className="k-q">How would you like to pay?</span>
       <span className="k-q-sub">
         {booking.quote ? `$${booking.quote.fare.toFixed(2)} · ${booking.quote.durationLabel} drive` : ''}
@@ -39,14 +49,6 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
       <PaymentCards method={booking.payment} onSelect={(m) => onChange({ payment: m })} />
 
       {error && <span className="k-price-wait">{error}</span>}
-
-      <div className="k-footer-bar">
-        <div className="k-footer-inner">
-          <button className="k-next-btn" disabled={!booking.payment || submitting} onClick={submit}>
-            {submitting ? 'Confirming…' : 'Confirm booking'}
-          </button>
-        </div>
-      </div>
     </FlowShell>
   );
 }

@@ -34,27 +34,39 @@ export default function MyRides({ onBack }) {
     }
   };
 
+  const footer = !rides ? (
+    <div className="k-footer-bar">
+      <div className="k-footer-inner">
+        <button className="k-next-btn" disabled={digits.length !== 10 || loading} onClick={find}>
+          {loading ? 'Looking…' : 'Find my rides'}
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div className="k-footer-bar">
+      <div className="k-footer-inner">
+        <button className="k-next-btn" onClick={() => { setRides(null); setDigits(''); }}>Search again</button>
+      </div>
+    </div>
+  );
+
   return (
-    <FlowShell title="My Rides" step={0} totalSteps={0} onBack={onBack}>
+    <FlowShell title="My Rides" step={0} totalSteps={0} onBack={onBack} footer={footer}>
       {!rides ? (
         <>
           <span className="k-q">Find your rides</span>
           <span className="k-q-sub">Enter the phone number you booked with</span>
           <PhoneKeypad digits={digits} onChange={setDigits} />
           {error && <span className="k-price-wait">{error}</span>}
-          <div className="k-footer-bar">
-            <div className="k-footer-inner">
-              <button className="k-next-btn" disabled={digits.length !== 10 || loading} onClick={find}>
-                {loading ? 'Looking…' : 'Find my rides'}
-              </button>
-            </div>
-          </div>
         </>
       ) : (
         <>
           <span className="k-q">Your rides</span>
           <span className="k-q-sub">{fmtPhone(digits)}</span>
 
+          {/* Unlike the other screens, this list is genuinely unbounded (a
+              rider could have many past rides) — .k-flow-body's internal
+              scroll is the expected mechanism here, not just a fallback. */}
           {rides.length === 0 ? (
             <span className="k-price-wait">No rides found for this number.</span>
           ) : (
@@ -75,12 +87,6 @@ export default function MyRides({ onBack }) {
               ))}
             </div>
           )}
-
-          <div className="k-footer-bar">
-            <div className="k-footer-inner">
-              <button className="k-next-btn" onClick={() => { setRides(null); setDigits(''); }}>Search again</button>
-            </div>
-          </div>
         </>
       )}
     </FlowShell>

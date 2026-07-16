@@ -53,8 +53,19 @@ export default function RouteStep({ booking, onChange, onNext, onBack }) {
     booking.dayIso && booking.timeLabel && booking.quote
   );
 
+  const footer = (
+    <div className="k-footer-bar">
+      <div className="k-footer-inner">
+        <button className="k-next-btn" disabled={!canContinue} onClick={onNext}>
+          Continue
+          {booking.quote && <span className="k-next-price">${booking.quote.fare.toFixed(2)}</span>}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <FlowShell title="Where to?" step={1} totalSteps={3} onBack={onBack}>
+    <FlowShell title="Where to?" step={1} totalSteps={3} onBack={onBack} footer={footer}>
       <span className="k-q">Where are you headed?</span>
       <span className="k-q-sub">Enter your pickup and destination</span>
 
@@ -86,15 +97,6 @@ export default function RouteStep({ booking, onChange, onNext, onBack }) {
         quote={booking.quote}
         onQuote={(quote) => onChange({ quote })}
       />
-
-      <div className="k-footer-bar">
-        <div className="k-footer-inner">
-          <button className="k-next-btn" disabled={!canContinue} onClick={onNext}>
-            Continue
-            {booking.quote && <span className="k-next-price">${booking.quote.fare.toFixed(2)}</span>}
-          </button>
-        </div>
-      </div>
     </FlowShell>
   );
 }
