@@ -36,7 +36,9 @@ export default function Confirm({ confirmedBooking, onReset }) {
             <Icon name="check" size={48} color="var(--paper)" stroke={2.5} />
           </div>
           <h1>You're all set</h1>
-          <p>A confirmation text is on its way to {confirmedBooking.rider_phone}.</p>
+          {/* No SMS provider is wired up yet — this deliberately doesn't
+              claim a text was sent. Keep your reference code handy instead. */}
+          <p>Your ride is booked under {confirmedBooking.rider_phone}. Save your confirmation code below.</p>
 
           <div className="k-ticket">
             <div className="k-ticket-row">
