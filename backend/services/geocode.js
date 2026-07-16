@@ -90,4 +90,23 @@ async function geocodeOne(query) {
   return results[0] || null;
 }
 
-module.exports = { geocode, geocodeOne };
+// Reverse geocode: coordinates -> a human address. Powers the kiosk's
+// "This trip" GPS pickup button. Same Nominatim provider as forward search.
+async function reverseGeocode(lat, lng) {
+  const params = new URLSearchParams({
+    lat: String(lat), lon: String(lng), format: 'json', zoom: '18', addressdetails: '1',
+  });
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', 'Accept-Language': 'en' },
+  });
+  if (!res.ok) throw new Error(`Nominatim reverse ${res.status}`);
+  const data = await res.json();
+  if (!data || data.error) return null;
+  return {
+    address: data.display_name,
+    lat: Number(data.lat),
+    lng: Number(data.lon),
+  };
+}
+
+module.exports = { geocode, geocodeOne, reverseGeocode };

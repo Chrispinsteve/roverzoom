@@ -22,6 +22,18 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   const [confirmed, setConfirmed] = useState(!!(value?.lat));
   const debounce = useRef(null);
   const justPicked = useRef(false);
+  // Remembers the exact query text if this instance mounted with an
+  // already-confirmed value (has coords) — e.g. a remount triggered by an
+  // external pick (chip, GPS). The search effect below compares against
+  // this on every run rather than a one-shot boolean flag: React 18
+  // StrictMode double-invokes mount effects, so a flag that gets flipped
+  // off inside the guarded branch gets consumed by the throwaway first
+  // invocation, leaving the real second invocation to fall through and
+  // fire a redundant search anyway — whose eventual resolve clobbers the
+  // real lat/lng with a bare, coordinate-less address. A stable comparison
+  // has no such "consumed once" failure mode, and still searches normally
+  // the moment the user actually edits this pre-filled text.
+  const initialConfirmedQuery = useRef(value?.lat ? (value.address || '') : null);
   const wrapperRef = useRef(null);
 
   // Close dropdown on outside click
@@ -42,6 +54,11 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
     // If we just programmatically set the query from a pick, skip searching.
     if (justPicked.current) {
       justPicked.current = false;
+      return;
+    }
+
+    // Mounted already-confirmed and text hasn't changed since — nothing to do.
+    if (initialConfirmedQuery.current !== null && query === initialConfirmedQuery.current) {
       return;
     }
 

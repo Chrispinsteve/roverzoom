@@ -69,6 +69,26 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /api/bookings/by-phone/:phone — list a rider's bookings for "My Rides".
+// No verification step: matches the app's existing no-account trust model
+// (the confirmation page is looked up by reference code the same way), but
+// it is NOT a secure access boundary — anyone who knows the phone number
+// can see that phone's ride history.
+router.get('/by-phone/:phone', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('rider_phone', req.params.phone)
+      .order('scheduled_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error('bookings by-phone error', err.message);
+    res.status(500).json({ error: 'Could not look up rides.' });
+  }
+});
+
 // GET /api/bookings/:reference — fetch a booking (confirmation screen / lookup)
 router.get('/:reference', async (req, res) => {
   try {
