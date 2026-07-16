@@ -29,7 +29,7 @@ export default function Attract({ onBookHere, onMyRides }) {
               <span className="k-path-label">On your phone</span>
               <div className="k-qr-row">
                 <div className="k-qr-box">
-                  <QrCode value={window.location.origin} size={120} />
+                  <QrCode value={window.location.origin} />
                 </div>
                 <div className="k-qr-text">
                   <h2>Scan to book</h2>

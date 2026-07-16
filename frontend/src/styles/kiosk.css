@@ -33,8 +33,13 @@
   color: var(--ink);
 }
 .kiosk-root *{ box-sizing:border-box; }
-.kiosk-root button{ font-family:inherit; cursor:pointer; border:none; background:none; font-size:inherit; color:inherit; }
-.kiosk-root input, .kiosk-root select{ font-family:inherit; font-size:inherit; color:inherit; }
+/* :where() zeroes this reset's specificity so any single-class button style
+   (.k-big-cta, .k-next-btn, etc.) wins normally instead of losing to this
+   class+type selector, which would otherwise always beat a plain class
+   regardless of source order — it was silently stripping the black
+   background off every primary CTA button. */
+:where(.kiosk-root button){ font-family:inherit; cursor:pointer; border:none; background:none; font-size:inherit; color:inherit; }
+:where(.kiosk-root input, .kiosk-root select){ font-family:inherit; font-size:inherit; color:inherit; }
 .kiosk-root input:focus, .kiosk-root button:focus-visible{ outline:3px solid #8AB8FF; outline-offset:2px; }
 
 .kiosk-screen{ min-height:100dvh; display:flex; flex-direction:column; }
@@ -77,13 +82,13 @@
 .k-flow-body{ flex:1; width:100%; max-width:620px; margin:0 auto; padding:10px clamp(16px,3vw,28px) 12px; display:flex; flex-direction:column; }
 .k-q{ font-family:var(--display); font-weight:600; font-size:clamp(20px,2.6vw,25px); line-height:1.15; letter-spacing:-0.01em; }
 .k-q-sub{ margin-top:4px; color:var(--mute); font-size:15px; }
-.k-field-label{ display:block; font-size:13.5px; font-weight:600; color:var(--mute); margin:11px 0 5px; letter-spacing:0.02em; }
+.k-field-label{ display:block; font-size:13.5px; font-weight:600; color:var(--mute); margin:20px 0 6px; letter-spacing:0.02em; }
 .k-chips{ display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; margin-top:6px; padding-bottom:2px; scrollbar-width:none; }
 .k-chips::-webkit-scrollbar{ display:none; }
 .k-chip{ border:1.5px solid var(--line); border-radius:999px; padding:8px 14px; font-size:14px; min-height:38px; background:var(--paper); transition:all .12s; white-space:nowrap; flex-shrink:0; }
 .k-chip:active{ transform:scale(0.97); }
 .k-chip.sel{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
-.k-price-slab{ margin-top:14px; border-radius:var(--k-radius); padding:14px 18px; background:var(--smoke); border:1.5px solid var(--line); transition:all .3s ease; }
+.k-price-slab{ margin-top:22px; border-radius:var(--k-radius); padding:14px 18px; background:var(--smoke); border:1.5px solid var(--line); transition:all .3s ease; }
 .k-price-slab.locked{ background:var(--lock-bg); border:1.5px solid var(--lock); animation:k-stamp .35s ease; }
 @keyframes k-stamp{ 0%{transform:scale(0.96); opacity:0.4;} 60%{transform:scale(1.015);} 100%{transform:scale(1);} }
 .k-price-cap{ font-size:15.5px; font-weight:600; color:var(--lock-deep); }
@@ -97,7 +102,7 @@
 .k-next-price{ font-variant-numeric:tabular-nums; color:#8FE0BC; }
 
 /* route card */
-.k-route-card{ border:1.5px solid var(--line); border-radius:var(--k-radius); background:var(--paper); padding:4px 14px; }
+.k-route-card{ margin-top:18px; border:1.5px solid var(--line); border-radius:var(--k-radius); background:var(--paper); padding:4px 14px; }
 .k-r-row{ display:flex; align-items:center; gap:12px; min-height:60px; }
 .k-rail{ position:relative; width:14px; align-self:stretch; display:flex; align-items:center; justify-content:center; }
 .k-pin{ width:11px; height:11px; border-radius:50%; z-index:1; }
