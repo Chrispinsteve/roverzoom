@@ -65,6 +65,15 @@ export default function Confirm({ confirmedBooking, onReset }) {
               <span className="k">Total</span>
               <span className="v">${Number(confirmedBooking.fare).toFixed(2)}</span>
             </div>
+            {/* Rarely populated this early — a driver is usually matched well
+                after this screen's 45s auto-reset window — but shown when
+                available, e.g. if this reference is looked up later via My Rides. */}
+            {confirmedBooking.driver && (
+              <div className="k-ticket-row">
+                <span className="k">Your driver</span>
+                <span className="v">{confirmedBooking.driver.name} · {confirmedBooking.driver.vehicle_color} {confirmedBooking.driver.vehicle_make}</span>
+              </div>
+            )}
           </div>
 
           <div className="k-confirm-actions">

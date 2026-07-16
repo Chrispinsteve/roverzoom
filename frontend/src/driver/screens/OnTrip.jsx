@@ -1,15 +1,16 @@
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
-import RouteMap from '../components/RouteMap';
 import PassengerRow from '../components/PassengerRow';
 import InstructionBanner from '../components/InstructionBanner';
+import { mapsUrl } from '../lib/maps';
 
-function etaLabel(minutesFromNow) {
-  const d = new Date(Date.now() + minutesFromNow * 60000);
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+function etaLabel(booking) {
+  const start = booking.started_at ? new Date(booking.started_at).getTime() : Date.now();
+  const eta = new Date(start + booking.duration_minutes * 60000);
+  return eta.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function OnTrip({ ride, onEndTrip }) {
+export default function OnTrip({ booking, onEndTrip }) {
   return (
     <DriverShell rightSlot={
       <button className="drv-icon-btn" aria-label="Safety">
@@ -18,30 +19,32 @@ export default function OnTrip({ ride, onEndTrip }) {
     }>
       <div className="body">
         <div className="rise">
-          <InstructionBanner icon="arrowUp" title="Continue straight" meta="12.4 mi" lines={['I-95 S']} />
+          <InstructionBanner icon="flag" title="Head to dropoff" lines={[booking.dropoff_address]} />
         </div>
 
-        <div className="rise-1">
-          <RouteMap
-            height={280}
-            pathD="M45 30 C 90 55, 70 90, 130 100 S 195 125, 185 150 S 235 158, 250 160"
-            labels={[{ text: 'WYNWOOD', top: '12%', left: '16%' }, { text: 'VIRGINIA KEY', top: '88%', left: '68%' }]}
-            carPos={{ top: '56%', left: '43%' }}
-            squarePos={{ top: '89%', left: '83%' }}
-            fabs={['volume', 'navArrow', 'shieldCheck']}
+        <a
+          className="btn btn-ghost rise-1"
+          href={mapsUrl(booking.dropoff_lat, booking.dropoff_lng, booking.dropoff_address)}
+          target="_blank" rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+        >
+          <Icon name="navArrow" size={18} color="var(--ink-2)" />
+          Open in Maps
+        </a>
+
+        <div style={{ marginTop: 20 }}>
+          <PassengerRow
+            name={booking.rider_name}
+            phone={booking.rider_phone}
+            right={
+              <div className="drv-passenger-right">
+                <div className="eyebrow">ETA</div>
+                <div className="drv-eta-value">{etaLabel(booking)}</div>
+                <div className="drv-rail-meta">{booking.distance_miles} mi · {booking.duration_minutes} min</div>
+              </div>
+            }
           />
         </div>
-
-        <PassengerRow
-          passenger={ride.passenger}
-          right={
-            <div className="drv-passenger-right">
-              <div className="eyebrow">ETA</div>
-              <div className="drv-eta-value">{etaLabel(ride.durationMin)}</div>
-              <div className="drv-rail-meta">{ride.distanceMiles} mi · {ride.durationMin} min</div>
-            </div>
-          }
-        />
 
         <div className="spacer" />
 

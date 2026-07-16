@@ -18,4 +18,13 @@ export const driverApi = {
   getSchedule: () => authedReq('/driver/schedule'),
   getAvailableTrips: () => authedReq('/driver/available-trips'),
   claimBooking: (bookingId) => authedReq(`/driver/bookings/${bookingId}/claim`, { method: 'POST' }),
+  setBookingStatus: (bookingId, event) =>
+    authedReq(`/driver/bookings/${bookingId}/status`, { method: 'POST', body: JSON.stringify({ event }) }),
+  getEarnings: () => authedReq('/driver/earnings'),
+  getUploadUrl: (type) =>
+    authedReq('/driver/profile/upload-url', { method: 'POST', body: JSON.stringify({ type }) }),
+  saveDocument: (type, path) =>
+    authedReq('/driver/profile/documents', { method: 'POST', body: JSON.stringify({ type, path }) }),
+  rateRider: (bookingId, rating) =>
+    authedReq(`/driver/bookings/${bookingId}/rate-rider`, { method: 'POST', body: JSON.stringify({ rating }) }),
 };

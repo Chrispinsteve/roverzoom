@@ -328,3 +328,48 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_driver();
+
+-- ============================================================
+-- Driver side (Phase: profile completion + real trip lifecycle)
+--
+-- Additive only — safe to run against a live database with existing driver/
+-- booking rows. Does NOT touch the DROP TABLE statements earlier in this
+-- file; those are for fresh installs only and must never be re-run here.
+-- ============================================================
+
+ALTER TABLE drivers
+  ADD COLUMN IF NOT EXISTS photo_url            TEXT,
+  ADD COLUMN IF NOT EXISTS license_photo_url     TEXT,
+  ADD COLUMN IF NOT EXISTS insurance_photo_url   TEXT,
+  -- Set (by the application) once all three of the above are non-null;
+  -- cleared if any is removed. This is the "profile complete" gate that
+  -- controls access to ride requests — see requireCompleteProfile.
+  ADD COLUMN IF NOT EXISTS profile_completed_at  TIMESTAMPTZ;
+
+-- complete_booking(): atomically finishes a trip — flips status, records the
+-- driver's earnings ledger entry, and increments rides_completed in one
+-- transaction, so a failure partway through never leaves the booking marked
+-- completed with no matching earnings row (or vice versa). The payout
+-- amount is computed by the caller (backend/services/payout.js is the one
+-- source of truth for the 60% cut) and passed in, rather than duplicating
+-- that constant here in SQL.
+CREATE OR REPLACE FUNCTION complete_booking(p_booking_id UUID, p_driver_id UUID, p_earnings_amount NUMERIC)
+RETURNS bookings AS $$
+DECLARE
+  v_booking bookings;
+BEGIN
+  UPDATE bookings SET status = 'completed', completed_at = now()
+    WHERE id = p_booking_id AND driver_id = p_driver_id AND status = 'in_progress'
+    RETURNING * INTO v_booking;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'booking_not_in_progress';
+  END IF;
+
+  INSERT INTO driver_earnings (driver_id, booking_id, amount, type)
+    VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare');
+
+  UPDATE drivers SET rides_completed = rides_completed + 1 WHERE id = p_driver_id;
+
+  RETURN v_booking;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

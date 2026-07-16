@@ -1,42 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import DriverShell from './DriverShell';
 import { useDriverAuth } from './useDriverAuth';
 import { supabase } from '../lib/supabaseClient';
+import { driverApi } from '../lib/driverApi';
 import Login from './screens/Login';
 import Signup from './screens/Signup';
 import CheckEmail from './screens/CheckEmail';
 import PendingVerification from './screens/PendingVerification';
 import Suspended from './screens/Suspended';
-import Dashboard from './screens/Dashboard';
-import NewRideRequest from './screens/NewRideRequest';
+import Home from './screens/Home';
+import Requests from './screens/Requests';
+import Schedule from './screens/Schedule';
+import Earnings from './screens/Earnings';
+import Profile from './screens/Profile';
 import RideDetails from './screens/RideDetails';
 import NavigateToPickup from './screens/NavigateToPickup';
 import PassengerPickup from './screens/PassengerPickup';
 import OnTrip from './screens/OnTrip';
 import TripComplete from './screens/TripComplete';
-import Schedule from './screens/Schedule';
 
-function nextPayoutLabel() {
-  const d = new Date();
-  d.setDate(d.getDate() + 10);
-  return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-}
-
-// Static mock ride — the lifecycle screens (request -> ... -> complete)
-// aren't wired to real dispatch/claim data yet; only the auth gate and the
-// Dashboard/Schedule screens use real data so far.
-const RIDE = {
-  passenger: { name: 'James Carter', rating: 4.95 },
-  pickup: { address: '123 Main St, Miami, FL', detail: 'Apt 4B, Main Entrance', distanceAway: '0.4 mi away' },
-  dropoff: { address: 'Miami International Airport (MIA)', detail: '2100 NW 42nd Ave, Miami, FL' },
-  distanceMiles: 18.4,
-  durationMin: 25,
-  baseFare: 30.00,
-  timeFare: 5.40,
-  fare: 35.40,
-  ridePreference: 'Standard Ride',
-  paymentMethod: 'Card',
+// Which trip-lifecycle screen a booking's real status maps to. A driver
+// re-opening the app mid-trip resumes at exactly the right screen instead
+// of losing their place.
+const STAGE_BY_STATUS = {
+  driver_assigned: 'details',
+  driver_en_route: 'navigate',
+  arrived: 'pickup',
+  in_progress: 'onTrip',
 };
+const ACTIVE_STATUSES = Object.keys(STAGE_BY_STATUS);
 
 function AuthLoading() {
   return (
@@ -62,29 +54,33 @@ function NoDriverProfile({ onLogout }) {
 }
 
 export default function DriverApp({ onExit }) {
-  const { loading, session, driver } = useDriverAuth();
+  const { loading, session, driver: authDriver } = useDriverAuth();
   const [authStage, setAuthStage] = useState('login'); // 'login' | 'signup' | 'checkEmail'
   const [signedUpEmail, setSignedUpEmail] = useState('');
 
-  const [stage, setStage] = useState('dashboard');
-  const [online, setOnline] = useState(false);
-  const [earningsToday, setEarningsToday] = useState(215.40);
-  const [ridesCompleted, setRidesCompleted] = useState(5);
-  const [payoutDate] = useState(nextPayoutLabel);
+  const [tab, setTab] = useState('home');
+  // Local override so a freshly-claimed/updated booking reflects instantly
+  // without waiting on a refetch; useDriverAuth's driver row (rating,
+  // profile fields) still comes from the live auth hook.
+  const [driverOverride, setDriverOverride] = useState(null);
+  const driver = driverOverride || authDriver;
 
-  // Simulate an incoming ride ping shortly after the driver goes online.
-  useEffect(() => {
-    if (online && stage === 'dashboard') {
-      const t = setTimeout(() => setStage('request'), 1800);
-      return () => clearTimeout(t);
+  const [activeBooking, setActiveBooking] = useState(undefined); // undefined = not checked yet, null = none
+  const [justCompleted, setJustCompleted] = useState(null);
+
+  const refreshActiveBooking = useCallback(async () => {
+    try {
+      const schedule = await driverApi.getSchedule();
+      const active = (schedule || []).find((b) => ACTIVE_STATUSES.includes(b.status));
+      setActiveBooking(active || null);
+    } catch {
+      setActiveBooking(null);
     }
-  }, [online, stage]);
+  }, []);
 
-  const completeTrip = () => {
-    setEarningsToday((v) => +(v + RIDE.fare).toFixed(2));
-    setRidesCompleted((v) => v + 1);
-    setStage('complete');
-  };
+  useEffect(() => {
+    if (driver && driver.status === 'active') refreshActiveBooking();
+  }, [driver, refreshActiveBooking]);
 
   const logout = () => supabase.auth.signOut();
 
@@ -109,60 +105,93 @@ export default function DriverApp({ onExit }) {
   if (driver.status === 'pending_verification') return <PendingVerification onLogout={logout} />;
   if (driver.status === 'suspended') return <Suspended onLogout={logout} />;
 
-  if (stage === 'dashboard') {
+  // Still resolving whether there's an in-progress trip to resume into.
+  if (activeBooking === undefined) return <AuthLoading />;
+
+  // A just-claimed or newly-advanced booking — update local state and let
+  // the render below pick the right lifecycle screen from its status.
+  const onBookingUpdate = (booking) => setActiveBooking(booking);
+
+  const advance = async (event) => {
+    const updated = await driverApi.setBookingStatus(activeBooking.id, event);
+    if (event === 'complete') {
+      setJustCompleted(updated);
+      setActiveBooking(null);
+    } else {
+      onBookingUpdate(updated);
+    }
+  };
+
+  // --- Trip Complete is shown once, then falls back to the tab shell -------
+  if (justCompleted) {
     return (
-      <Dashboard
+      <TripComplete
+        booking={justCompleted}
+        onBackToDashboard={() => { setJustCompleted(null); setTab('home'); }}
+      />
+    );
+  }
+
+  // --- Active trip: full-screen focus mode, no tab bar ----------------------
+  if (activeBooking) {
+    const stage = STAGE_BY_STATUS[activeBooking.status];
+    if (stage === 'details') {
+      return (
+        <RideDetails
+          booking={activeBooking}
+          onStartNavigation={() => advance('en_route')}
+        />
+      );
+    }
+    if (stage === 'navigate') {
+      return <NavigateToPickup booking={activeBooking} onArrived={() => advance('arrived')} />;
+    }
+    if (stage === 'pickup') {
+      return <PassengerPickup booking={activeBooking} onStartTrip={() => advance('start')} />;
+    }
+    if (stage === 'onTrip') {
+      return <OnTrip booking={activeBooking} onEndTrip={() => advance('complete')} />;
+    }
+  }
+
+  // --- Idle: tab shell --------------------------------------------------------
+  const tabProps = { activeTab: tab, onChangeTab: setTab };
+
+  if (tab === 'home') {
+    return (
+      <Home
         driver={driver}
-        online={online}
-        earningsToday={earningsToday}
-        ridesCompleted={ridesCompleted}
-        payoutDate={payoutDate}
-        onToggleOnline={() => setOnline((v) => !v)}
         onExit={onExit}
         onLogout={logout}
-        onOpenSchedule={() => setStage('schedule')}
+        onOpenTab={setTab}
+        {...tabProps}
       />
     );
   }
-
-  if (stage === 'schedule') {
-    return <Schedule onBack={() => setStage('dashboard')} />;
-  }
-
-  if (stage === 'request') {
+  if (tab === 'requests') {
     return (
-      <NewRideRequest
-        ride={RIDE}
-        onDecline={() => setStage('dashboard')}
-        onAccept={() => setStage('details')}
+      <Requests
+        driver={driver}
+        onClaimed={onBookingUpdate}
+        {...tabProps}
       />
     );
   }
-
-  if (stage === 'details') {
+  if (tab === 'schedule') {
+    return <Schedule driver={driver} onClaimed={onBookingUpdate} {...tabProps} />;
+  }
+  if (tab === 'earnings') {
+    return <Earnings {...tabProps} />;
+  }
+  if (tab === 'profile') {
     return (
-      <RideDetails
-        ride={RIDE}
-        onBack={() => setStage('request')}
-        onStartNavigation={() => setStage('navigate')}
+      <Profile
+        driver={driver}
+        onDriverUpdate={setDriverOverride}
+        onLogout={logout}
+        {...tabProps}
       />
     );
-  }
-
-  if (stage === 'navigate') {
-    return <NavigateToPickup ride={RIDE} onArrived={() => setStage('pickup')} />;
-  }
-
-  if (stage === 'pickup') {
-    return <PassengerPickup ride={RIDE} onStartTrip={() => setStage('onTrip')} />;
-  }
-
-  if (stage === 'onTrip') {
-    return <OnTrip ride={RIDE} onEndTrip={completeTrip} />;
-  }
-
-  if (stage === 'complete') {
-    return <TripComplete ride={RIDE} onBackToDashboard={() => setStage('dashboard')} />;
   }
 
   return null;

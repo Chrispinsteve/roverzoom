@@ -5,6 +5,16 @@ const { makeReference } = require('../services/reference');
 
 const router = express.Router();
 
+// Once a driver is assigned, riders should be able to identify them — but
+// only this safe subset. Never phone/email/license/insurance/vehicle_plate.
+const DRIVER_PUBLIC_FIELDS = 'name, photo_url, rating, vehicle_make, vehicle_model, vehicle_color';
+
+function withDriverInfo(booking) {
+  if (!booking) return booking;
+  const { drivers, ...rest } = booking;
+  return { ...rest, driver: drivers || null };
+}
+
 // POST /api/bookings — create a confirmed booking
 router.post('/', async (req, res) => {
   const {
@@ -78,11 +88,11 @@ router.get('/by-phone/:phone', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select(`*, drivers(${DRIVER_PUBLIC_FIELDS})`)
       .eq('rider_phone', req.params.phone)
       .order('scheduled_at', { ascending: false });
     if (error) throw error;
-    res.json(data || []);
+    res.json((data || []).map(withDriverInfo));
   } catch (err) {
     console.error('bookings by-phone error', err.message);
     res.status(500).json({ error: 'Could not look up rides.' });
@@ -94,12 +104,12 @@ router.get('/:reference', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select(`*, drivers(${DRIVER_PUBLIC_FIELDS})`)
       .eq('reference', req.params.reference)
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Booking not found.' });
-    res.json(data);
+    res.json(withDriverInfo(data));
   } catch (err) {
     console.error('booking fetch error', err.message);
     res.status(500).json({ error: 'Could not fetch booking.' });

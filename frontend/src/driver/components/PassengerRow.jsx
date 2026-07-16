@@ -1,24 +1,25 @@
 import Icon from '../../components/Icon';
 import Avatar from './Avatar';
 
-// Passenger identity row, reused across ride details / navigate / pickup / on-trip.
-// Pass `right` to replace the call/message buttons with custom content (e.g. ETA).
-export default function PassengerRow({ passenger, right }) {
+// Rider identity row, reused across ride details / navigate / pickup / on-trip.
+// Riders don't have accounts or ratings in this app — just the name + phone
+// collected at booking — so this shows name only, with real tel:/sms: links
+// (previously these were decorative, non-functional buttons).
+export default function PassengerRow({ name, phone, right }) {
   return (
     <div className="drv-passenger-row">
-      <Avatar name={passenger.name} size={46} />
+      <Avatar name={name} size={46} />
       <div className="drv-passenger-info">
-        <div className="drv-passenger-name">{passenger.name}</div>
-        <div className="drv-passenger-rating">★ {passenger.rating}</div>
+        <div className="drv-passenger-name">{name}</div>
       </div>
       {right ?? (
         <div className="drv-passenger-actions">
-          <button className="drv-icon-btn" aria-label="Call passenger">
+          <a className="drv-icon-btn" aria-label="Call rider" href={`tel:${phone}`}>
             <Icon name="phone" size={16} color="var(--ink)" />
-          </button>
-          <button className="drv-icon-btn" aria-label="Message passenger">
+          </a>
+          <a className="drv-icon-btn" aria-label="Text rider" href={`sms:${phone}`}>
             <Icon name="message" size={16} color="var(--ink)" />
-          </button>
+          </a>
         </div>
       )}
     </div>

@@ -79,6 +79,20 @@ export default function MyRides({ onBack }) {
                     <span className={`k-tag ${r.status === 'confirmed' ? 'green' : ''}`}>{r.status}</span>
                     <span className="k-tag">${Number(r.fare).toFixed(2)}</span>
                   </div>
+                  {/* Only ever present once a driver has claimed this ride —
+                      claiming requires a complete profile, so photo_url is
+                      always set here (never a blank/broken image). */}
+                  {r.driver && (
+                    <div className="k-ride-driver">
+                      <img src={r.driver.photo_url} alt={r.driver.name} className="k-ride-driver-photo" />
+                      <div className="k-ride-driver-info">
+                        <div className="k-ride-driver-name">{r.driver.name}</div>
+                        <div className="k-ride-driver-meta">
+                          ★ {r.driver.rating} · {r.driver.vehicle_color} {r.driver.vehicle_make} {r.driver.vehicle_model}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="k-ride-actions">
                     <button className="k-mini-btn" onClick={stub('Reschedule')}>Reschedule</button>
                     <button className="k-mini-btn" onClick={stub('Cancel')}>Cancel</button>

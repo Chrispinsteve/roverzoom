@@ -1,10 +1,10 @@
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
-import RouteMap from '../components/RouteMap';
 import PassengerRow from '../components/PassengerRow';
 import InstructionBanner from '../components/InstructionBanner';
+import { mapsUrl } from '../lib/maps';
 
-export default function NavigateToPickup({ ride, onArrived }) {
+export default function NavigateToPickup({ booking, onArrived }) {
   return (
     <DriverShell rightSlot={
       <button className="drv-icon-btn" aria-label="Safety">
@@ -16,22 +16,23 @@ export default function NavigateToPickup({ ride, onArrived }) {
           <InstructionBanner
             icon="arrowUp"
             title="Head to pickup"
-            lines={[ride.pickup.address, ride.pickup.distanceAway]}
+            lines={[booking.pickup_address, `${booking.distance_miles} mi · ~${booking.duration_minutes} min`]}
           />
         </div>
 
-        <div className="rise-1">
-          <RouteMap
-            height={280}
-            pathD="M50 165 L110 165 L110 105 L190 105 L190 45 L240 45"
-            labels={[{ text: 'DOWNTOWN', top: '20%', left: '18%' }]}
-            carPos={{ top: '91.7%', left: '16.7%' }}
-            squarePos={{ top: '25%', left: '80%' }}
-            fabs={['navArrow', 'shieldCheck']}
-          />
-        </div>
+        <a
+          className="btn btn-ghost rise-1"
+          href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)}
+          target="_blank" rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}
+        >
+          <Icon name="navArrow" size={18} color="var(--ink-2)" />
+          Open in Maps
+        </a>
 
-        <PassengerRow passenger={ride.passenger} />
+        <div style={{ marginTop: 20 }}>
+          <PassengerRow name={booking.rider_name} phone={booking.rider_phone} />
+        </div>
 
         <div className="spacer" />
 

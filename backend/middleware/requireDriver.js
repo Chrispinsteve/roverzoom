@@ -47,4 +47,18 @@ function requireActiveDriver(req, res, next) {
   next();
 }
 
-module.exports = { requireDriver, requireActiveDriver };
+// Gates ride-request access on profile completion (photo + license +
+// insurance all uploaded) — the "open marketplace, but controlled" model:
+// there's no online/offline toggle, so this is the one real access control
+// on who can see/claim rides.
+function requireCompleteProfile(req, res, next) {
+  if (!req.driver.profile_completed_at) {
+    return res.status(403).json({
+      error: 'Complete your profile (photo, license, insurance) to see ride requests.',
+      code: 'profile_incomplete',
+    });
+  }
+  next();
+}
+
+module.exports = { requireDriver, requireActiveDriver, requireCompleteProfile };

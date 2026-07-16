@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
+import { driverApi } from '../../lib/driverApi';
 
-export default function TripComplete({ ride, onBackToDashboard }) {
+export default function TripComplete({ booking, onBackToDashboard }) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
+  const [saved, setSaved] = useState(false);
+
+  const fare = Number(booking.fare);
+  const payout = booking.driver_payout;
+  const platformCut = Math.round((fare - payout) * 100) / 100;
+
+  const rate = (n) => {
+    setRating(n);
+    driverApi.rateRider(booking.id, n).then(() => setSaved(true)).catch(() => {});
+  };
 
   return (
     <DriverShell rightSlot={
@@ -19,33 +30,33 @@ export default function TripComplete({ ride, onBackToDashboard }) {
           </div>
           <h1 className="title rise-1" style={{ fontSize: 25 }}>Trip Complete!</h1>
           <p className="subtitle rise-1" style={{ marginBottom: 0 }}>
-            You earned <strong style={{ color: 'var(--ink)' }}>${ride.fare.toFixed(2)}</strong>
+            You earned <strong style={{ color: 'var(--ink)' }}>${payout.toFixed(2)}</strong>
           </p>
         </div>
 
         <div className="summary rise-2">
           <div className="summary-row">
-            <span className="summary-label">Base Fare</span>
-            <span className="summary-value">${ride.baseFare.toFixed(2)}</span>
+            <span className="summary-label">Fare (rider paid)</span>
+            <span className="summary-value">${fare.toFixed(2)}</span>
           </div>
           <div className="summary-row">
-            <span className="summary-label">Time ({ride.durationMin} min)</span>
-            <span className="summary-value">${ride.timeFare.toFixed(2)}</span>
+            <span className="summary-label">Platform fee (40%)</span>
+            <span className="summary-value">-${platformCut.toFixed(2)}</span>
           </div>
           <div className="summary-row">
-            <span className="summary-label" style={{ fontWeight: 700, color: 'var(--ink)' }}>Total</span>
-            <span className="summary-value big">${ride.fare.toFixed(2)}</span>
+            <span className="summary-label" style={{ fontWeight: 700, color: 'var(--ink)' }}>Your Payout (60%)</span>
+            <span className="summary-value big">${payout.toFixed(2)}</span>
           </div>
         </div>
 
         <div className="rise-3" style={{ textAlign: 'center', marginTop: 24 }}>
-          <p className="eyebrow" style={{ marginBottom: 12 }}>Rate your passenger</p>
+          <p className="eyebrow" style={{ marginBottom: 12 }}>{saved ? 'Rating saved' : 'Rate your passenger'}</p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
                 aria-label={`${n} star`}
-                onClick={() => setRating(n)}
+                onClick={() => rate(n)}
                 onMouseEnter={() => setHover(n)}
                 onMouseLeave={() => setHover(0)}
                 style={{ padding: 4 }}

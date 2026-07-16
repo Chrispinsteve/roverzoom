@@ -632,6 +632,62 @@ input, textarea { font-family: inherit; }
 }
 .drv-icon-btn:active { transform: scale(0.92); }
 
+/* Persistent bottom tab bar — pinned below .body (the only scrollable
+   flex child of .stage), never scrolls away. Hidden entirely during an
+   active trip (DriverShell renders it only when activeTab is passed). */
+.drv-tabbar {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--line-2);
+  background: var(--canvas);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+}
+.drv-tabbar-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 2px;
+  font-size: 11px; font-weight: 600;
+  color: var(--ink-4);
+  border-radius: var(--r-sm);
+}
+.drv-tabbar-btn.active { color: var(--ink); }
+.drv-tabbar-btn:active { background: var(--canvas-2); }
+
+.drv-empty-state {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 10px; margin-top: 48px; padding: 0 24px;
+  color: var(--ink-3); font-size: 14.5px; line-height: 1.5;
+}
+
+/* Profile-completion gate banner (Home) — the "controlled at some level"
+   access gate, since there's no online/offline toggle. */
+.drv-gate-banner {
+  display: block; width: 100%; text-align: left;
+  background: var(--card); border: 1.5px solid #eab308;
+  border-radius: var(--r-md); padding: 16px 18px; margin-bottom: 18px;
+}
+.drv-gate-banner-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.drv-gate-banner-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+.drv-gate-banner-sub { margin-top: 4px; font-size: 13px; color: var(--ink-3); }
+.drv-gate-checklist { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.drv-gate-chip {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-3);
+  background: var(--canvas-2); border-radius: 999px; padding: 5px 10px;
+}
+.drv-gate-chip.done { color: var(--positive); }
+
+/* Profile tab — document upload rows */
+.drv-doc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--line-2);
+}
+.drv-doc-row:last-of-type { border-bottom: none; }
+.drv-doc-label { font-size: 15px; font-weight: 600; color: var(--ink); }
+.drv-doc-hint { margin-top: 2px; font-size: 12.5px; color: var(--ink-3); }
+.drv-doc-done { display: flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 600; color: var(--positive); flex-shrink: 0; white-space: nowrap; }
+.drv-doc-upload-btn { width: auto; min-height: 40px; padding: 8px 18px; flex-shrink: 0; cursor: pointer; }
+
 .drv-profile { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
 .drv-profile-name { font-size: 18px; font-weight: 700; color: var(--ink); }
 .drv-profile-meta { display: flex; align-items: center; gap: 10px; margin-top: 3px; font-size: 13.5px; color: var(--ink-3); }
@@ -655,44 +711,6 @@ input, textarea { font-family: inherit; }
 .drv-go-caption { text-align: center; font-size: 13px; color: var(--positive); margin: 10px 0 0; }
 
 .drv-rail-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
-
-/* Decorative schematic route map (no real map provider wired up) */
-.drv-map {
-  position: relative;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--line);
-  background: linear-gradient(160deg, #14161a 0%, #1c1e22 100%);
-  overflow: hidden;
-}
-.drv-map-svg { width: 100%; height: 100%; display: block; }
-.drv-map-route-shadow { fill: none; stroke: rgba(0,0,0,0.5); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
-.drv-map-route { fill: none; stroke: rgba(255,255,255,0.9); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.drv-map-label {
-  position: absolute; transform: translate(-50%, -50%);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: rgba(255,255,255,0.32);
-}
-.drv-map-car {
-  position: absolute; transform: translate(-50%, -50%);
-  width: 28px; height: 28px; border-radius: 50%; background: #fff;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-}
-.drv-map-square {
-  position: absolute; transform: translate(-50%, -50%);
-  width: 12px; height: 12px; border-radius: 3px; background: #fff;
-  box-shadow: 0 0 0 5px rgba(255,255,255,0.15);
-}
-.drv-map-fabs {
-  position: absolute; top: 14px; right: 14px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.drv-map-fab {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: rgba(12,13,15,0.6); border: 1px solid rgba(255,255,255,0.15);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-}
 
 /* Turn-by-turn instruction banner */
 .drv-instruction {
