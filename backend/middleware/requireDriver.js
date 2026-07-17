@@ -15,7 +15,17 @@ async function requireDriver(req, res, next) {
 
   try {
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) return res.status(401).json({ error: 'Invalid or expired session.' });
+    if (error || !data?.user) {
+      // A fetch-level failure means WE couldn't reach the Auth API (bad
+      // SUPABASE_URL/key, network) — a server problem, not the driver's
+      // session. Answering 401 here would tell every client "log in again"
+      // for an outage no re-login can fix.
+      if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0 || (error.status || 0) >= 500)) {
+        console.error('requireDriver: auth service unreachable —', error.message);
+        return res.status(503).json({ error: 'Could not verify your session right now. Try again in a moment.' });
+      }
+      return res.status(401).json({ error: 'Invalid or expired session.', code: 'session_invalid' });
+    }
 
     const { data: driver, error: driverErr } = await supabase
       .from('drivers')

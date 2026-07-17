@@ -632,6 +632,29 @@ input, textarea { font-family: inherit; }
 }
 .drv-icon-btn:active { transform: scale(0.92); }
 
+/* Driver mode is a true app frame: the stage is EXACTLY viewport-height
+   (not min-height, which lets tall content grow the page and scroll the
+   whole document, tab bar and all). With the height fixed, .body becomes
+   the only scroll region and the header/tab bar never move. */
+.app[data-theme="dark"] .stage {
+  height: min(960px, calc(100dvh - 40px));
+}
+@media (max-width: 600px) {
+  .app[data-theme="dark"] .stage { height: 100dvh; }
+}
+
+/* Schedule screen: the page itself never scrolls — the calendar, filter
+   chip, and My Schedule/Available tabs stay pinned; only the trip list
+   below them scrolls. */
+.drv-schedule-body { overflow-y: hidden; }
+.drv-schedule-body > * { flex-shrink: 0; }
+.drv-schedule-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
 /* Persistent bottom tab bar — pinned below .body (the only scrollable
    flex child of .stage), never scrolls away. Hidden entirely during an
    active trip (DriverShell renders it only when activeTab is passed). */

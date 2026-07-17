@@ -118,7 +118,7 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
 
   return (
     <DriverShell activeTab={activeTab} onChangeTab={onChangeTab}>
-      <div className="body">
+      <div className="body drv-schedule-body">
         <h1 className="title rise" style={{ fontSize: 26 }}>Schedule</h1>
 
         <div className="rise-1">
@@ -144,54 +144,56 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
 
         {error && <p className="error-text">{error}</p>}
 
-        {tab === 'available' && !profileComplete ? (
-          <div className="drv-empty-state rise-1">
-            <Icon name="shieldCheck" size={32} color="var(--ink-4)" />
-            <p>Complete your profile to claim available trips.</p>
-            <button className="btn" style={{ marginTop: 16 }} onClick={() => onChangeTab('profile')}>
-              Complete Profile
-            </button>
-          </div>
-        ) : (
-          <>
-            {list === null && !error && <p className="muted center" style={{ marginTop: 24 }}>Loading…</p>}
+        <div className="drv-schedule-scroll">
+          {tab === 'available' && !profileComplete ? (
+            <div className="drv-empty-state rise-1">
+              <Icon name="shieldCheck" size={32} color="var(--ink-4)" />
+              <p>Complete your profile to claim available trips.</p>
+              <button className="btn" style={{ marginTop: 16 }} onClick={() => onChangeTab('profile')}>
+                Complete Profile
+              </button>
+            </div>
+          ) : (
+            <>
+              {list === null && !error && <p className="muted center" style={{ marginTop: 24 }}>Loading…</p>}
 
-            {list && list.length === 0 && (
-              <p className="muted center" style={{ marginTop: 24 }}>
-                {selectedDate ? 'No trips on this date.' : (tab === 'mine' ? 'No upcoming trips yet.' : 'No trips available right now.')}
-              </p>
-            )}
+              {list && list.length === 0 && (
+                <p className="muted center" style={{ marginTop: 24 }}>
+                  {selectedDate ? 'No trips on this date.' : (tab === 'mine' ? 'No upcoming trips yet.' : 'No trips available right now.')}
+                </p>
+              )}
 
-            {list && groupByDay(list).map((group) => (
-              <div key={group.key} style={{ marginBottom: 18 }}>
-                <div className="eyebrow" style={{ marginBottom: 8 }}>{dayLabel(group.items[0].scheduled_at)}</div>
-                {group.items.map((b) => (
-                  tab === 'available' ? (
-                    <button
-                      key={b.id}
-                      className="drv-trip-row"
-                      onClick={() => claim(b.id)}
-                      disabled={claimingId === b.id}
-                    >
-                      <TripRowBody booking={b} />
-                      <span className="drv-trip-claim">{claimingId === b.id ? '…' : 'Claim'}</span>
-                    </button>
-                  ) : (
-                    <div key={b.id} className="drv-trip-row">
-                      <TripRowBody booking={b} />
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                        <span className="drv-trip-status">{STATUS_LABEL[b.status] || b.status}</span>
-                        {b.status === 'driver_assigned' && (new Date(b.scheduled_at) - Date.now()) > 2 * 36e5 && (
-                          <button className="drv-release" onClick={() => release(b)}>Release</button>
-                        )}
+              {list && groupByDay(list).map((group) => (
+                <div key={group.key} style={{ marginBottom: 18 }}>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>{dayLabel(group.items[0].scheduled_at)}</div>
+                  {group.items.map((b) => (
+                    tab === 'available' ? (
+                      <button
+                        key={b.id}
+                        className="drv-trip-row"
+                        onClick={() => claim(b.id)}
+                        disabled={claimingId === b.id}
+                      >
+                        <TripRowBody booking={b} />
+                        <span className="drv-trip-claim">{claimingId === b.id ? '…' : 'Claim'}</span>
+                      </button>
+                    ) : (
+                      <div key={b.id} className="drv-trip-row">
+                        <TripRowBody booking={b} />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                          <span className="drv-trip-status">{STATUS_LABEL[b.status] || b.status}</span>
+                          {b.status === 'driver_assigned' && (new Date(b.scheduled_at) - Date.now()) > 2 * 36e5 && (
+                            <button className="drv-release" onClick={() => release(b)}>Release</button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )
-                ))}
-              </div>
-            ))}
-          </>
-        )}
+                    )
+                  ))}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </DriverShell>
   );
