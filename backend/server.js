@@ -5,15 +5,24 @@ const cors = require('cors');
 const quoteRoutes = require('./routes/quote');
 const bookingRoutes = require('./routes/bookings');
 const driverRoutes = require('./routes/driver');
+const paymentsRoutes = require('./routes/payments');
 
 const app = express();
 app.use(cors());
+
+// Stripe webhook signature verification needs the raw, unparsed body — this
+// must be registered (and scoped to just this one path) BEFORE the global
+// express.json() below, or by the time the request reaches the webhook
+// handler the body has already been consumed/parsed and constructEvent()
+// fails. Every other /api/payments/* route gets normal JSON parsing.
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'roverzoom-api' }));
 app.use('/api', quoteRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/driver', driverRoutes);
+app.use('/api/payments', paymentsRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
