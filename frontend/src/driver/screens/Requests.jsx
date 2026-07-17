@@ -48,7 +48,11 @@ function RequestCard({ trip, fromYouMi, conflict, claiming, onAccept }) {
         <span className="drv-req-chip">{trip.distance_miles} mi trip</span>
         <span className="drv-req-chip">~{trip.duration_minutes} min</span>
         {fromYouMi != null && <span className="drv-req-chip">{fromYouMi.toFixed(1)} mi from you</span>}
-        <span className="drv-req-chip">{trip.payment_method === 'cash' ? 'Rider pays cash' : 'Card — prepaid'}</span>
+        <span className="drv-req-chip">
+          {trip.payment_method === 'cash' ? 'Rider pays cash'
+            : trip.payment_method === 'zelle' ? 'Paid by Zelle'
+            : 'Card — prepaid'}
+        </span>
       </div>
 
       {conflict && (

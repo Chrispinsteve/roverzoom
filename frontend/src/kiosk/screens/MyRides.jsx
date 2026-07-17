@@ -3,6 +3,7 @@ import FlowShell from '../components/FlowShell';
 import PhoneKeypad from '../components/PhoneKeypad';
 import { api } from '../../lib/api';
 import { fmtPhone } from '../lib/phone';
+import { statusPill, isTrackable } from '../lib/rideStatus';
 
 function fmtWhen(iso) {
   const d = new Date(iso);
@@ -13,7 +14,7 @@ function fmtWhen(iso) {
 // approved mockup's own scope for those two buttons.
 const stub = (label) => () => alert(`${label} is coming in a future update.`);
 
-export default function MyRides({ onBack }) {
+export default function MyRides({ onBack, onTrack }) {
   const [digits, setDigits] = useState('');
   const [rides, setRides] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -71,12 +72,14 @@ export default function MyRides({ onBack }) {
             <span className="k-price-wait">No rides found for this number.</span>
           ) : (
             <div className="k-rides-list">
-              {rides.map((r) => (
+              {rides.map((r) => {
+                const pill = statusPill(r.status);
+                return (
                 <div key={r.id} className="k-ride-card">
                   <div className="k-ride-when">{fmtWhen(r.scheduled_at)}</div>
                   <div className="k-ride-route">{r.pickup_address} → {r.dropoff_address}</div>
                   <div className="k-ride-tags">
-                    <span className={`k-tag ${r.status === 'confirmed' ? 'green' : ''}`}>{r.status}</span>
+                    <span className={`k-tag k-tag-${pill.tone}`}>{pill.label}</span>
                     <span className="k-tag">${Number(r.fare).toFixed(2)}</span>
                   </div>
                   {/* Only ever present once a driver has claimed this ride —
@@ -94,11 +97,15 @@ export default function MyRides({ onBack }) {
                     </div>
                   )}
                   <div className="k-ride-actions">
+                    {isTrackable(r.status) && (
+                      <button className="k-mini-btn k-mini-btn-primary" onClick={() => onTrack(r.reference)}>Track ride</button>
+                    )}
                     <button className="k-mini-btn" onClick={stub('Reschedule')}>Reschedule</button>
                     <button className="k-mini-btn" onClick={stub('Cancel')}>Cancel</button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

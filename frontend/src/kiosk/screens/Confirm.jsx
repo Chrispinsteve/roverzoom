@@ -8,7 +8,7 @@ function fmtWhen(iso) {
   return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-export default function Confirm({ confirmedBooking, onReset }) {
+export default function Confirm({ confirmedBooking, onTrack, onReset }) {
   const [secondsLeft, setSecondsLeft] = useState(RESET_SECONDS);
 
   useEffect(() => {
@@ -75,10 +75,6 @@ export default function Confirm({ confirmedBooking, onReset }) {
               <span className="v">{fmtWhen(confirmedBooking.scheduled_at)}</span>
             </div>
             <div className="k-ticket-row">
-              <span className="k">Payment</span>
-              <span className="v">{confirmedBooking.payment_method === 'card' ? 'Card' : 'Cash'}</span>
-            </div>
-            <div className="k-ticket-row">
               <span className="k">Total</span>
               <span className="v">${Number(confirmedBooking.fare).toFixed(2)}</span>
             </div>
@@ -94,6 +90,7 @@ export default function Confirm({ confirmedBooking, onReset }) {
           </div>
 
           <div className="k-confirm-actions">
+            <button className="k-next-btn" onClick={onTrack}>Track my ride</button>
             <button className="k-ghost-btn" onClick={onReset}>Book another ride</button>
           </div>
           <span className="k-reset-note">This screen will reset in {secondsLeft}s for the next rider</span>

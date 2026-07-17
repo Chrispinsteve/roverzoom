@@ -217,8 +217,15 @@
 .k-ride-driver-info{ min-width:0; }
 .k-ride-driver-name{ font-weight:600; font-size:15px; }
 .k-ride-driver-meta{ margin-top:2px; font-size:13px; color:var(--mute); }
-.k-ride-actions{ margin-top:14px; display:flex; gap:10px; }
+.k-ride-actions{ margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
 .k-mini-btn{ border:1.5px solid var(--line); border-radius:10px; padding:10px 16px; font-size:15px; min-height:44px; }
+.k-mini-btn-primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); font-weight:600; }
+
+/* status pills (My Rides) — friendly, colour-coded by lifecycle stage */
+.k-tag-go{ background:var(--lock-bg); color:var(--lock-deep); }
+.k-tag-done{ background:var(--lock-bg); color:var(--lock-deep); }
+.k-tag-wait{ background:#FBF0D9; color:#7A5B15; }
+.k-tag-canceled{ background:#F3E4E2; color:var(--danger); }
 
 /* phone lookup (My Rides entry) */
 .k-lookup-row{ display:flex; gap:10px; align-items:flex-end; margin-top:12px; }
@@ -226,6 +233,37 @@
 
 @media (max-width:480px){ .k-q{ font-size:18.5px; } .k-price-num{ font-size:23px; } }
 @media (prefers-reduced-motion:reduce){ .kiosk-root *{ animation:none!important; transition:none!important; } }
+
+/* ===== Live ride tracking ===== */
+.k-track-hero{ display:flex; flex-direction:column; gap:5px; margin-bottom:clamp(12px,2.2vh,20px); }
+.k-track-title{ font-family:var(--display); font-weight:600; font-size:clamp(23px,1.2vw + 1.6vh,31px); letter-spacing:-0.02em; line-height:1.08; }
+.k-track-sub{ color:var(--mute); font-size:clamp(14px,0.5vw + 0.7vh,16px); line-height:1.45; }
+.k-track-canceled .k-track-title{ color:var(--danger); }
+.k-track-done .k-track-title{ color:var(--lock-deep); }
+.k-track-live{ align-self:flex-start; margin-top:6px; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--lock); background:var(--lock-bg); padding:4px 11px; border-radius:999px; }
+.k-track-live-dot{ width:7px; height:7px; border-radius:50%; background:var(--lock); animation:k-pulse 1.4s ease-in-out infinite; }
+@keyframes k-pulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.3; transform:scale(0.65); } }
+
+.k-track-driver{ display:flex; align-items:center; gap:12px; background:var(--paper); border:1.5px solid var(--line); border-radius:var(--k-radius-lg); padding:14px 16px; box-shadow:var(--shadow-card); }
+.k-track-driver .k-ride-driver-photo{ width:52px; height:52px; background:var(--smoke); }
+.k-track-driver-badge{ margin-left:auto; align-self:flex-start; font-size:11.5px; font-weight:600; color:var(--lock-deep); background:var(--lock-bg); padding:4px 9px; border-radius:999px; white-space:nowrap; }
+
+.k-track-steps{ list-style:none; margin:clamp(14px,2.4vh,22px) 0 0; padding:0; position:relative; }
+.k-track-steps::before{ content:''; position:absolute; left:12px; top:18px; bottom:18px; width:2px; background:var(--line); transform:translateX(-50%); }
+.k-track-step{ position:relative; display:flex; align-items:center; gap:14px; padding:8px 0; }
+.k-track-node{ position:relative; z-index:1; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:var(--smoke); border:2px solid var(--line); transition:background .3s, border-color .3s; }
+.k-track-node-dot{ width:7px; height:7px; border-radius:50%; background:var(--mute-dark); }
+.k-track-step-label{ font-size:15.5px; font-weight:500; color:var(--mute); transition:color .3s; }
+.k-track-step.done .k-track-node{ background:var(--lock); border-color:var(--lock); }
+.k-track-step.done .k-track-step-label{ color:var(--ink); }
+.k-track-step.active .k-track-node{ border-color:var(--lock); background:var(--paper); }
+.k-track-step.active .k-track-node-dot{ background:var(--lock); animation:k-pulse 1.4s ease-in-out infinite; }
+.k-track-step.active .k-track-step-label{ color:var(--ink); font-weight:650; }
+
+.k-track-ticket{ margin-top:clamp(14px,2.4vh,22px); background:var(--smoke); }
+
+/* Track screen keeps the confirm-style stacked actions tidy on wide kiosks */
+.k-confirm-actions .k-next-btn{ flex:0 1 auto; min-width:220px; }
 
 /* ===== In-app payments ===== */
 .k-stripe-mount{margin-top:18px; background:var(--paper, #fff); border-radius:12px;}
