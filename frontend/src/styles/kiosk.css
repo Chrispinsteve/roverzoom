@@ -226,3 +226,8 @@
 
 @media (max-width:480px){ .k-q{ font-size:18.5px; } .k-price-num{ font-size:23px; } }
 @media (prefers-reduced-motion:reduce){ .kiosk-root *{ animation:none!important; transition:none!important; } }
+
+/* ===== In-app payments ===== */
+.k-stripe-mount{margin-top:18px; background:var(--paper, #fff); border-radius:12px;}
+.k-zelle-note{margin-top:14px; max-width:460px; width:100%; background:#DCF2E6; color:#07402C; border-radius:12px; padding:13px 16px; font-size:14.5px; line-height:1.55; text-align:left;}
+.k-zelle-note b{font-weight:650;}

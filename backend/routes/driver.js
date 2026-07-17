@@ -154,6 +154,54 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
   }
 });
 
+// POST /api/driver/bookings/:bookingId/release — hands a claimed (not yet
+// started) booking back to the open pool. Allowed only while the trip is
+// still in 'driver_assigned' and pickup is more than RELEASE_CUTOFF_HOURS
+// away — inside that window the rider is counting on this specific driver,
+// so releasing requires contacting support instead. Same guarded-UPDATE
+// pattern as claim: the WHERE clause enforces ownership + status, so a
+// stale double-tap or a race with en_route fails safely with 409.
+const RELEASE_CUTOFF_HOURS = Number(process.env.RELEASE_CUTOFF_HOURS) || 2;
+
+router.post('/bookings/:bookingId/release', requireDriver, requireActiveDriver, async (req, res) => {
+  const { bookingId } = req.params;
+  try {
+    const { data: booking, error: fetchErr } = await supabase
+      .from('bookings')
+      .select('id, driver_id, status, scheduled_at')
+      .eq('id', bookingId)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!booking || booking.driver_id !== req.driver.id) {
+      return res.status(404).json({ error: 'Trip not found.' });
+    }
+    if (booking.status !== 'driver_assigned') {
+      return res.status(409).json({ error: 'A trip can only be released before you start driving to it.' });
+    }
+    const hoursOut = (new Date(booking.scheduled_at) - Date.now()) / 36e5;
+    if (hoursOut < RELEASE_CUTOFF_HOURS) {
+      return res.status(409).json({
+        error: `Pickup is less than ${RELEASE_CUTOFF_HOURS}h away — the rider is counting on you. Contact support if you truly can't make it.`,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ driver_id: null, status: 'confirmed', accepted_at: null })
+      .eq('id', bookingId)
+      .eq('driver_id', req.driver.id)
+      .eq('status', 'driver_assigned')
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(409).json({ error: 'Trip could not be released.' });
+    res.json({ released: true, bookingId });
+  } catch (err) {
+    console.error('release booking error', err.message);
+    res.status(500).json({ error: 'Could not release trip.' });
+  }
+});
+
 // GET /api/driver/earnings — real ledger-backed summary + history.
 router.get('/earnings', requireDriver, async (req, res) => {
   try {

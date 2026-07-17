@@ -3,6 +3,48 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import Avatar from '../components/Avatar';
 import { driverApi } from '../../lib/driverApi';
+import { mapsUrl } from '../lib/maps';
+
+const UPCOMING = ['driver_assigned', 'driver_en_route', 'arrived', 'in_progress'];
+
+function countdownLabel(iso) {
+  const ms = new Date(iso) - Date.now();
+  if (ms <= 0) return 'now';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `in ${mins} min`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `in ${h}h ${mins % 60}m`;
+  return new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+// The one question a driver opens the app with: "when's my next ride?"
+// Answered above the fold, with a live countdown and one-tap directions.
+function NextRideCard({ booking, onOpenTab }) {
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="drv-next rise">
+      <div className="drv-next-top">
+        <span className="drv-next-eyebrow">Next ride</span>
+        <span className="drv-next-count">{countdownLabel(booking.scheduled_at)}</span>
+      </div>
+      <div className="drv-next-route">{booking.pickup_address} → {booking.dropoff_address}</div>
+      <div className="drv-next-meta">
+        {new Date(booking.scheduled_at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+        {' · '}{booking.rider_name}{' · you earn $'}{booking.driver_payout.toFixed(2)}
+      </div>
+      <div className="drv-next-actions">
+        <a className="drv-next-btn" target="_blank" rel="noopener noreferrer" href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)}>
+          <Icon name="car" size={15} color="var(--ink)" /> Directions
+        </a>
+        <button className="drv-next-btn" onClick={() => onOpenTab('schedule')}>View schedule</button>
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ icon, label, value, sub }) {
   return (
@@ -85,9 +127,16 @@ function ProfileGateBanner({ driver, onOpenTab }) {
 
 export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, onChangeTab }) {
   const [earnings, setEarnings] = useState(null);
+  const [nextRide, setNextRide] = useState(null);
 
   useEffect(() => {
     driverApi.getEarnings().then(setEarnings).catch(() => setEarnings(null));
+    driverApi.getSchedule().then((schedule) => {
+      const upcoming = (schedule || [])
+        .filter((b) => UPCOMING.includes(b.status) && new Date(b.scheduled_at) > new Date(Date.now() - 60 * 60000))
+        .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+      setNextRide(upcoming[0] || null);
+    }).catch(() => setNextRide(null));
   }, []);
 
   const profileComplete = !!driver.profile_completed_at;
@@ -113,6 +162,8 @@ export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, o
         </div>
 
         {!profileComplete && <ProfileGateBanner driver={driver} onOpenTab={onOpenTab} />}
+
+        {nextRide && <NextRideCard booking={nextRide} onOpenTab={onOpenTab} />}
 
         <StatCard
           icon="bars"

@@ -35,6 +35,15 @@ export default function Confirm({ confirmedBooking, onReset }) {
           <div className="k-check-ring">
             <Icon name="check" size={48} color="var(--paper)" stroke={2.5} />
           </div>
+
+          {confirmedBooking.payment_method === 'zelle' && confirmedBooking.paymentsConfig?.zelle && (
+            <div className="k-zelle-note">
+              <b>Finish with Zelle:</b> send ${Number(confirmedBooking.fare).toFixed(2)} to{' '}
+              <b>{confirmedBooking.paymentsConfig.zelle.recipient}</b>{' '}
+              ({confirmedBooking.paymentsConfig.zelle.name}) and put{' '}
+              <b>{confirmedBooking.reference}</b> in the memo so we can match it to your ride.
+            </div>
+          )}
           <h1>You're all set</h1>
           {/* No SMS provider is wired up yet — this deliberately doesn't
               claim a text was sent. Keep your reference code handy instead. */}
@@ -52,6 +61,14 @@ export default function Confirm({ confirmedBooking, onReset }) {
             <div className="k-ticket-row">
               <span className="k">Destination</span>
               <span className="v">{confirmedBooking.dropoff_address}</span>
+            </div>
+            <div className="k-ticket-row">
+              <span className="k">Payment</span>
+              <span className="v">
+                {confirmedBooking.payment_method === 'card' && (confirmedBooking.payment_status === 'paid' ? 'Paid by card \u2713' : 'Card \u2014 processing')}
+                {confirmedBooking.payment_method === 'cash' && `Cash to driver \u00b7 $${Number(confirmedBooking.fare).toFixed(2)}`}
+                {confirmedBooking.payment_method === 'zelle' && `Zelle \u00b7 $${Number(confirmedBooking.fare).toFixed(2)}`}
+              </span>
             </div>
             <div className="k-ticket-row">
               <span className="k">Date &amp; time</span>

@@ -79,6 +79,21 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const release = async (booking) => {
+    const ok = window.confirm(
+      'Release this ride back to other drivers?\n\n' +
+      'You can release up to 2 hours before pickup. After that the rider is counting on you.'
+    );
+    if (!ok) return;
+    setError('');
+    try {
+      await driverApi.releaseBooking(booking.id);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const claim = async (bookingId) => {
     setClaimingId(bookingId);
     setError('');
@@ -164,7 +179,12 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
                   ) : (
                     <div key={b.id} className="drv-trip-row">
                       <TripRowBody booking={b} />
-                      <span className="drv-trip-status">{STATUS_LABEL[b.status] || b.status}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                        <span className="drv-trip-status">{STATUS_LABEL[b.status] || b.status}</span>
+                        {b.status === 'driver_assigned' && (new Date(b.scheduled_at) - Date.now()) > 2 * 36e5 && (
+                          <button className="drv-release" onClick={() => release(b)}>Release</button>
+                        )}
+                      </div>
                     </div>
                   )
                 ))}

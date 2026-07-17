@@ -28,8 +28,8 @@ router.post('/', async (req, res) => {
   if (!rider?.name || !rider?.phone) {
     return res.status(400).json({ error: 'Name and phone are required.' });
   }
-  if (!['card', 'cash'].includes(paymentMethod)) {
-    return res.status(400).json({ error: 'Payment method must be card or cash.' });
+  if (!['card', 'cash', 'zelle'].includes(paymentMethod)) {
+    return res.status(400).json({ error: 'Payment method must be card, cash, or zelle.' });
   }
 
   const { distanceMiles, durationMinutes, fare } = estimate(pickup, dropoff);

@@ -32,4 +32,7 @@ export const api = {
     req('/bookings', { method: 'POST', body: JSON.stringify(payload) }),
   getBooking: (ref) => req(`/bookings/${ref}`),
   getBookingsByPhone: (phone) => req(`/bookings/by-phone/${encodeURIComponent(phone)}`),
+  getPaymentsConfig: () => req('/payments/config'),
+  createPaymentIntent: (bookingId) =>
+    req('/payments/create-intent', { method: 'POST', body: JSON.stringify({ bookingId }) }),
 };

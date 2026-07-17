@@ -6,6 +6,35 @@ function dateLabel(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+// Last 7 days of ledger entries bucketed per day — a shape, not a dashboard.
+// Drivers glance at this to answer one question: "how's my week going?"
+function WeekChart({ recent }) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    days.push({ key: d.toDateString(), label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), total: 0, isToday: i === 0 });
+  }
+  const byKey = new Map(days.map((d) => [d.key, d]));
+  for (const e of recent) {
+    const k = new Date(e.created_at).toDateString();
+    if (byKey.has(k)) byKey.get(k).total += Number(e.amount);
+  }
+  const max = Math.max(...days.map((d) => d.total), 1);
+  return (
+    <div className="drv-chart rise-1">
+      {days.map((d) => (
+        <div key={d.key} className="drv-chart-col" title={`$${d.total.toFixed(2)}`}>
+          <div className="drv-chart-amt">{d.total > 0 ? `$${Math.round(d.total)}` : ''}</div>
+          <div className="drv-chart-barwrap">
+            <div className={`drv-chart-bar${d.isToday ? ' today' : ''}`} style={{ height: `${Math.max(d.total / max * 100, d.total > 0 ? 6 : 2)}%` }} />
+          </div>
+          <div className={`drv-chart-day${d.isToday ? ' today' : ''}`}>{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Earnings({ activeTab, onChangeTab }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -30,6 +59,8 @@ export default function Earnings({ activeTab, onChangeTab }) {
               <div className="stat"><div className="k">This Week</div><div className="v">${data.weekTotal.toFixed(2)}</div></div>
             </div>
 
+            <WeekChart recent={data.recent} />
+
             <p className="eyebrow rise-2" style={{ marginTop: 22, marginBottom: 8 }}>Recent Activity</p>
             {data.recent.length === 0 && (
               <p className="muted center" style={{ marginTop: 12 }}>No earnings yet — completed trips will show up here.</p>
@@ -38,7 +69,7 @@ export default function Earnings({ activeTab, onChangeTab }) {
               <div key={e.id} className="drv-trip-row" style={{ cursor: 'default' }}>
                 <div className="drv-trip-body">
                   <div className="drv-trip-time">{dateLabel(e.created_at)}</div>
-                  <div className="drv-trip-route" style={{ textTransform: 'capitalize' }}>{e.type}</div>
+                  <div className="drv-trip-route">{e.type === 'fare' ? 'Ride payout' : e.type === 'bonus' ? 'Bonus' : e.type}</div>
                 </div>
                 <span className="drv-trip-status" style={{ color: 'var(--positive)' }}>+${Number(e.amount).toFixed(2)}</span>
               </div>
