@@ -41,10 +41,14 @@ export default function Attract({ onBookHere, onMyRides }) {
 
             <div className="k-path-card k-tablet-path">
               <span className="k-path-label">Right here, right now</span>
-              <h2>Book on this tablet in under a minute</h2>
-              {/* "Confirmation lands on your phone by text" is the mockup's original
-                  copy — softened here since no SMS provider is wired up yet. */}
-              <p>Three taps and your number. This screen forgets everything when you're done.</p>
+              {/* Device-aware copy: "this tablet" and the shared-screen reset
+                  only make sense on the kiosk — a phone user is holding their
+                  own device, so the phone variant drops both. Toggled by CSS at
+                  the same 600px breakpoint that hides the QR card. */}
+              <h2 className="k-only-kiosk">Book on this tablet in under a minute</h2>
+              <h2 className="k-only-phone">Book your ride in under a minute</h2>
+              <p className="k-only-kiosk">Three taps and your number. This screen forgets everything when you're done.</p>
+              <p className="k-only-phone">Three taps and your number — that's it.</p>
               <button className="k-big-cta" onClick={onBookHere}>
                 Book my ride <Icon name="arrowRight" size={20} color="var(--paper)" />
               </button>

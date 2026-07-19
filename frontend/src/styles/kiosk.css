@@ -81,6 +81,14 @@
    (.k-path-card.k-qr-card) so this beats the later `.k-path-card{display:flex}`
    rule — a media query alone doesn't raise priority. */
 @media (max-width:600px){ .k-path-card.k-qr-card{ display:none; } }
+
+/* Device-aware copy: kiosk variant shown by default, phone variant swapped in
+   at the same phone breakpoint. */
+.k-only-phone{ display:none; }
+@media (max-width:600px){
+  .k-only-kiosk{ display:none; }
+  .k-only-phone{ display:block; }
+}
 .k-path-card{ min-height:0; overflow:hidden; border:1px solid var(--line-dark); border-radius:var(--k-radius-lg); padding:clamp(10px, 0.8vw + 1.4vh, 28px); display:flex; flex-direction:column; gap:clamp(4px,1vh,14px); background:#131311; }
 .k-path-label{ flex-shrink:0; font-family:var(--display); font-size:clamp(11px,0.9vh + 0.3vw,14px); letter-spacing:0.14em; text-transform:uppercase; color:var(--mute-dark); }
 .k-qr-row{ display:flex; gap:clamp(10px,1.4vw,20px); align-items:center; min-height:0; }
