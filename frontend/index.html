@@ -7,6 +7,14 @@
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- iOS Safari only drops the browser URL/navigation bar (launches
+         full-screen from the home screen) when it sees THIS apple- tag; the
+         generic mobile-web-app-capable above only covers Android and iOS 16.4+.
+         status-bar-style "black" = dark bar + white text, matching the dark
+         entry screens; content sits below it (opaque, no overlap). -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="RoverZoom" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>RoverZoom — Book a scheduled ride</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
