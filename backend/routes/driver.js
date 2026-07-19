@@ -4,6 +4,7 @@ const { requireDriver, requireActiveDriver, requireCompleteProfile } = require('
 const { driverPayout } = require('../services/payout');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
+const { stripe } = require('../services/stripe');
 
 const router = express.Router();
 
@@ -347,6 +348,93 @@ router.post('/bookings/:bookingId/rate-rider', requireDriver, async (req, res) =
   } catch (err) {
     console.error('rate rider error', err.message);
     res.status(500).json({ error: 'Could not save rating.' });
+  }
+});
+
+// --- Driver payouts: Stripe Connect Express --------------------------------
+// Drivers get paid through a Stripe Connect Express connected account: Stripe
+// hosts the onboarding (bank account / debit card + identity), so we never
+// store sensitive payout data, and the account's `payouts_enabled` flag is the
+// source of truth. We keep only a POINTER to the account. Since this
+// environment can't run DDL to add a drivers column, that pointer lives in the
+// driver's Supabase Auth app_metadata (server-controlled, not user-editable)
+// instead of a new column — Stripe still owns the actual payout state.
+async function getConnectAccountId(driver) {
+  if (!driver.auth_user_id) return null;
+  const { data, error } = await supabase.auth.admin.getUserById(driver.auth_user_id);
+  if (error) throw error;
+  return data?.user?.app_metadata?.stripe_connect_account_id || null;
+}
+
+async function setConnectAccountId(driver, accountId) {
+  const { data, error: getErr } = await supabase.auth.admin.getUserById(driver.auth_user_id);
+  if (getErr) throw getErr;
+  const app_metadata = { ...(data?.user?.app_metadata || {}), stripe_connect_account_id: accountId };
+  const { error } = await supabase.auth.admin.updateUserById(driver.auth_user_id, { app_metadata });
+  if (error) throw error;
+}
+
+function payoutBaseUrl() {
+  return (process.env.PUBLIC_BASE_URL || 'https://roverzooma.vercel.app').replace(/\/+$/, '');
+}
+
+// POST /api/driver/payouts/onboard — start or resume Connect Express onboarding.
+// Returns { url } to Stripe's hosted onboarding; the frontend redirects there.
+router.post('/payouts/onboard', requireDriver, async (req, res) => {
+  const s = stripe();
+  if (!s) return res.status(503).json({ error: 'Payouts are not configured yet.' });
+  if (!req.driver.auth_user_id) return res.status(400).json({ error: 'This account can’t set up payouts.' });
+
+  try {
+    let accountId = await getConnectAccountId(req.driver);
+    if (!accountId) {
+      const account = await s.accounts.create({
+        type: 'express',
+        email: req.driver.email || undefined,
+        business_type: 'individual',
+        capabilities: { transfers: { requested: true } },
+        metadata: { driver_id: req.driver.id },
+      });
+      accountId = account.id;
+      await setConnectAccountId(req.driver, accountId);
+    }
+    const base = payoutBaseUrl();
+    const link = await s.accountLinks.create({
+      account: accountId,
+      refresh_url: `${base}/?driver=payouts&refresh=1`,
+      return_url: `${base}/?driver=payouts`,
+      type: 'account_onboarding',
+    });
+    res.json({ url: link.url });
+  } catch (err) {
+    console.error('payout onboard error', err.message);
+    const notEnabled = /connect/i.test(err.message || '');
+    res.status(notEnabled ? 503 : 500).json({
+      error: notEnabled
+        ? 'Stripe Connect isn’t enabled on this platform account yet.'
+        : 'Could not start payout setup. Please try again.',
+    });
+  }
+});
+
+// GET /api/driver/payouts/status — where this driver stands: not started,
+// onboarding in progress, or fully enabled to receive payouts.
+router.get('/payouts/status', requireDriver, async (req, res) => {
+  const s = stripe();
+  if (!s) return res.json({ configured: false, connected: false, payoutsEnabled: false });
+  try {
+    const accountId = await getConnectAccountId(req.driver);
+    if (!accountId) return res.json({ configured: true, connected: false, payoutsEnabled: false });
+    const acct = await s.accounts.retrieve(accountId);
+    res.json({
+      configured: true,
+      connected: true,
+      detailsSubmitted: !!acct.details_submitted,
+      payoutsEnabled: !!acct.payouts_enabled,
+    });
+  } catch (err) {
+    console.error('payout status error', err.message);
+    res.status(500).json({ error: 'Could not fetch payout status.' });
   }
 });
 

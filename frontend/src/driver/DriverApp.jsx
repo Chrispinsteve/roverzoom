@@ -58,7 +58,14 @@ export default function DriverApp({ onExit }) {
   const [authStage, setAuthStage] = useState('login'); // 'login' | 'signup' | 'checkEmail'
   const [signedUpEmail, setSignedUpEmail] = useState('');
 
-  const [tab, setTab] = useState('home');
+  // Land on Profile when returning from Stripe payout onboarding (…/?driver=payouts).
+  const [tab, setTab] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('driver') === 'payouts' ? 'profile' : 'home';
+    } catch {
+      return 'home';
+    }
+  });
   // Local override so a freshly-claimed/updated booking reflects instantly
   // without waiting on a refetch; useDriverAuth's driver row (rating,
   // profile fields) still comes from the live auth hook.

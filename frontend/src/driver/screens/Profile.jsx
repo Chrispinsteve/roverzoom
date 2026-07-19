@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import Avatar from '../components/Avatar';
@@ -54,6 +54,62 @@ function UploadRow({ docType, done, onUploaded }) {
   );
 }
 
+// Driver payouts via Stripe Connect. Stripe hosts the bank/debit-card
+// onboarding; here we only reflect status and hand off to that hosted flow.
+function PayoutsSection() {
+  const [status, setStatus] = useState(null); // null = loading
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    driverApi.getPayoutStatus().then(setStatus).catch(() => setStatus({ configured: false }));
+  }, []);
+
+  const start = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const { url } = await driverApi.startPayoutOnboarding();
+      window.location.href = url; // Stripe-hosted onboarding
+    } catch (e) {
+      setError(e.message || 'Could not start payout setup.');
+      setBusy(false);
+    }
+  };
+
+  if (!status || !status.configured) return null; // loading, or payouts not enabled server-side yet
+
+  const enabled = status.payoutsEnabled;
+  const inProgress = status.connected && !enabled;
+
+  return (
+    <div className="drv-payouts rise-2">
+      <p className="eyebrow" style={{ marginTop: 24, marginBottom: 6 }}>Getting paid</p>
+      {enabled ? (
+        <div className="drv-doc-row">
+          <div className="drv-doc-info">
+            <div className="drv-doc-label">Payouts active</div>
+            <div className="drv-doc-hint">You’re set to be paid to your bank or debit card.</div>
+          </div>
+          <span className="drv-doc-done"><Icon name="check" size={16} color="var(--positive)" stroke={3} /> Ready</span>
+        </div>
+      ) : (
+        <>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+            {inProgress
+              ? 'Your details are being verified — finish any remaining steps to start getting paid.'
+              : 'Add your bank account or debit card to get paid. Secured by Stripe — your details never touch our servers.'}
+          </p>
+          <button className="btn" disabled={busy} onClick={start}>
+            {busy ? 'Opening…' : inProgress ? 'Finish payout setup' : 'Set up payouts'}
+          </button>
+          {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Profile({ driver, onDriverUpdate, onLogout, activeTab, onChangeTab }) {
   const doneCount = DOC_TYPES.filter((d) => !!driver[COLUMN_BY_TYPE[d.type]]).length;
   const complete = !!driver.profile_completed_at;
@@ -102,6 +158,8 @@ export default function Profile({ driver, onDriverUpdate, onLogout, activeTab, o
             onUploaded={onDriverUpdate}
           />
         ))}
+
+        <PayoutsSection />
 
         <div className="spacer" />
 
