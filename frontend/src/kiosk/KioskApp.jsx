@@ -6,6 +6,7 @@ import PayStep from './screens/PayStep';
 import Confirm from './screens/Confirm';
 import TrackRide from './screens/TrackRide';
 import MyRides from './screens/MyRides';
+import { addActiveRide } from './lib/activeRides';
 
 const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
@@ -34,7 +35,15 @@ export default function KioskApp() {
     setScreen('attract');
   };
 
-  const track = (reference) => { setTrackReference(reference); setScreen('track'); };
+  const track = (reference) => {
+    if (!reference) return;
+    // Remember it on this device and keep it in the URL, so the rider can
+    // leave, refresh, or come back days later and still reach live tracking.
+    addActiveRide(reference);
+    window.history.replaceState({}, '', `?track=${encodeURIComponent(reference)}`);
+    setTrackReference(reference);
+    setScreen('track');
+  };
 
   // Deep link: the "a driver accepted" SMS points the rider's own phone at
   // `…/?track=RZ-XXXXX`. Opening that URL should land directly on live
@@ -42,14 +51,18 @@ export default function KioskApp() {
   // bridges "booked on the shared tablet" to "tracked on my phone".
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get('track');
-    if (ref) {
-      setTrackReference(ref);
-      setScreen('track');
-    }
+    if (ref) track(ref);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (screen === 'attract') {
-    return <Attract onBookHere={() => setScreen('route')} onMyRides={() => setScreen('rides')} />;
+    return (
+      <Attract
+        onBookHere={() => setScreen('route')}
+        onMyRides={() => setScreen('rides')}
+        onTrackRide={track}
+      />
+    );
   }
   if (screen === 'route') {
     return (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../components/Icon';
 import QrCode from '../components/QrCode';
+import { addActiveRide } from '../lib/activeRides';
 
 const RESET_SECONDS = 45;
 
@@ -11,6 +12,12 @@ function fmtWhen(iso) {
 
 export default function Confirm({ confirmedBooking, onTrack, onReset }) {
   const [secondsLeft, setSecondsLeft] = useState(RESET_SECONDS);
+
+  // Remember this ride on the device the moment it's booked, so its live
+  // tracking stays reachable later even if the rider never taps "Track".
+  useEffect(() => {
+    if (confirmedBooking?.reference) addActiveRide(confirmedBooking.reference);
+  }, [confirmedBooking?.reference]);
 
   useEffect(() => {
     const id = setInterval(() => {
