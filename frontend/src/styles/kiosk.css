@@ -76,6 +76,11 @@
 .k-hero .k-lock-word{ color:#57C79A; }
 .k-paths{ flex:1; min-height:0; display:grid; grid-template-columns:1fr 1.2fr; gap:clamp(8px,1.6vh,24px); align-items:stretch; }
 @media (max-width:760px){ .k-paths{ grid-template-columns:1fr; } }
+/* On a phone the "scan to book" QR is pointless — you're already on your phone.
+   Hide that whole card so the booking CTA stands alone. Uses BOTH classes
+   (.k-path-card.k-qr-card) so this beats the later `.k-path-card{display:flex}`
+   rule — a media query alone doesn't raise priority. */
+@media (max-width:600px){ .k-path-card.k-qr-card{ display:none; } }
 .k-path-card{ min-height:0; overflow:hidden; border:1px solid var(--line-dark); border-radius:var(--k-radius-lg); padding:clamp(10px, 0.8vw + 1.4vh, 28px); display:flex; flex-direction:column; gap:clamp(4px,1vh,14px); background:#131311; }
 .k-path-label{ flex-shrink:0; font-family:var(--display); font-size:clamp(11px,0.9vh + 0.3vw,14px); letter-spacing:0.14em; text-transform:uppercase; color:var(--mute-dark); }
 .k-qr-row{ display:flex; gap:clamp(10px,1.4vw,20px); align-items:center; min-height:0; }
@@ -287,14 +292,6 @@
 .k-confirm-qr .k-qr-box{ width:clamp(120px,16vh,150px); }
 .k-confirm-qr .k-qr-text h2{ color:var(--paper); }
 .k-confirm-qr .k-qr-text p{ color:#9AD8BC; }
-
-/* Attract-screen "resume tracking" banner — a permanent one-tap way back to a
-   ride still in flight (booked days ahead, reachable any time until complete). */
-.k-track-resume{ display:flex; align-items:center; gap:12px; width:100%; max-width:640px; margin:clamp(8px,1.4vh,16px) auto 0; padding:clamp(11px,1.5vh,16px) clamp(14px,1.6vw,20px); background:rgba(15,123,84,0.16); border:1px solid rgba(34,197,94,0.4); border-radius:var(--k-radius-lg); color:var(--paper); text-align:left; }
-.k-track-resume:active{ transform:scale(0.99); }
-.k-track-resume-live{ display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#7CE0AE; text-transform:uppercase; letter-spacing:0.04em; flex-shrink:0; }
-.k-track-resume-dot{ width:8px; height:8px; border-radius:50%; background:#22c55e; animation:k-pulse 1.4s ease-in-out infinite; }
-.k-track-resume-label{ flex:1; min-width:0; font-family:var(--display); font-weight:500; font-size:clamp(14px,0.6vw + 0.9vh,18px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* ===== In-app payments ===== */
 .k-stripe-mount{margin-top:18px; background:var(--paper, #fff); border-radius:12px;}

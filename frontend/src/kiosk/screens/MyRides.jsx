@@ -98,7 +98,7 @@ export default function MyRides({ onBack, onTrack }) {
                   )}
                   <div className="k-ride-actions">
                     {isTrackable(r.status) && (
-                      <button className="k-mini-btn k-mini-btn-primary" onClick={() => onTrack(r.reference)}>Track ride</button>
+                      <button className="k-mini-btn k-mini-btn-primary" onClick={() => onTrack(r.id)}>Track ride</button>
                     )}
                     <button className="k-mini-btn" onClick={stub('Reschedule')}>Reschedule</button>
                     <button className="k-mini-btn" onClick={stub('Cancel')}>Cancel</button>

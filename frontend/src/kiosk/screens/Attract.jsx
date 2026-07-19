@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../components/Icon';
 import QrCode from '../components/QrCode';
-import { getActiveRides } from '../lib/activeRides';
+import { PUBLIC_ORIGIN } from '../../lib/publicUrl';
 
-export default function Attract({ onBookHere, onMyRides, onTrackRide }) {
+export default function Attract({ onBookHere, onMyRides }) {
   const [time, setTime] = useState(() => new Date());
-  // Rides still in flight on THIS device — surfaced as a one-tap way back to
-  // live tracking, so a ride booked days ahead is never "lost" after leaving.
-  const [active] = useState(() => getActiveRides());
 
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 15000);
@@ -28,22 +25,12 @@ export default function Attract({ onBookHere, onMyRides, onTrackRide }) {
             <p><span className="k-lock-word">Price locked</span> the moment you book. Driver guaranteed. No surge, no waiting on a curb — even at 2 AM.</p>
           </div>
 
-          {active.length > 0 && onTrackRide && (
-            <button className="k-track-resume" onClick={() => onTrackRide(active[0])}>
-              <span className="k-track-resume-live"><span className="k-track-resume-dot" />Live</span>
-              <span className="k-track-resume-label">
-                Track your {active.length > 1 ? 'rides' : 'ride'} · {active[0]}
-              </span>
-              <Icon name="arrowRight" size={18} color="var(--paper)" />
-            </button>
-          )}
-
           <div className="k-paths">
             <div className="k-path-card k-qr-card">
               <span className="k-path-label">On your phone</span>
               <div className="k-qr-fill">
                 <div className="k-qr-box">
-                  <QrCode value={window.location.origin} />
+                  <QrCode value={PUBLIC_ORIGIN} />
                 </div>
               </div>
               <div className="k-qr-caption-block">

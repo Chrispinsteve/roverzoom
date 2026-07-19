@@ -6,7 +6,6 @@ import PayStep from './screens/PayStep';
 import Confirm from './screens/Confirm';
 import TrackRide from './screens/TrackRide';
 import MyRides from './screens/MyRides';
-import { addActiveRide } from './lib/activeRides';
 
 const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
@@ -20,14 +19,14 @@ export default function KioskApp() {
   const [screen, setScreen] = useState('attract'); // attract | route | phone | pay | confirm | track | rides
   const [booking, setBooking] = useState(EMPTY_BOOKING);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
-  const [trackReference, setTrackReference] = useState(null);
+  const [trackToken, setTrackToken] = useState(null); // booking UUID id (unguessable)
 
   const patch = (fields) => setBooking((b) => ({ ...b, ...fields }));
 
   const reset = () => {
     setBooking(EMPTY_BOOKING);
     setConfirmedBooking(null);
-    setTrackReference(null);
+    setTrackToken(null);
     // Drop a lingering ?track=… so a later refresh starts clean at Attract.
     if (window.location.search) {
       window.history.replaceState({}, '', window.location.pathname);
@@ -35,23 +34,23 @@ export default function KioskApp() {
     setScreen('attract');
   };
 
-  const track = (reference) => {
-    if (!reference) return;
-    // Remember it on this device and keep it in the URL, so the rider can
-    // leave, refresh, or come back days later and still reach live tracking.
-    addActiveRide(reference);
-    window.history.replaceState({}, '', `?track=${encodeURIComponent(reference)}`);
-    setTrackReference(reference);
+  const track = (token) => {
+    if (!token) return;
+    // Keep the token in the URL so a refresh or bookmark reloads straight into
+    // live tracking. It's the booking's unguessable UUID, so the link is
+    // private — nothing about it is surfaced on the shared kiosk entrance.
+    window.history.replaceState({}, '', `?track=${encodeURIComponent(token)}`);
+    setTrackToken(token);
     setScreen('track');
   };
 
   // Deep link: the "a driver accepted" SMS points the rider's own phone at
-  // `…/?track=RZ-XXXXX`. Opening that URL should land directly on live
-  // tracking for that ride — not the booking home screen. This is what
-  // bridges "booked on the shared tablet" to "tracked on my phone".
+  // `…/?track=<uuid>`. Opening that URL lands directly on live tracking for
+  // that specific ride — the private bridge from the shared tablet to the
+  // rider's own phone.
   useEffect(() => {
-    const ref = new URLSearchParams(window.location.search).get('track');
-    if (ref) track(ref);
+    const token = new URLSearchParams(window.location.search).get('track');
+    if (token) track(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -60,7 +59,6 @@ export default function KioskApp() {
       <Attract
         onBookHere={() => setScreen('route')}
         onMyRides={() => setScreen('rides')}
-        onTrackRide={track}
       />
     );
   }
@@ -98,7 +96,7 @@ export default function KioskApp() {
     return (
       <Confirm
         confirmedBooking={confirmedBooking}
-        onTrack={() => track(confirmedBooking?.reference)}
+        onTrack={() => track(confirmedBooking?.id)}
         onReset={reset}
       />
     );
@@ -106,8 +104,8 @@ export default function KioskApp() {
   if (screen === 'track') {
     return (
       <TrackRide
-        reference={trackReference}
-        initialBooking={confirmedBooking && confirmedBooking.reference === trackReference ? confirmedBooking : null}
+        reference={trackToken}
+        initialBooking={confirmedBooking && confirmedBooking.id === trackToken ? confirmedBooking : null}
         onBack={reset}
         onNewRide={reset}
       />

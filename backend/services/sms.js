@@ -49,9 +49,10 @@ function baseUrl() {
 }
 
 // The tracking deep-link the rider opens on their own phone. Keyed by the
-// short reference code (not the phone number) — safe to put in a URL.
-function trackingUrl(reference) {
-  return `${baseUrl()}/?track=${encodeURIComponent(reference)}`;
+// booking's UUID id (NOT the short reference) so the link is unguessable and
+// private — only whoever the rider shares it with can view the ride.
+function trackingUrl(token) {
+  return `${baseUrl()}/?track=${encodeURIComponent(token)}`;
 }
 
 // Core send. Always resolves; the result object says what happened so callers
@@ -107,7 +108,7 @@ async function sendDriverAcceptedNotification(booking, driver) {
     : '';
   const body =
     `RoverZoom: ${first}${vehicle} accepted your ride! ` +
-    `Track them live: ${trackingUrl(booking.reference)}`;
+    `Track them live: ${trackingUrl(booking.id)}`;
   return sendSms(booking.rider_phone, body);
 }
 

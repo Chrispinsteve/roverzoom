@@ -3,7 +3,6 @@ import FlowShell from '../components/FlowShell';
 import Icon from '../../components/Icon';
 import { api } from '../../lib/api';
 import { TRACK_STEPS, completedCount, statusHeadline, isTerminal } from '../lib/rideStatus';
-import { removeActiveRide } from '../lib/activeRides';
 
 const POLL_MS = 5000;
 
@@ -33,9 +32,6 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
         setError('');
         if (isTerminal(fresh.status)) {
           clearInterval(timerRef.current);
-          // Ride is over — stop remembering it on this device so the home
-          // screen only ever offers to track rides that are still in flight.
-          removeActiveRide(reference);
         }
       } catch (e) {
         if (!cancelled) setError(e.message || 'Lost connection — retrying…');

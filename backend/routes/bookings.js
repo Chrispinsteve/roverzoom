@@ -111,13 +111,21 @@ router.get('/by-phone/:phone', async (req, res) => {
   }
 });
 
-// GET /api/bookings/:reference — fetch a booking (confirmation screen / lookup)
-router.get('/:reference', async (req, res) => {
+// GET /api/bookings/:ref — fetch a booking for the confirmation / tracking screen.
+// Accepts EITHER the booking's UUID id or the short human reference. Tracking
+// links use the UUID (unguessable, ~122 bits) so a ride is private — only
+// someone the rider shares the link with can view it — whereas the short
+// reference (RZ-XXXXX, ~28M combinations) is guessable and kept only for
+// human-facing confirmation display, never used as the tracking token.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+router.get('/:ref', async (req, res) => {
+  const { ref } = req.params;
+  const column = UUID_RE.test(ref) ? 'id' : 'reference';
   try {
     const { data, error } = await supabase
       .from('bookings')
       .select(`*, drivers(${DRIVER_PUBLIC_FIELDS})`)
-      .eq('reference', req.params.reference)
+      .eq(column, ref)
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Booking not found.' });
