@@ -375,7 +375,7 @@ async function setConnectAccountId(driver, accountId) {
 }
 
 function payoutBaseUrl() {
-  return (process.env.PUBLIC_BASE_URL || 'https://roverzooma.vercel.app').replace(/\/+$/, '');
+  return (process.env.PUBLIC_BASE_URL || 'https://roverzoom.com').replace(/\/+$/, '');
 }
 
 // POST /api/driver/payouts/onboard — start or resume Connect Express onboarding.

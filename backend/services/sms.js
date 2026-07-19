@@ -45,7 +45,7 @@ function toE164(phone) {
 }
 
 function baseUrl() {
-  return (process.env.PUBLIC_BASE_URL || 'https://roverzooma.vercel.app').replace(/\/+$/, '');
+  return (process.env.PUBLIC_BASE_URL || 'https://roverzoom.com').replace(/\/+$/, '');
 }
 
 // The tracking deep-link the rider opens on their own phone. Keyed by the

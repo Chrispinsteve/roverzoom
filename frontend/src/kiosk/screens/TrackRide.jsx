@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import FlowShell from '../components/FlowShell';
 import Icon from '../../components/Icon';
 import { api } from '../../lib/api';
-import { TRACK_STEPS, currentStep, statusHeadline, isTerminal } from '../lib/rideStatus';
+import { TRACK_STEPS, completedCount, statusHeadline, isTerminal } from '../lib/rideStatus';
 import { removeActiveRide } from '../lib/activeRides';
 
 const POLL_MS = 5000;
@@ -48,7 +48,7 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
   }, [reference]);
 
   const status = booking?.status || 'confirmed';
-  const step = currentStep(status);
+  const done = completedCount(status);
   const head = statusHeadline(status);
   const driver = booking?.driver || null;
   const canceled = status === 'canceled';
@@ -94,11 +94,13 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
       {!canceled && (
         <ol className="k-track-steps">
           {TRACK_STEPS.map((s, i) => {
-            const state = step > i ? 'done' : step === i ? 'active' : 'todo';
+            const isDone = i < done;             // this action has happened -> checked
+            const isCurrent = i === done - 1;    // the most recent completed step
+            const state = isCurrent ? 'current' : isDone ? 'done' : 'todo';
             return (
               <li key={s.key} className={`k-track-step ${state}`}>
                 <span className="k-track-node">
-                  {state === 'done'
+                  {isDone
                     ? <Icon name="check" size={13} color="var(--paper)" stroke={3} />
                     : <span className="k-track-node-dot" />}
                 </span>

@@ -13,23 +13,24 @@ export const TRACK_STEPS = [
   { key: 'ontrip', label: 'On your trip' },
 ];
 
-// How far along the timeline a given status is. The number is the index of the
-// milestone currently IN PROGRESS; every lower-indexed milestone is done. A
-// completed trip is `TRACK_STEPS.length` — one past the last step, so all five
-// render as done.
-const STATUS_STEP = {
-  confirmed: 0,
-  dispatching: 0,
-  manual_dispatch_required: 0,
-  driver_assigned: 1,
-  driver_en_route: 2,
-  arrived: 3,
-  in_progress: 4,
-  completed: TRACK_STEPS.length,
+// How many milestones are COMPLETE (green-checked) at a given status. A
+// milestone gets its check the instant its own action happens — not when the
+// next one begins. So the ride is checked "booked" the moment it's confirmed,
+// "driver assigned" the moment a driver accepts, and so on. The last completed
+// milestone is the current one (highlighted); everything above it is upcoming.
+const STATUS_COMPLETED = {
+  confirmed: 1,
+  dispatching: 1,
+  manual_dispatch_required: 1,
+  driver_assigned: 2,
+  driver_en_route: 3,
+  arrived: 4,
+  in_progress: 5,
+  completed: 5,
 };
 
-export function currentStep(status) {
-  return STATUS_STEP[status] ?? 0;
+export function completedCount(status) {
+  return STATUS_COMPLETED[status] ?? 1;
 }
 
 // Statuses where nothing more will change — polling can stop.

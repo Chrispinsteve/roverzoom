@@ -254,11 +254,13 @@
 .k-track-node{ position:relative; z-index:1; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:var(--smoke); border:2px solid var(--line); transition:background .3s, border-color .3s; }
 .k-track-node-dot{ width:7px; height:7px; border-radius:50%; background:var(--mute-dark); }
 .k-track-step-label{ font-size:15.5px; font-weight:500; color:var(--mute); transition:color .3s; }
-.k-track-step.done .k-track-node{ background:var(--lock); border-color:var(--lock); }
+/* Both completed and current steps show the green check the moment their
+   action happens; the current (most recent) one is emphasised with a ring. */
+.k-track-step.done .k-track-node,
+.k-track-step.current .k-track-node{ background:var(--lock); border-color:var(--lock); }
 .k-track-step.done .k-track-step-label{ color:var(--ink); }
-.k-track-step.active .k-track-node{ border-color:var(--lock); background:var(--paper); }
-.k-track-step.active .k-track-node-dot{ background:var(--lock); animation:k-pulse 1.4s ease-in-out infinite; }
-.k-track-step.active .k-track-step-label{ color:var(--ink); font-weight:650; }
+.k-track-step.current .k-track-node{ box-shadow:0 0 0 4px rgba(15,123,84,0.18); }
+.k-track-step.current .k-track-step-label{ color:var(--ink); font-weight:650; }
 
 .k-track-ticket{ margin-top:clamp(14px,2.4vh,22px); background:var(--smoke); }
 
