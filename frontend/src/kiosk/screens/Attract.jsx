@@ -39,16 +39,16 @@ export default function Attract({ onBookHere, onMyRides, onTrackRide }) {
           )}
 
           <div className="k-paths">
-            <div className="k-path-card">
+            <div className="k-path-card k-qr-card">
               <span className="k-path-label">On your phone</span>
-              <div className="k-qr-row">
+              <div className="k-qr-fill">
                 <div className="k-qr-box">
                   <QrCode value={window.location.origin} />
                 </div>
-                <div className="k-qr-text">
-                  <h2>Scan to book</h2>
-                  <p>Opens instantly — no app to install. Your price carries over.</p>
-                </div>
+              </div>
+              <div className="k-qr-caption-block">
+                <h2>Scan to book</h2>
+                <p>Opens instantly — no app to install. Your price carries over.</p>
               </div>
             </div>
 

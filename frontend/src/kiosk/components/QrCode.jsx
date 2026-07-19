@@ -13,7 +13,7 @@ import QRCode from 'qrcode';
 // stylesheet rules. Left alone, that pins the QR to a fixed pixel size
 // regardless of its box, so it visually detaches/misaligns as the box
 // resizes. Clearing that inline style after render hands sizing back to CSS.
-const RENDER_SIZE = 336;
+const RENDER_SIZE = 640;
 
 export default function QrCode({ value }) {
   const canvasRef = useRef(null);
@@ -22,8 +22,13 @@ export default function QrCode({ value }) {
     if (!canvasRef.current) return;
     QRCode.toCanvas(canvasRef.current, value, {
       width: RENDER_SIZE,
-      margin: 1,
-      color: { dark: '#0B0B0B', light: '#FFFFFF' },
+      // margin is the mandatory "quiet zone" in modules — 4 is the QR-spec
+      // minimum for reliable scanning; 1 (the old value) is why phones
+      // struggled. errorCorrectionLevel 'Q' recovers ~25%, so glare/angle on
+      // a glossy in-car screen still scans.
+      margin: 4,
+      errorCorrectionLevel: 'Q',
+      color: { dark: '#000000', light: '#FFFFFF' },
     })
       .then(() => {
         canvasRef.current.style.width = '100%';

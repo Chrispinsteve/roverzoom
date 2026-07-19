@@ -79,8 +79,21 @@
 .k-path-card{ min-height:0; overflow:hidden; border:1px solid var(--line-dark); border-radius:var(--k-radius-lg); padding:clamp(10px, 0.8vw + 1.4vh, 28px); display:flex; flex-direction:column; gap:clamp(4px,1vh,14px); background:#131311; }
 .k-path-label{ flex-shrink:0; font-family:var(--display); font-size:clamp(11px,0.9vh + 0.3vw,14px); letter-spacing:0.14em; text-transform:uppercase; color:var(--mute-dark); }
 .k-qr-row{ display:flex; gap:clamp(10px,1.4vw,20px); align-items:center; min-height:0; }
-.k-qr-box{ width:clamp(64px, 7.5vh, 150px); aspect-ratio:1; background:var(--paper); border-radius:12px; padding:clamp(6px,0.8vh,12px); flex-shrink:0; }
-.k-qr-box svg, .k-qr-box canvas{ width:100%; height:100%; display:block; }
+.k-qr-box{ width:clamp(150px, 18vh, 220px); aspect-ratio:1; background:#fff; border-radius:12px; padding:clamp(8px,1vh,14px); flex-shrink:0; }
+
+/* "On your phone" card: the QR is the hero and fills the card's free space,
+   with the label above and the caption below. Sizing keys off BOTH the card
+   width and viewport height (min of the two) so it stays large in the car
+   tablet's landscape AND in portrait, without ever overflowing the card. */
+.k-qr-card{ align-items:center; text-align:center; }
+.k-qr-fill{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; padding:clamp(4px,1.2vh,16px) 0; }
+/* Fill the card's free height (bounded by flex, so the label + caption always
+   fit above/below), stay square via aspect-ratio, and never exceed the card
+   width. object-fit on the canvas keeps the code square even if the box isn't. */
+.k-qr-card .k-qr-box{ height:100%; width:auto; aspect-ratio:1; max-width:100%; max-height:380px; padding:clamp(10px,1.4vh,18px); }
+.k-qr-caption-block h2{ font-family:var(--display); font-weight:500; font-size:clamp(16px,0.8vw + 0.9vh,24px); color:var(--paper); }
+.k-qr-caption-block p{ margin:4px auto 0; max-width:34ch; font-size:clamp(12px,0.5vw + 0.6vh,16px); color:var(--mute-dark); line-height:1.35; }
+.k-qr-box svg, .k-qr-box canvas{ width:100%; height:100%; display:block; object-fit:contain; }
 /* min-width:0 is required on a flex item holding text next to a
    flex-shrink:0 sibling (.k-qr-box) — without it the text refuses to wrap
    below its own intrinsic width and forces the whole row (and the page)
@@ -271,7 +284,7 @@
    rider on the shared tablet doesn't have to wait for the SMS. Scoped colours
    for the deep-green confirm background. */
 .k-confirm-qr{ flex-shrink:0; margin-top:clamp(14px,2.4vh,26px); display:flex; align-items:center; gap:clamp(12px,1.6vw,20px); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius:var(--k-radius-lg); padding:clamp(12px,1.6vh,18px); max-width:460px; width:100%; text-align:left; }
-.k-confirm-qr .k-qr-box{ width:clamp(84px,12vh,116px); }
+.k-confirm-qr .k-qr-box{ width:clamp(120px,16vh,150px); }
 .k-confirm-qr .k-qr-text h2{ color:var(--paper); }
 .k-confirm-qr .k-qr-text p{ color:#9AD8BC; }
 
