@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../components/Icon';
+import QrCode from '../components/QrCode';
 
 const RESET_SECONDS = 45;
 
@@ -87,6 +88,16 @@ export default function Confirm({ confirmedBooking, onTrack, onReset }) {
                 <span className="v">{confirmedBooking.driver.name} · {confirmedBooking.driver.vehicle_color} {confirmedBooking.driver.vehicle_make}</span>
               </div>
             )}
+          </div>
+
+          <div className="k-confirm-qr">
+            <div className="k-qr-box">
+              <QrCode value={`${window.location.origin}/?track=${encodeURIComponent(confirmedBooking.reference)}`} />
+            </div>
+            <div className="k-qr-text">
+              <h2>Scan to track on your phone</h2>
+              <p>Take your ride with you — watch your driver accept and arrive, live. We'll text this link too.</p>
+            </div>
           </div>
 
           <div className="k-confirm-actions">

@@ -3,10 +3,17 @@ const supabase = require('../db/supabase');
 const { requireDriver, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
 const { driverPayout } = require('../services/payout');
 const { briefAddress } = require('../services/address');
+const { sendDriverAcceptedNotification } = require('../services/sms');
 
 const router = express.Router();
 
-const AVAILABLE_WINDOW_DAYS = 7;
+// A driver must be able to see and accept EVERY upcoming booking a rider can
+// make — otherwise a saved booking silently strands the rider. Riders can
+// schedule up to 14 days out (kiosk lib/datetime.js), so there is deliberately
+// NO upper time bound here: any unclaimed future booking is browsable. The
+// only bound is a grace on the lower end (below) so an imminent or slightly
+// past ride stays claimable instead of vanishing the moment its time ticks by.
+const AVAILABLE_GRACE_HOURS = Number(process.env.AVAILABLE_GRACE_HOURS) || 6;
 
 function withPayout(booking) {
   return { ...booking, driver_payout: driverPayout(Number(booking.fare)) };
@@ -39,15 +46,13 @@ router.get('/schedule', requireDriver, async (req, res) => {
 // address + coordinates are withheld pre-commitment.
 router.get('/available-trips', requireDriver, requireActiveDriver, requireCompleteProfile, async (req, res) => {
   try {
-    const now = new Date().toISOString();
-    const windowEnd = new Date(Date.now() + AVAILABLE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const windowStart = new Date(Date.now() - AVAILABLE_GRACE_HOURS * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
       .is('driver_id', null)
       .in('status', ['confirmed', 'dispatching'])
-      .gte('scheduled_at', now)
-      .lte('scheduled_at', windowEnd)
+      .gte('scheduled_at', windowStart)
       .order('scheduled_at', { ascending: true });
     if (error) throw error;
     const redacted = (data || []).map((b) => withPayout({
@@ -80,6 +85,16 @@ router.post('/bookings/:bookingId/claim', requireDriver, requireActiveDriver, re
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(409).json({ error: 'This trip was already claimed by another driver.' });
+
+    // The claim SUCCEEDED. Message #2 (driver accepted + tracking link) is
+    // best-effort — wrapped so a texting failure can never surface as a claim
+    // error and make the driver think they lost the ride.
+    try {
+      await sendDriverAcceptedNotification(data, req.driver);
+    } catch (smsErr) {
+      console.error('driver-accepted sms failed (non-fatal)', smsErr.message);
+    }
+
     res.json(withPayout(data));
   } catch (err) {
     console.error('claim booking error', err.message);

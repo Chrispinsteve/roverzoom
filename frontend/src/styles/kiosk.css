@@ -265,6 +265,14 @@
 /* Track screen keeps the confirm-style stacked actions tidy on wide kiosks */
 .k-confirm-actions .k-next-btn{ flex:0 1 auto; min-width:220px; }
 
+/* Confirmation-screen QR — the instant "take tracking with you" bridge, so a
+   rider on the shared tablet doesn't have to wait for the SMS. Scoped colours
+   for the deep-green confirm background. */
+.k-confirm-qr{ flex-shrink:0; margin-top:clamp(14px,2.4vh,26px); display:flex; align-items:center; gap:clamp(12px,1.6vw,20px); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius:var(--k-radius-lg); padding:clamp(12px,1.6vh,18px); max-width:460px; width:100%; text-align:left; }
+.k-confirm-qr .k-qr-box{ width:clamp(84px,12vh,116px); }
+.k-confirm-qr .k-qr-text h2{ color:var(--paper); }
+.k-confirm-qr .k-qr-text p{ color:#9AD8BC; }
+
 /* ===== In-app payments ===== */
 .k-stripe-mount{margin-top:18px; background:var(--paper, #fff); border-radius:12px;}
 .k-zelle-note{margin-top:14px; max-width:460px; width:100%; background:#DCF2E6; color:#07402C; border-radius:12px; padding:13px 16px; font-size:14.5px; line-height:1.55; text-align:left;}

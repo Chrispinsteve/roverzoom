@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../db/supabase');
 const { estimate } = require('../services/fare');
 const { makeReference } = require('../services/reference');
+const { sendBookingConfirmation } = require('../services/sms');
 
 const router = express.Router();
 
@@ -72,6 +73,17 @@ router.post('/', async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // The booking is SAVED at this point. The confirmation text (message #1)
+    // is best-effort only — wrapped so that nothing about SMS (a Twilio
+    // outage, a bad number, anything) can turn a successful save into a 500
+    // and make the rider think their ride didn't go through.
+    try {
+      await sendBookingConfirmation(data);
+    } catch (smsErr) {
+      console.error('booking confirmation sms failed (non-fatal)', smsErr.message);
+    }
+
     res.status(201).json(data);
   } catch (err) {
     console.error('booking insert error', err.message);

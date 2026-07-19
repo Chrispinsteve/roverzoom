@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Attract from './screens/Attract';
 import RouteStep from './screens/RouteStep';
 import PhoneStep from './screens/PhoneStep';
@@ -27,10 +27,26 @@ export default function KioskApp() {
     setBooking(EMPTY_BOOKING);
     setConfirmedBooking(null);
     setTrackReference(null);
+    // Drop a lingering ?track=… so a later refresh starts clean at Attract.
+    if (window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     setScreen('attract');
   };
 
   const track = (reference) => { setTrackReference(reference); setScreen('track'); };
+
+  // Deep link: the "a driver accepted" SMS points the rider's own phone at
+  // `…/?track=RZ-XXXXX`. Opening that URL should land directly on live
+  // tracking for that ride — not the booking home screen. This is what
+  // bridges "booked on the shared tablet" to "tracked on my phone".
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get('track');
+    if (ref) {
+      setTrackReference(ref);
+      setScreen('track');
+    }
+  }, []);
 
   if (screen === 'attract') {
     return <Attract onBookHere={() => setScreen('route')} onMyRides={() => setScreen('rides')} />;
