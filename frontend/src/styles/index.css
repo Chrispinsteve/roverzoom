@@ -833,7 +833,10 @@ input, textarea { font-family: inherit; }
 }
 .drv-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .drv-cal-cell {
-  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  /* Capped height (not aspect-ratio) so cells stay compact on wide driver
+     screens — a square cell there balloons the calendar and shoves the tabs
+     and trip list off the bottom of the fixed-height Schedule frame. */
+  height: clamp(40px, 6vh, 54px); display: flex; flex-direction: column; align-items: center; justify-content: center;
   border-radius: 10px; gap: 3px; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums;
 }
 .drv-cal-cell.empty { visibility: hidden; }
