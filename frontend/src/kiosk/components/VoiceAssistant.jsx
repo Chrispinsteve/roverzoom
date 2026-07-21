@@ -23,6 +23,13 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   const stateRef = useRef('idle');
   const mountedRef = useRef(true);
   const primedRef = useRef(false);
+  const audioRef = useRef(null);
+  const premiumRef = useRef(null); // null = unknown, true = neural voice, false = browser voice
+
+  const stopSpeech = useCallback(() => {
+    try { if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; audioRef.current = null; } } catch { /* ignore */ }
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => {
@@ -32,37 +39,70 @@ export default function VoiceAssistant({ onClose, onBooked }) {
     return () => {
       mountedRef.current = false;
       try { recRef.current && recRef.current.abort(); } catch { /* ignore */ }
-      try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+      stopSpeech();
     };
-  }, []);
+  }, [stopSpeech]);
 
-  // iOS only lets speechSynthesis start from inside a user gesture — "prime" it
-  // once on the first tap so later spoken replies (which come after an async
-  // request) are allowed to play.
+  // iOS only allows audio to start from inside a user gesture — "prime" both the
+  // browser speech engine and HTMLAudio on the first tap so later replies (which
+  // come back after an async request) are allowed to play.
   const primeTTS = () => {
     if (primedRef.current) return;
     primedRef.current = true;
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch { /* ignore */ }
+    try { const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='); a.volume = 0; a.play().catch(() => {}); } catch { /* ignore */ }
   };
 
-  const speak = useCallback((text) => new Promise((resolve) => {
+  // Warmer browser fallback: a livelier pitch and a natural-sounding system
+  // voice (skipping the novelty/robotic ones), so even without the neural voice
+  // it reads less flat.
+  const speakBrowser = useCallback((text) => new Promise((resolve) => {
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.02; u.pitch = 1.0;
+      u.rate = 1.0; u.pitch = 1.07;
       const voices = window.speechSynthesis.getVoices() || [];
-      const nice = voices.find((v) => /en[-_]US/i.test(v.lang) && /(Samantha|Ava|Zoe|Aria|Jenny|Google US English|natural)/i.test(v.name))
+      const bad = /eloquence|compact|zarvox|albert|bad news|bells|boing|bubbles|cellos|deranged|hysterical|pipe|trinoids|whisper|wobble|jester|organ|superstar|flo|grandma|grandpa|reed|rocko|sandy|shelley/i;
+      const nice = voices.find((v) => /en[-_]US/i.test(v.lang) && /(Samantha|Ava|Allison|Nicky|Nova|Aria|Jenny|Google US English)/i.test(v.name))
+        || voices.find((v) => /en[-_]US/i.test(v.lang) && !bad.test(v.name))
         || voices.find((v) => /en[-_]US/i.test(v.lang))
-        || voices.find((v) => /^en/i.test(v.lang));
+        || voices.find((v) => /^en/i.test(v.lang) && !bad.test(v.name));
       if (nice) u.voice = nice;
       u.onend = resolve; u.onerror = resolve;
       window.speechSynthesis.speak(u);
     } catch { resolve(); }
   }), []);
 
+  // Prefer the warm neural voice from the server; fall back to the browser voice
+  // if it isn't configured (503) or playback is blocked.
+  const speak = useCallback(async (text) => {
+    stopSpeech();
+    if (premiumRef.current !== false) {
+      try {
+        const res = await fetch('/api/assistant/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+        if (res.ok) {
+          premiumRef.current = true;
+          const url = URL.createObjectURL(await res.blob());
+          const played = await new Promise((resolve) => {
+            const audio = new Audio(url);
+            audioRef.current = audio;
+            audio.onended = () => { URL.revokeObjectURL(url); resolve(true); };
+            audio.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
+            audio.play().catch(() => { URL.revokeObjectURL(url); resolve(false); });
+          });
+          if (played) return;
+          // playback blocked (e.g. iOS autoplay) — fall through to the browser voice
+        } else {
+          premiumRef.current = false;
+        }
+      } catch { premiumRef.current = false; }
+    }
+    if (mountedRef.current) await speakBrowser(text);
+  }, [speakBrowser, stopSpeech]);
+
   const startListening = useCallback(() => {
     if (!CAN_LISTEN) return;
-    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    stopSpeech();
     try {
       const rec = new SR();
       rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
@@ -114,7 +154,7 @@ export default function VoiceAssistant({ onClose, onBooked }) {
     primeTTS();
     if (state === 'thinking') return;
     if (state === 'listening') { try { recRef.current && recRef.current.stop(); } catch { /* ignore */ } return; }
-    if (state === 'speaking') { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+    if (state === 'speaking') { stopSpeech(); }
     if (CAN_LISTEN) startListening();
   };
 
