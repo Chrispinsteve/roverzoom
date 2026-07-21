@@ -18,7 +18,7 @@ router.post('/', async (req, res) => {
       return res.status(503).json({ error: "The voice assistant isn't switched on yet." });
     }
     console.error('assistant error', err.message);
-    res.status(500).json({ error: 'The assistant had trouble just now. Please try again.' });
+    res.status(500).json({ error: 'The assistant had trouble just now. Please try again.', detail: err.message });
   }
 });
 
