@@ -37,7 +37,7 @@ async function synthOpenAI(text) {
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: process.env.TTS_MODEL || 'tts-1',
-      voice: process.env.TTS_VOICE || 'nova',
+      voice: process.env.TTS_VOICE || 'shimmer',
       input: text,
       response_format: 'mp3',
       speed: 1.0,
