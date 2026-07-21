@@ -1,23 +1,44 @@
 // Neural text-to-speech for the assistant's spoken replies. The browser's
-// built-in speech sounds robotic; a neural voice sounds human and warm. Uses
-// OpenAI's TTS when OPENAI_API_KEY is set, and returns null otherwise so the
-// frontend gracefully falls back to the browser voice — same lazy/optional
-// pattern as Stripe and Twilio, so nothing breaks when it isn't configured.
+// built-in speech sounds robotic; a neural voice sounds human and warm.
 //
-// Voice + model are env-tunable: TTS_VOICE (default "nova" — warm and
-// friendly; "shimmer" is brighter/upbeat, "fable" is expressive) and
-// TTS_MODEL (default "tts-1"). Cost is tiny — ~$0.015 per 1,000 characters,
-// so a spoken reply is a small fraction of a cent.
-async function synthesizeSpeech(text) {
+// Two providers, tried in order of "most human" — whichever key is set wins,
+// and if neither is set this returns null so the frontend gracefully falls back
+// to the browser voice (same lazy/optional pattern as Stripe and Twilio):
+//   1. ElevenLabs (ELEVENLABS_API_KEY) — the most expressive/joyful voices,
+//      low-latency Flash model. Pricier per character.
+//   2. OpenAI (OPENAI_API_KEY) — very natural, much cheaper.
+// If both keys are set, ElevenLabs is used.
+
+async function synthElevenLabs(text) {
+  const key = process.env.ELEVENLABS_API_KEY;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // "Rachel" — warm default; swap for any voice in your library
+  const model = process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5'; // low-latency, high quality
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+    body: JSON.stringify({
+      text,
+      model_id: model,
+      // Lower stability + some style = livelier, warmer delivery (less flat).
+      voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.45, use_speaker_boost: true },
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`elevenlabs ${res.status} ${detail.slice(0, 180)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function synthOpenAI(text) {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) return null; // not configured — caller falls back to browser TTS
   const res = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: process.env.TTS_MODEL || 'tts-1',
       voice: process.env.TTS_VOICE || 'nova',
-      input: String(text).slice(0, 1200),
+      input: text,
       response_format: 'mp3',
       speed: 1.0,
     }),
@@ -29,8 +50,15 @@ async function synthesizeSpeech(text) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+async function synthesizeSpeech(text) {
+  const input = String(text).slice(0, 1200);
+  if (process.env.ELEVENLABS_API_KEY) return synthElevenLabs(input);
+  if (process.env.OPENAI_API_KEY) return synthOpenAI(input);
+  return null; // not configured — caller falls back to browser TTS
+}
+
 function ttsConfigured() {
-  return !!process.env.OPENAI_API_KEY;
+  return !!(process.env.ELEVENLABS_API_KEY || process.env.OPENAI_API_KEY);
 }
 
 module.exports = { synthesizeSpeech, ttsConfigured };
