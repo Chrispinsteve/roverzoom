@@ -6,6 +6,7 @@ import PayStep from './screens/PayStep';
 import Confirm from './screens/Confirm';
 import TrackRide from './screens/TrackRide';
 import MyRides from './screens/MyRides';
+import VoiceAssistant from './components/VoiceAssistant';
 
 const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
@@ -20,6 +21,8 @@ export default function KioskApp() {
   const [booking, setBooking] = useState(EMPTY_BOOKING);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
   const [trackToken, setTrackToken] = useState(null); // booking UUID id (unguessable)
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantBooking, setAssistantBooking] = useState(null);
 
   const patch = (fields) => setBooking((b) => ({ ...b, ...fields }));
 
@@ -49,17 +52,35 @@ export default function KioskApp() {
   // that specific ride — the private bridge from the shared tablet to the
   // rider's own phone.
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('track');
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('track');
     if (token) track(token);
+    else if (params.get('talk') !== null) setAssistantOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The voice assistant is an overlay layer — it opens over whatever screen is
+  // showing and, if it booked a ride, drops the rider into live tracking on close.
+  const closeAssistant = () => {
+    setAssistantOpen(false);
+    const b = assistantBooking;
+    setAssistantBooking(null);
+    if (b && b.booking_id) track(b.booking_id);
+  };
+  const assistantLayer = assistantOpen ? (
+    <VoiceAssistant onClose={closeAssistant} onBooked={setAssistantBooking} />
+  ) : null;
+
   if (screen === 'attract') {
     return (
-      <Attract
-        onBookHere={() => setScreen('route')}
-        onMyRides={() => setScreen('rides')}
-      />
+      <>
+        <Attract
+          onBookHere={() => setScreen('route')}
+          onMyRides={() => setScreen('rides')}
+          onTalk={() => setAssistantOpen(true)}
+        />
+        {assistantLayer}
+      </>
     );
   }
   if (screen === 'route') {

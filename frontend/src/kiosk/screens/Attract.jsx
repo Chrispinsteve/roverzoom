@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../components/Icon';
 import QrCode from '../components/QrCode';
+import VoiceOrb from '../../components/VoiceOrb';
 import { PUBLIC_ORIGIN } from '../../lib/publicUrl';
 
-export default function Attract({ onBookHere, onMyRides }) {
+export default function Attract({ onBookHere, onMyRides, onTalk }) {
   const [time, setTime] = useState(() => new Date());
 
   useEffect(() => {
@@ -17,7 +18,15 @@ export default function Attract({ onBookHere, onMyRides }) {
         <div className="k-kiosk-wrap">
           <div className="k-kiosk-top">
             <img src="/logo-wordmark-white.png" alt="RoverZoom" className="k-brand-img" />
-            <span className="k-clock">{time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+            <div className="k-top-right">
+              {onTalk && (
+                <button className="k-talk-orb" onClick={onTalk} aria-label="Talk to book a ride">
+                  <span className="k-talk-orb-viz"><VoiceOrb state="idle" size={40} /></span>
+                  <span className="k-talk-orb-label">Talk to book</span>
+                </button>
+              )}
+              <span className="k-clock">{time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+            </div>
           </div>
 
           <div className="k-hero">

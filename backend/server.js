@@ -6,6 +6,7 @@ const quoteRoutes = require('./routes/quote');
 const bookingRoutes = require('./routes/bookings');
 const driverRoutes = require('./routes/driver');
 const paymentsRoutes = require('./routes/payments');
+const assistantRoutes = require('./routes/assistant');
 
 const app = express();
 app.use(cors());
@@ -23,6 +24,7 @@ app.use('/api', quoteRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/assistant', assistantRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars

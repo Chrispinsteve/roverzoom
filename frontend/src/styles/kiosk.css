@@ -260,6 +260,38 @@
 @media (max-width:480px){ .k-q{ font-size:18.5px; } .k-price-num{ font-size:23px; } }
 @media (prefers-reduced-motion:reduce){ .kiosk-root *{ animation:none!important; transition:none!important; } }
 
+/* ===== Voice assistant ===== */
+/* "Talk to book" pill in the Attract header — the entry to the voice assistant.
+   Lives on the dark header band so the orb's glow reads; opens the full-screen
+   orb on tap. */
+.k-top-right{ display:flex; align-items:center; gap:clamp(8px,1.4vw,16px); }
+.k-talk-orb{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(120,200,255,0.38); border-radius:999px; padding:4px 14px 4px 4px; transition:border-color .16s ease, transform .12s ease; }
+.k-talk-orb:active{ transform:scale(0.97); }
+.k-talk-orb-viz{ width:40px; height:40px; border-radius:50%; display:block; flex:none; filter:drop-shadow(0 0 12px rgba(80,180,255,0.6)); }
+.k-talk-orb-label{ font-family:var(--display); font-size:clamp(12px,0.5vw+0.7vh,14px); font-weight:500; letter-spacing:0.01em; color:#fff; white-space:nowrap; }
+
+/* Full-screen assistant overlay — self-contained (renders outside the kiosk
+   token scope), committed to a deep-space dark look. */
+.rz-va{ position:fixed; inset:0; z-index:1000; background:radial-gradient(circle at 50% 36%, #0b1017, #05070b 72%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:24px; text-align:center; color:#eef2f9; font-family:'Inter',system-ui,-apple-system,sans-serif; }
+.rz-va-close{ position:absolute; top:16px; right:18px; width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#cfd6e2; font-size:15px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.rz-va-close:active{ transform:scale(0.94); }
+.rz-va-orb{ background:none; border:none; padding:0; border-radius:50%; cursor:pointer; filter:drop-shadow(0 0 60px rgba(60,150,230,0.35)); -webkit-tap-highlight-color:transparent; }
+.rz-va-orb:active{ transform:scale(0.985); }
+.rz-va-status{ display:flex; align-items:center; gap:8px; font-family:'Space Grotesk',ui-monospace,monospace; font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:#8ea0b8; }
+.rz-va-status.listening,.rz-va-status.speaking{ color:#6fd3ff; }
+.rz-va-dot{ width:8px; height:8px; border-radius:50%; background:currentColor; animation:rz-va-pulse 1.3s ease-in-out infinite; }
+@keyframes rz-va-pulse{ 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.6);} }
+.rz-va-caption{ max-width:38ch; min-height:3.2em; margin:0; font-size:clamp(17px,2.4vw,22px); line-height:1.42; color:#eef2f9; }
+.rz-va-error{ margin:0; color:#ff9a8a; font-size:14px; }
+.rz-va-hint{ background:none; border:none; color:#7f8da3; font-size:14px; min-height:22px; cursor:pointer; }
+.rz-va-type{ display:flex; gap:10px; width:min(92vw,440px); }
+.rz-va-input{ flex:1; min-width:0; background:rgba(255,255,255,0.06); border:1px solid rgba(140,190,255,0.28); color:#fff; border-radius:14px; padding:14px 16px; font-size:16px; outline:none; }
+.rz-va-input::placeholder{ color:#8494a8; }
+.rz-va-input:focus{ border-color:#6fd3ff; }
+.rz-va-send{ flex:none; background:linear-gradient(180deg,#8fe0ff,#4fbdf5); color:#04121c; font-weight:600; font-size:15px; border:none; border-radius:14px; padding:0 22px; cursor:pointer; }
+.rz-va-send:disabled{ opacity:0.4; cursor:default; }
+@media (prefers-reduced-motion:reduce){ .rz-va-dot{ animation:none; } }
+
 /* ===== Live ride tracking ===== */
 .k-track-hero{ display:flex; flex-direction:column; gap:5px; margin-bottom:clamp(12px,2.2vh,20px); }
 .k-track-title{ font-family:var(--display); font-weight:600; font-size:clamp(23px,1.2vw + 1.6vh,31px); letter-spacing:-0.02em; line-height:1.08; }

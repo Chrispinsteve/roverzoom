@@ -35,4 +35,6 @@ export const api = {
   getPaymentsConfig: () => req('/payments/config'),
   createPaymentIntent: (bookingId) =>
     req('/payments/create-intent', { method: 'POST', body: JSON.stringify({ bookingId }) }),
+  assistant: (history, message) =>
+    req('/assistant', { method: 'POST', body: JSON.stringify({ history, message }) }),
 };
