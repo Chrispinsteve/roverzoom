@@ -10,6 +10,17 @@ const CAN_LISTEN = !!SR;
 
 const STATUS_LABEL = { idle: 'RoverZoom', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking' };
 
+// Decode an MP3 arrayBuffer via Web Audio, tolerating Safari's callback-only form.
+function decodeAudio(ctx, arrayBuffer) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ok = (b) => { if (!settled) { settled = true; resolve(b); } };
+    const err = (e) => { if (!settled) { settled = true; reject(e || new Error('decode failed')); } };
+    try { const p = ctx.decodeAudioData(arrayBuffer, ok, err); if (p && typeof p.then === 'function') p.then(ok, err); }
+    catch (e) { err(e); }
+  });
+}
+
 export default function VoiceAssistant({ onClose, onBooked }) {
   const [state, setState] = useState('idle');
   const [caption, setCaption] = useState(
@@ -24,9 +35,20 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   const mountedRef = useRef(true);
   const primedRef = useRef(false);
   const audioRef = useRef(null);
-  const premiumRef = useRef(null); // null = unknown, true = neural voice, false = browser voice
+  const audioCtxRef = useRef(null);
+  const sourceRef = useRef(null);
+  const premiumRef = useRef(null); // null = unknown, true = neural voice, false = not configured
+
+  const getCtx = () => {
+    if (!audioCtxRef.current) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) { try { audioCtxRef.current = new AC(); } catch { /* ignore */ } }
+    }
+    return audioCtxRef.current;
+  };
 
   const stopSpeech = useCallback(() => {
+    try { if (sourceRef.current) { sourceRef.current.onended = null; sourceRef.current.stop(); sourceRef.current = null; } } catch { /* ignore */ }
     try { if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; audioRef.current = null; } } catch { /* ignore */ }
     try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
   }, []);
@@ -50,7 +72,9 @@ export default function VoiceAssistant({ onClose, onBooked }) {
     if (primedRef.current) return;
     primedRef.current = true;
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch { /* ignore */ }
-    try { const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='); a.volume = 0; a.play().catch(() => {}); } catch { /* ignore */ }
+    // Unlock Web Audio inside the gesture — this is what lets the neural voice
+    // actually play on iOS (a plain <audio>.play() after an async fetch is blocked).
+    try { const ctx = getCtx(); if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); } catch { /* ignore */ }
   };
 
   // Warmer browser fallback: a livelier pitch and a natural-sounding system
@@ -80,22 +104,47 @@ export default function VoiceAssistant({ onClose, onBooked }) {
     if (premiumRef.current !== false) {
       try {
         const res = await fetch('/api/assistant/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-        if (res.ok) {
+        if (res.status === 503) {
+          premiumRef.current = false; // no voice key configured — stop trying this session
+        } else if (res.ok) {
           premiumRef.current = true;
-          const url = URL.createObjectURL(await res.blob());
-          const played = await new Promise((resolve) => {
-            const audio = new Audio(url);
-            audioRef.current = audio;
-            audio.onended = () => { URL.revokeObjectURL(url); resolve(true); };
-            audio.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
-            audio.play().catch(() => { URL.revokeObjectURL(url); resolve(false); });
-          });
-          if (played) return;
-          // playback blocked (e.g. iOS autoplay) — fall through to the browser voice
-        } else {
-          premiumRef.current = false;
+          const arrayBuf = await res.arrayBuffer();
+          // Primary: Web Audio. Its context is unlocked in the tap gesture
+          // (primeTTS), so playback is allowed on iOS where <audio> is not.
+          const ctx = getCtx();
+          if (ctx) {
+            try {
+              if (ctx.state === 'suspended') await ctx.resume();
+              const buffer = await decodeAudio(ctx, arrayBuf.slice(0));
+              const played = await new Promise((resolve) => {
+                try {
+                  const src = ctx.createBufferSource();
+                  src.buffer = buffer;
+                  src.connect(ctx.destination);
+                  src.onended = () => resolve(true);
+                  sourceRef.current = src;
+                  src.start(0);
+                } catch { resolve(false); }
+              });
+              if (played) return;
+            } catch { /* fall through */ }
+          }
+          // Secondary: plain <audio> (works on desktop even without Web Audio).
+          try {
+            const url = URL.createObjectURL(new Blob([arrayBuf], { type: 'audio/mpeg' }));
+            const played = await new Promise((resolve) => {
+              const audio = new Audio(url);
+              audioRef.current = audio;
+              audio.onended = () => { URL.revokeObjectURL(url); resolve(true); };
+              audio.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
+              audio.play().catch(() => { URL.revokeObjectURL(url); resolve(false); });
+            });
+            if (played) return;
+          } catch { /* fall through */ }
         }
-      } catch { premiumRef.current = false; }
+        // Any other status (e.g. transient 500): don't disable neural for the
+        // whole session — just use the browser voice this one turn.
+      } catch { /* network blip — browser voice this turn, retry neural next */ }
     }
     if (mountedRef.current) await speakBrowser(text);
   }, [speakBrowser, stopSpeech]);
