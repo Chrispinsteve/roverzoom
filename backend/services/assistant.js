@@ -10,11 +10,12 @@ const { geocodeOne } = require('./geocode');
 const { makeReference } = require('./reference');
 const { sendBookingConfirmation, trackingUrl } = require('./sms');
 
-// Per the model guidance, use the most capable model. Thinking is deliberately
-// left off (fast turnaround matters for a spoken back-and-forth) and effort is
-// low — the work here is short slot-filling plus tool calls, not deep
-// reasoning, and the model handles that well without a thinking pass.
-const MODEL = 'claude-opus-4-8';
+// A spoken back-and-forth has to feel near-instant, so speed wins over raw
+// power here: Claude Haiku 4.5 is the fastest (and cheapest) model and is more
+// than capable of this slot-filling + tool-use booking flow. Thinking is left
+// off for latency. (Haiku 4.5 does not accept output_config.effort — that's an
+// Opus/Sonnet-tier parameter — so it isn't sent.)
+const MODEL = 'claude-haiku-4-5';
 
 let client = null;
 let resolved = false;
@@ -207,8 +208,7 @@ async function runAssistant(history, message) {
   for (let iter = 0; iter < 6; iter++) {
     const resp = await a.messages.create({
       model: MODEL,
-      max_tokens: 2048,
-      output_config: { effort: 'low' },
+      max_tokens: 1024,
       system: systemPrompt(),
       tools: TOOLS,
       messages,
