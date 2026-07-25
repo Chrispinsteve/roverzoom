@@ -6,7 +6,7 @@
 // flow keeps working; the assistant endpoint just answers 503.
 const supabase = require('../db/supabase');
 const { estimate } = require('./fare');
-const { geocodeOne } = require('./geocode');
+const { geocode, geocodeOne } = require('./geocode');
 const { makeReference } = require('./reference');
 const { sendBookingConfirmation, trackingUrl } = require('./sms');
 
@@ -34,6 +34,19 @@ function anthropic() {
 }
 
 const TOOLS = [
+  {
+    name: 'find_place',
+    description:
+      'Look up a place by NAME when the rider names a business, hotel, airport, store, restaurant, mall, or landmark instead of giving a street address (e.g. "Walmart", "the Hilton", "Fort Lauderdale airport", "Aventura Mall"). Returns real matching places with their full addresses. Pass "near" (the pickup city/area, or wherever the rider is) so you get the local branch rather than one across the country. Use this to turn a place name into a real address before quoting or booking; if several plausibly match, name a couple and ask which one.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The place or business name, exactly as the rider said it.' },
+        near: { type: 'string', description: "Optional. A city, area, or the pickup address to focus results nearby — usually the rider's pickup city." },
+      },
+      required: ['query'],
+    },
+  },
   {
     name: 'get_quote',
     description:
@@ -78,6 +91,21 @@ const TOOLS = [
 async function resolveEnds(pickup, dropoff) {
   const [p, d] = await Promise.all([geocodeOne(pickup), geocodeOne(dropoff)]);
   return { p, d };
+}
+
+async function toolFindPlace(input) {
+  const name = String(input.query || '').trim();
+  if (!name) return { matches: [] };
+  const near = String(input.near || '').trim();
+  // Bias to the rider's area first so "Walmart" finds the local one; if nothing
+  // turns up nearby, widen to a plain name search rather than coming back empty.
+  let results = near ? await geocode(`${name}, ${near}`, 5).catch(() => []) : [];
+  if (!results.length) results = await geocode(name, 5).catch(() => []);
+  const matches = results.slice(0, 5).map((r) => ({ name: r.label, address: r.address }));
+  if (!matches.length) {
+    return { matches: [], note: 'No place found by that name. Ask the rider for a street address, a nearby cross street, or the city.' };
+  }
+  return { matches };
 }
 
 async function toolGetQuote(input) {
@@ -159,6 +187,7 @@ async function toolGetBookingStatus(input) {
 
 async function runTool(name, input) {
   try {
+    if (name === 'find_place') return await toolFindPlace(input);
     if (name === 'get_quote') return await toolGetQuote(input);
     if (name === 'create_booking') return await toolCreateBooking(input);
     if (name === 'get_booking_status') return await toolGetBookingStatus(input);
@@ -178,6 +207,7 @@ Current date and time: ${new Date().toISOString()}. Use this to turn phrases lik
 How to behave:
 - Your replies are READ ALOUD by a text-to-speech voice. Keep every reply to one or two short spoken sentences. No lists, no markdown, no emojis, no code. Say prices in words, like "fifty-two dollars".
 - A booking needs: pickup, destination, date and time, the rider's name, and their phone number. Ask only for what's still missing, one item at a time. Keep it conversational.
+- Riders often name a place instead of an address — a business, hotel, store, mall, airport, or landmark ("the Marriott", "Walmart", "Fort Lauderdale airport"). When they do, use find_place to look up the real address; pass the pickup city as "near" so you get the local one. If several match, briefly say the options and ask which. Then always quote and book with the full resolved address — never a bare name, and never invent one.
 - Use get_quote to price a ride. Always tell the rider the locked price and get a clear yes before booking.
 - Call create_booking only after you have everything and they've confirmed. Default payment to cash unless they say otherwise.
 - After booking, read back the confirmation code clearly (say the characters) and tell them a driver will be assigned soon and they'll get a tracking text.

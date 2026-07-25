@@ -282,6 +282,9 @@
 .rz-va-dot{ width:8px; height:8px; border-radius:50%; background:currentColor; animation:rz-va-pulse 1.3s ease-in-out infinite; }
 @keyframes rz-va-pulse{ 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.6);} }
 .rz-va-caption{ max-width:38ch; min-height:3.2em; margin:0; font-size:clamp(17px,2.4vw,22px); line-height:1.42; color:#eef2f9; }
+.rz-va-working{ display:inline-block; color:#aeb9cc; font-style:italic; animation:rz-va-fade .5s ease; }
+@keyframes rz-va-fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+@media (prefers-reduced-motion: reduce){ .rz-va-working{ animation:none; } }
 .rz-va-error{ margin:0; color:#ff9a8a; font-size:14px; }
 .rz-va-hint{ background:none; border:none; color:#7f8da3; font-size:14px; min-height:22px; cursor:pointer; }
 .rz-va-type{ display:flex; gap:10px; width:min(92vw,440px); }

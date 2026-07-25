@@ -8,7 +8,22 @@ import { api } from '../../lib/api';
 const SR = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
 const CAN_LISTEN = !!SR;
 
-const STATUS_LABEL = { idle: 'RoverZoom', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking' };
+const STATUS_LABEL = { idle: 'RoverZoom', listening: 'Listening', thinking: 'Working', speaking: 'Speaking' };
+
+// Playful "we're on it" phrases shown while the assistant thinks, so the short
+// wait feels alive instead of dead air. They rotate every ~1.2s.
+const WORKING_PHRASES = [
+  'Mapping your route…',
+  'Cooking up your ride…',
+  'Finding the fastest way…',
+  'Checking the roads…',
+  'Plotting your pickup…',
+  'Crunching the fare…',
+  'Reading the map…',
+  'Warming up the engine…',
+  'Looking that up…',
+  'Almost there…',
+];
 
 // Decode an MP3 arrayBuffer via Web Audio, tolerating Safari's callback-only form.
 function decodeAudio(ctx, arrayBuffer) {
@@ -28,6 +43,7 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   );
   const [error, setError] = useState('');
   const [typed, setTyped] = useState('');
+  const [working, setWorking] = useState(WORKING_PHRASES[0]);
 
   const historyRef = useRef([]);
   const recRef = useRef(null);
@@ -54,6 +70,18 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   }, []);
 
   useEffect(() => { stateRef.current = state; }, [state]);
+
+  // While thinking, rotate the playful "working" phrases so the wait feels alive.
+  useEffect(() => {
+    if (state !== 'thinking') return;
+    let i = Math.floor(Math.random() * WORKING_PHRASES.length);
+    setWorking(WORKING_PHRASES[i]);
+    const id = setInterval(() => {
+      i = (i + 1) % WORKING_PHRASES.length;
+      setWorking(WORKING_PHRASES[i]);
+    }, 1200);
+    return () => clearInterval(id);
+  }, [state]);
   useEffect(() => {
     mountedRef.current = true;
     // Voices load asynchronously in some browsers.
@@ -229,7 +257,11 @@ export default function VoiceAssistant({ onClose, onBooked }) {
         {STATUS_LABEL[state]}
       </div>
 
-      <p className="rz-va-caption" aria-live="polite">{caption}</p>
+      <p className="rz-va-caption" aria-live="polite">
+        {state === 'thinking'
+          ? <span key={working} className="rz-va-working">{working}</span>
+          : caption}
+      </p>
       {error && <p className="rz-va-error">{error}</p>}
 
       {CAN_LISTEN ? (
