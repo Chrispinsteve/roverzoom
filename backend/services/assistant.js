@@ -6,7 +6,7 @@
 // flow keeps working; the assistant endpoint just answers 503.
 const supabase = require('../db/supabase');
 const { estimate } = require('./fare');
-const { geocode, geocodeOne } = require('./geocode');
+const { geocode, geocodeOne, searchNear } = require('./geocode');
 const { makeReference } = require('./reference');
 const { sendBookingConfirmation, trackingUrl } = require('./sms');
 
@@ -97,15 +97,27 @@ async function toolFindPlace(input) {
   const name = String(input.query || '').trim();
   if (!name) return { matches: [] };
   const near = String(input.near || '').trim();
-  // Bias to the rider's area first so "Walmart" finds the local one; if nothing
-  // turns up nearby, widen to a plain name search rather than coming back empty.
-  let results = near ? await geocode(`${name}, ${near}`, 5).catch(() => []) : [];
-  if (!results.length) results = await geocode(name, 5).catch(() => []);
-  const matches = results.slice(0, 5).map((r) => ({ name: r.label, address: r.address }));
-  if (!matches.length) {
-    return { matches: [], note: 'No place found by that name. Ask the rider for a street address, a nearby cross street, or the city.' };
+
+  // If we know where the rider is, anchor the search there and only return
+  // nearby matches — never a same-name business in another city (a Publix in
+  // Tampa for a rider in Lantana). Results come back nearest-first.
+  if (near) {
+    const anchor = await geocodeOne(near).catch(() => null);
+    if (anchor) {
+      const rows = await searchNear(name, { lat: anchor.lat, lng: anchor.lng }, 5).catch(() => []);
+      if (rows.length) {
+        return { matches: rows.map((r) => ({ name: r.label, address: r.address, miles_away: Math.round(r.miles) })) };
+      }
+      return { matches: [], note: `No "${name}" found near ${near}. Ask the rider for the street address or a nearby cross street.` };
+    }
   }
-  return { matches };
+
+  // No usable location to anchor on — best-effort plain search.
+  const rows = await geocode(near ? `${name}, ${near}` : name, 5).catch(() => []);
+  if (!rows.length) {
+    return { matches: [], note: 'No place found by that name — and no pickup location to search near. Ask the rider where they are, then a street address if needed.' };
+  }
+  return { matches: rows.map((r) => ({ name: r.label, address: r.address })) };
 }
 
 async function toolGetQuote(input) {
@@ -207,7 +219,7 @@ Current date and time: ${new Date().toISOString()}. Use this to turn phrases lik
 How to behave:
 - Your replies are READ ALOUD by a text-to-speech voice. Keep every reply to one or two short spoken sentences. No lists, no markdown, no emojis, no code. Say prices in words, like "fifty-two dollars".
 - A booking needs: pickup, destination, date and time, the rider's name, and their phone number. Ask only for what's still missing, one item at a time. Keep it conversational.
-- Riders often name a place instead of an address — a business, hotel, store, mall, airport, or landmark ("the Marriott", "Walmart", "Fort Lauderdale airport"). When they do, use find_place to look up the real address; pass the pickup city as "near" so you get the local one. If several match, briefly say the options and ask which. Then always quote and book with the full resolved address — never a bare name, and never invent one.
+- Riders often name a place instead of an address — a business, hotel, store, mall, airport, or landmark ("Publix", "the Marriott", "Fort Lauderdale airport"). When they do, use find_place. ALWAYS pass "near": the rider's pickup address if you have it, otherwise their city or neighborhood — this pins the branch closest to them instead of a same-name store in another city. If you don't yet know where the rider is, ask for their pickup FIRST, then search. Matches come back nearest-first with how many miles away each is; take the closest, or if two are similarly close, name them and ask which. Then always quote and book with the full resolved address — never a bare name, and never invent one.
 - Use get_quote to price a ride. Always tell the rider the locked price and get a clear yes before booking.
 - Call create_booking only after you have everything and they've confirmed. Default payment to cash unless they say otherwise.
 - After booking, read back the confirmation code clearly (say the characters) and tell them a driver will be assigned soon and they'll get a tracking text.

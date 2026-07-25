@@ -62,8 +62,23 @@ async function tryPhoton(query, limit) {
   return normalizePhoton(data.features || []);
 }
 
+// Small in-memory cache: the assistant often geocodes the same pickup/dropoff
+// several times in one booking (find_place, then get_quote, then create_booking),
+// so this cuts redundant calls — faster, and gentler on Nominatim's rate limit.
+const _geoCache = new Map();
+const GEO_TTL_MS = 10 * 60 * 1000;
+
 async function geocode(query, limit = 5) {
   if (!query || query.trim().length < 3) return [];
+  const key = `${limit}|${query.toLowerCase().trim()}`;
+  const hit = _geoCache.get(key);
+  if (hit && Date.now() - hit.t < GEO_TTL_MS) return hit.rows;
+  const rows = await geocodeUncached(query, limit);
+  _geoCache.set(key, { t: Date.now(), rows });
+  return rows;
+}
+
+async function geocodeUncached(query, limit) {
   // Try Nominatim first; on any failure, fall back to Photon.
   try {
     const rows = await tryNominatim(query, limit);
@@ -83,6 +98,59 @@ async function geocode(query, limit = 5) {
       throw e;
     }
   }
+}
+
+// Great-circle distance in miles between two lat/lng points.
+function milesBetween(aLat, aLng, bLat, bLng) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+// Proximity place search: places matching `query` NEAR an anchor point, sorted
+// nearest-first and hard-capped to a radius so a same-name business in another
+// city can never win (the "Publix in Tampa for a rider in Lantana" bug). Tries
+// Nominatim bounded to a box around the anchor, then Photon biased to the point;
+// both results are distance-filtered.
+async function searchNear(query, anchor, limit = 6) {
+  if (!query || !anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) return [];
+  const { lat, lng } = anchor;
+  const dLat = 0.6, dLng = 0.7; // ~40-mile box around the rider
+  const viewbox = `${lng - dLng},${lat - dLat},${lng + dLng},${lat + dLat}`;
+
+  const viaNominatim = async () => {
+    const params = new URLSearchParams({
+      q: query, format: 'json', addressdetails: '1', limit: '10',
+      countrycodes: 'us', viewbox, bounded: '1',
+    });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', 'Accept-Language': 'en' },
+    });
+    if (!res.ok) throw new Error(`Nominatim ${res.status}`);
+    return normalizeNominatim(await res.json());
+  };
+  const viaPhoton = async () => {
+    const params = new URLSearchParams({ q: query, limit: '15', lang: 'en', lat: String(lat), lon: String(lng) });
+    const res = await fetch(`https://photon.komoot.io/api/?${params}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Photon ${res.status}`);
+    return normalizePhoton((await res.json()).features || []);
+  };
+
+  // Photon (point-biased) has far better chain/POI coverage than Nominatim for
+  // "nearest branch" lookups, so try it first; Nominatim (box-bounded) backs it up.
+  let rows = [];
+  try { rows = await viaPhoton(); } catch { rows = []; }
+  if (!rows.length) { try { rows = await viaNominatim(); } catch { rows = []; } }
+
+  const MAX_MI = 80;
+  return rows
+    .map((r) => ({ ...r, miles: milesBetween(lat, lng, r.lat, r.lng) }))
+    .filter((r) => Number.isFinite(r.miles) && r.miles <= MAX_MI)
+    .sort((a, b) => a.miles - b.miles)
+    .slice(0, limit);
 }
 
 async function geocodeOne(query) {
@@ -109,4 +177,4 @@ async function reverseGeocode(lat, lng) {
   };
 }
 
-module.exports = { geocode, geocodeOne, reverseGeocode };
+module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween };
