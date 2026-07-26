@@ -70,56 +70,55 @@
 /* Fixed size — the logo must never resize or reflow between orientations. */
 .k-brand-img{ height:28px; display:block; flex-shrink:0; }
 .k-clock{ font-family:var(--display); font-size:14px; color:var(--mute-dark); font-variant-numeric:tabular-nums; flex-shrink:0; }
-.k-hero{ flex-shrink:0; margin:clamp(6px,2.4vh,36px) 0 clamp(6px,1.6vh,20px); }
-.k-hero h1{ font-family:var(--display); font-weight:600; font-size:clamp(20px, 2.4vw + 1.6vh, 56px); line-height:1.08; letter-spacing:-0.01em; max-width:20ch; }
-.k-hero p{ margin-top:clamp(6px,1vh,14px); font-size:clamp(12.5px, 0.7vw + 0.9vh, 20px); color:var(--mute-dark); max-width:48ch; }
-.k-hero .k-lock-word{ color:#57C79A; }
-.k-paths{ flex:1; min-height:0; display:grid; grid-template-columns:1fr 1.2fr; gap:clamp(8px,1.6vh,24px); align-items:stretch; }
-@media (max-width:760px){ .k-paths{ grid-template-columns:1fr; } }
-/* On a phone the "scan to book" QR is pointless — you're already on your phone.
-   Hide that whole card so the booking CTA stands alone. Uses BOTH classes
-   (.k-path-card.k-qr-card) so this beats the later `.k-path-card{display:flex}`
-   rule — a media query alone doesn't raise priority. */
-@media (max-width:600px){ .k-path-card.k-qr-card{ display:none; } }
+/* Rotating headline marquee — the attract centerpiece. Each pair rises/fades in
+   as the copy changes (keyed re-mount replays the animation). min-height keeps
+   the block from jumping between title-only and title+subtext slides. */
+.k-rotator{ flex-shrink:0; margin:clamp(8px,2.6vh,40px) 0 clamp(8px,1.8vh,26px); min-height:clamp(84px,16vh,164px); display:flex; flex-direction:column; justify-content:center; }
+.k-rotator-title{ font-family:var(--display); font-weight:600; font-size:clamp(22px, 2.3vw + 1.7vh, 54px); line-height:1.06; letter-spacing:-0.015em; max-width:22ch; color:var(--paper); animation:k-rise .55s var(--ease) both; }
+.k-rotator-sub{ margin-top:clamp(6px,1.1vh,15px); font-size:clamp(13px, 0.7vw + 0.9vh, 21px); color:var(--mute-dark); max-width:46ch; animation:k-rise .55s var(--ease) .06s both; }
+@keyframes k-rise{ from{ opacity:0; transform:translateY(13px); } to{ opacity:1; transform:translateY(0); } }
 
-/* Device-aware copy: kiosk variant shown by default, phone variant swapped in
-   at the same phone breakpoint. */
-.k-only-phone{ display:none; }
-@media (max-width:600px){
-  .k-only-kiosk{ display:none; }
-  .k-only-phone{ display:block; }
-}
-.k-path-card{ min-height:0; overflow:hidden; border:1px solid var(--line-dark); border-radius:var(--k-radius-lg); padding:clamp(10px, 0.8vw + 1.4vh, 28px); display:flex; flex-direction:column; gap:clamp(4px,1vh,14px); background:#131311; }
-.k-path-label{ flex-shrink:0; font-family:var(--display); font-size:clamp(11px,0.9vh + 0.3vw,14px); letter-spacing:0.14em; text-transform:uppercase; color:var(--mute-dark); }
-.k-qr-row{ display:flex; gap:clamp(10px,1.4vw,20px); align-items:center; min-height:0; }
+/* Two-up body: QR to continue on phone (left) + tappable use-case cards (right),
+   both stretching to fill the space between the marquee and the CTA. */
+.k-attract-main{ flex:1; min-height:0; display:grid; grid-template-columns:0.82fr 1.18fr; gap:clamp(10px,1.8vw,26px); align-items:stretch; }
+.k-qr-panel{ min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:clamp(8px,1.6vh,18px); border:1px solid var(--line-dark); border-radius:var(--k-radius-lg); padding:clamp(12px,2vh,28px); background:#131311; }
+.k-qr-panel-cap h2{ font-family:var(--display); font-weight:500; font-size:clamp(15px,0.7vw + 0.9vh,23px); color:var(--paper); }
+.k-qr-panel-cap p{ margin-top:4px; font-size:clamp(11.5px,0.5vw + 0.6vh,16px); color:var(--mute-dark); }
+
+.k-cases{ min-height:0; display:grid; grid-template-rows:repeat(4,1fr); gap:clamp(7px,1.2vh,14px); }
+.k-case{ display:flex; align-items:center; gap:clamp(10px,1.4vw,18px); text-align:left; border:1px solid var(--line-dark); border-radius:var(--k-radius); padding:clamp(8px,1.2vh,18px) clamp(12px,1.4vw,22px); background:#131311; transition:border-color .16s ease, transform .12s ease; }
+.k-case:hover{ border-color:#3b3b37; }
+.k-case:active{ transform:scale(0.985); }
+.k-case-ic{ flex-shrink:0; width:clamp(38px,5vh,54px); height:clamp(38px,5vh,54px); border-radius:12px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; font-size:clamp(19px,1vw + 1.3vh,28px); }
+.k-case-tx{ display:flex; flex-direction:column; min-width:0; gap:2px; }
+.k-case-title{ font-family:var(--display); font-weight:600; font-size:clamp(14px,0.6vw + 0.9vh,21px); color:var(--paper); }
+.k-case-line{ font-size:clamp(11.5px,0.5vw + 0.6vh,16px); color:var(--mute-dark); line-height:1.3; }
+
+/* Primary CTA sits on the dark ground, so it's inverted (white) to read as THE
+   action; the "find your ride" link stays quiet beneath it. */
+.k-attract-cta{ flex-shrink:0; margin-top:clamp(10px,2vh,26px); display:flex; flex-direction:column; align-items:center; gap:clamp(6px,1.2vh,12px); }
+.k-book-cta{ width:100%; max-width:520px; background:var(--paper); color:var(--ink); font-family:var(--display); font-weight:600; font-size:clamp(16px,0.7vw + 1.1vh,24px); padding:clamp(11px,1.7vh,20px) clamp(20px,2vw,30px); border-radius:var(--k-radius); min-height:clamp(46px,8vh,66px); display:flex; align-items:center; justify-content:center; gap:10px; transition:transform .12s ease; }
+.k-book-cta:active{ transform:scale(0.98); }
+.k-find-ride{ color:var(--mute-dark); font-size:clamp(12px,0.5vw + 0.6vh,15px); padding:4px; transition:color .15s ease; }
+.k-find-ride:active{ color:var(--paper); }
+
+/* Shared QR primitives — the confirmation screen reuses .k-qr-box / .k-qr-text. */
 .k-qr-box{ width:clamp(150px, 18vh, 220px); aspect-ratio:1; background:#fff; border-radius:12px; padding:clamp(8px,1vh,14px); flex-shrink:0; }
-
-/* "On your phone" card: the QR is the hero and fills the card's free space,
-   with the label above and the caption below. Sizing keys off BOTH the card
-   width and viewport height (min of the two) so it stays large in the car
-   tablet's landscape AND in portrait, without ever overflowing the card. */
-.k-qr-card{ align-items:center; text-align:center; }
-.k-qr-fill{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; padding:clamp(4px,1.2vh,16px) 0; }
-/* Fill the card's free height (bounded by flex, so the label + caption always
-   fit above/below), stay square via aspect-ratio, and never exceed the card
-   width. object-fit on the canvas keeps the code square even if the box isn't. */
-.k-qr-card .k-qr-box{ height:100%; width:auto; aspect-ratio:1; max-width:100%; max-height:380px; padding:clamp(10px,1.4vh,18px); }
-.k-qr-caption-block h2{ font-family:var(--display); font-weight:500; font-size:clamp(16px,0.8vw + 0.9vh,24px); color:var(--paper); }
-.k-qr-caption-block p{ margin:4px auto 0; max-width:34ch; font-size:clamp(12px,0.5vw + 0.6vh,16px); color:var(--mute-dark); line-height:1.35; }
+.k-qr-panel .k-qr-box{ width:auto; height:clamp(118px,22vh,240px); aspect-ratio:1; max-width:100%; padding:clamp(10px,1.4vh,16px); }
 .k-qr-box svg, .k-qr-box canvas{ width:100%; height:100%; display:block; object-fit:contain; }
-/* min-width:0 is required on a flex item holding text next to a
-   flex-shrink:0 sibling (.k-qr-box) — without it the text refuses to wrap
-   below its own intrinsic width and forces the whole row (and the page)
-   wider than its container. */
+/* min-width:0 keeps caption text wrapping instead of forcing the row wider. */
 .k-qr-text{ min-width:0; }
 .k-qr-text h2{ font-family:var(--display); font-weight:500; font-size:clamp(14px, 0.8vw + 0.9vh, 24px); color:var(--paper); }
 .k-qr-text p{ margin-top:4px; font-size:clamp(11px, 0.5vw + 0.6vh, 17px); color:var(--mute-dark); line-height:1.35; }
-.k-path-card.k-tablet-path{ background:var(--paper); color:var(--ink); border-color:var(--paper); }
-.k-tablet-path h2{ flex-shrink:0; font-family:var(--display); font-weight:600; font-size:clamp(16px, 1vw + 1.4vh, 30px); line-height:1.15; }
-.k-tablet-path p{ color:var(--mute); font-size:clamp(11.5px, 0.5vw + 0.7vh, 18px); line-height:1.4; overflow:hidden; }
-.k-big-cta{ flex-shrink:0; margin-top:auto; background:var(--ink); color:var(--paper); font-family:var(--display); font-weight:500; font-size:clamp(14px, 0.6vw + 1vh, 22px); padding:clamp(8px,1.4vh,20px) clamp(16px,2vw,28px); border-radius:var(--k-radius); min-height:clamp(38px, 8vh, 64px); display:flex; align-items:center; justify-content:center; gap:10px; transition:transform .12s ease; }
-.k-big-cta:active{ transform:scale(0.98); }
-.k-kiosk-foot{ flex-shrink:0; margin-top:clamp(6px,1.6vh,28px); display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; font-size:clamp(10.5px,0.6vw + 0.6vh,14px); color:var(--mute-dark); border-top:1px solid var(--line-dark); padding-top:clamp(6px,1vh,16px); }
+
+/* Phone: you're already on your phone, so drop the QR panel, stack the cards,
+   and release the kiosk's fixed one-screen lock so the page scrolls naturally. */
+@media (max-width:600px){
+  .kiosk-screen.k-attract{ height:auto; min-height:100dvh; overflow-y:auto; }
+  .k-attract-main{ grid-template-columns:1fr; }
+  .k-qr-panel{ display:none; }
+  .k-cases{ grid-template-rows:none; }
+}
 
 /* ============ FLOW (light multi-step screens) ============ */
 .k-flow{ background:var(--paper); }
