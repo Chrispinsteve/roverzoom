@@ -12,6 +12,63 @@
 // requires it, and a vague UA is a common cause of 403 responses.
 const USER_AGENT = 'RoverZoom/1.0 (https://roverzoom.com; support@roverzoom.com)';
 
+// --- Google (preferred provider when GOOGLE_MAPS_API_KEY is set) -------------
+// Enable BOTH "Geocoding API" and "Places API (New)" on the key in Google Cloud.
+// When present it powers precise address geocoding and nearby place search;
+// when absent everything transparently falls back to the free Nominatim/Photon
+// stack below, so the app never hard-depends on it.
+function googleKey() { return process.env.GOOGLE_MAPS_API_KEY || ''; }
+function isGoogleEnabled() { return !!googleKey(); }
+
+async function googleGeocode(query) {
+  const key = googleKey();
+  if (!key) return null;
+  const params = new URLSearchParams({ address: query, key, region: 'us' });
+  const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
+  if (!res.ok) throw new Error(`google geocode ${res.status}`);
+  const data = await res.json();
+  if (data.status !== 'OK' || !data.results || !data.results.length) return null;
+  const r = data.results[0];
+  const parts = r.formatted_address.split(',');
+  return {
+    label: parts[0],
+    sublabel: parts.slice(1, 4).join(',').trim(),
+    address: r.formatted_address,
+    lat: r.geometry.location.lat,
+    lng: r.geometry.location.lng,
+  };
+}
+
+// Google Places "Text Search" (New API), biased to a point — the strongest way
+// to turn "Publix" near a location into the actual nearest branch.
+async function googleSearchNear(query, anchor, limit) {
+  const key = googleKey();
+  if (!key) return [];
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location',
+    },
+    body: JSON.stringify({
+      textQuery: query,
+      regionCode: 'US',
+      maxResultCount: Math.min(limit || 6, 10),
+      locationBias: { circle: { center: { latitude: anchor.lat, longitude: anchor.lng }, radius: 40000 } },
+    }),
+  });
+  if (!res.ok) throw new Error(`google places ${res.status}`);
+  const data = await res.json();
+  return (data.places || []).map((p) => ({
+    label: (p.displayName && p.displayName.text) || query,
+    sublabel: '',
+    address: p.formattedAddress || (p.displayName && p.displayName.text) || query,
+    lat: p.location && p.location.latitude,
+    lng: p.location && p.location.longitude,
+  }));
+}
+
 function normalizeNominatim(rows) {
   return rows.map((r) => ({
     label: r.name || r.display_name.split(',')[0],
@@ -118,9 +175,25 @@ function milesBetween(aLat, aLng, bLat, bLng) {
 async function searchNear(query, anchor, limit = 6) {
   if (!query || !anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) return [];
   const { lat, lng } = anchor;
+  const MAX_MI = 80;
+  const rank = (rows) => rows
+    .map((r) => ({ ...r, miles: milesBetween(lat, lng, r.lat, r.lng) }))
+    .filter((r) => Number.isFinite(r.miles) && r.miles <= MAX_MI)
+    .sort((a, b) => a.miles - b.miles)
+    .slice(0, limit);
+
+  // Preferred: Google Places (best chain/POI coverage), biased to the anchor.
+  if (isGoogleEnabled()) {
+    try {
+      const g = rank(await googleSearchNear(query, anchor, 10));
+      if (g.length) return g;
+    } catch (e) { console.warn('google places failed, falling back:', e.message); }
+  }
+
+  // Free fallback. Photon (point-biased) beats Nominatim for "nearest branch"
+  // coverage, so try it first; Nominatim (box-bounded to the rider) backs it up.
   const dLat = 0.6, dLng = 0.7; // ~40-mile box around the rider
   const viewbox = `${lng - dLng},${lat - dLat},${lng + dLng},${lat + dLat}`;
-
   const viaNominatim = async () => {
     const params = new URLSearchParams({
       q: query, format: 'json', addressdetails: '1', limit: '10',
@@ -138,22 +211,19 @@ async function searchNear(query, anchor, limit = 6) {
     if (!res.ok) throw new Error(`Photon ${res.status}`);
     return normalizePhoton((await res.json()).features || []);
   };
-
-  // Photon (point-biased) has far better chain/POI coverage than Nominatim for
-  // "nearest branch" lookups, so try it first; Nominatim (box-bounded) backs it up.
   let rows = [];
   try { rows = await viaPhoton(); } catch { rows = []; }
   if (!rows.length) { try { rows = await viaNominatim(); } catch { rows = []; } }
-
-  const MAX_MI = 80;
-  return rows
-    .map((r) => ({ ...r, miles: milesBetween(lat, lng, r.lat, r.lng) }))
-    .filter((r) => Number.isFinite(r.miles) && r.miles <= MAX_MI)
-    .sort((a, b) => a.miles - b.miles)
-    .slice(0, limit);
+  return rank(rows);
 }
 
 async function geocodeOne(query) {
+  // Prefer Google for precise single-address resolution (pickup/dropoff, and the
+  // anchor point for nearby place search); fall back to the free stack.
+  if (isGoogleEnabled()) {
+    try { const g = await googleGeocode(query); if (g) return g; }
+    catch (e) { console.warn('google geocode failed, falling back:', e.message); }
+  }
   const results = await geocode(query, 1).catch(() => []);
   return results[0] || null;
 }
