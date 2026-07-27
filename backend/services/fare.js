@@ -59,4 +59,4 @@ function estimate(pickup, dropoff) {
   };
 }
 
-module.exports = { estimate, haversineMiles, HOURLY_RATE };
+module.exports = { estimate, haversineMiles, HOURLY_RATE, FARE_MULTIPLIER };

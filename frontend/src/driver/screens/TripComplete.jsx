@@ -11,6 +11,10 @@ export default function TripComplete({ booking, onBackToDashboard }) {
   const fare = Number(booking.fare);
   const payout = booking.driver_payout;
   const platformCut = Math.round((fare - payout) * 100) / 100;
+  // Derived from the actual amounts so the split always matches the payout
+  // (the rider fare carries the marketing discount; the driver's cut is protected).
+  const payoutPct = fare > 0 ? Math.round((payout / fare) * 100) : 0;
+  const feePct = Math.max(0, 100 - payoutPct);
 
   const rate = (n) => {
     setRating(n);
@@ -40,11 +44,11 @@ export default function TripComplete({ booking, onBackToDashboard }) {
             <span className="summary-value">${fare.toFixed(2)}</span>
           </div>
           <div className="summary-row">
-            <span className="summary-label">Platform fee (40%)</span>
+            <span className="summary-label">Platform fee ({feePct}%)</span>
             <span className="summary-value">-${platformCut.toFixed(2)}</span>
           </div>
           <div className="summary-row">
-            <span className="summary-label" style={{ fontWeight: 700, color: 'var(--ink)' }}>Your Payout (60%)</span>
+            <span className="summary-label" style={{ fontWeight: 700, color: 'var(--ink)' }}>Your Payout ({payoutPct}%)</span>
             <span className="summary-value big">${payout.toFixed(2)}</span>
           </div>
         </div>

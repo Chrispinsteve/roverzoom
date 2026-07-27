@@ -1,7 +1,7 @@
 const express = require('express');
 const supabase = require('../db/supabase');
 const { requireDriver, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
-const { driverPayout } = require('../services/payout');
+const { driverPayout, DRIVER_CUT_PCT } = require('../services/payout');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
 const { stripe } = require('../services/stripe');
@@ -251,6 +251,7 @@ router.get('/earnings', requireDriver, async (req, res) => {
     res.json({
       todayTotal: Math.round(todayTotal * 100) / 100,
       weekTotal: Math.round(weekTotal * 100) / 100,
+      driverSharePct: Math.round(DRIVER_CUT_PCT * 100),
       recent: earnings || [],
       payouts: payouts || [],
     });
