@@ -1,10 +1,15 @@
-// Fare model: $50 per hour of estimated trip duration.
-// Includes distance cap, human-readable duration, and service-area warning.
+// Fare model: $50 per hour of estimated trip duration, then a marketing
+// discount applied on top. Includes distance cap, human-readable duration,
+// and service-area warning.
 
 const HOURLY_RATE = Number(process.env.HOURLY_RATE) || 50;
 const ROAD_FACTOR = 1.3;
 const AVG_SPEED_MPH = 28;
 const MIN_FARE = 12;
+// Marketing discount: every quoted fare is 25% below the base rate, to undercut
+// competitors ("Pay 25% less"). Tunable via FARE_MULTIPLIER (0.75 = 25% off);
+// set it to 1 to price at the full rate.
+const FARE_MULTIPLIER = Number(process.env.FARE_MULTIPLIER) || 0.75;
 const MAX_DISTANCE_MILES = 200; // Service area cap — beyond this, warn the rider.
 
 const EARTH_MILES = 3958.8;
@@ -41,7 +46,8 @@ function estimate(pickup, dropoff) {
   const cappedMiles = tooFar ? MAX_DISTANCE_MILES : distanceMiles;
 
   const durationMinutes = Math.max(8, Math.round((cappedMiles / AVG_SPEED_MPH) * 60));
-  const fare = Math.max(MIN_FARE, Math.round((durationMinutes / 60) * HOURLY_RATE * 100) / 100);
+  const baseFare = Math.max(MIN_FARE, (durationMinutes / 60) * HOURLY_RATE);
+  const fare = Math.round(baseFare * FARE_MULTIPLIER * 100) / 100;
 
   return {
     distanceMiles: Math.round(cappedMiles * 10) / 10,
