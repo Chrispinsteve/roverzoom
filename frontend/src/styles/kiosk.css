@@ -99,8 +99,16 @@
 .k-attract-cta{ flex-shrink:0; margin-top:clamp(10px,2vh,26px); display:flex; flex-direction:column; align-items:center; gap:clamp(6px,1.2vh,12px); }
 .k-book-cta{ width:100%; max-width:520px; background:var(--paper); color:var(--ink); font-family:var(--display); font-weight:600; font-size:clamp(16px,0.7vw + 1.1vh,24px); padding:clamp(11px,1.7vh,20px) clamp(20px,2vw,30px); border-radius:var(--k-radius); min-height:clamp(46px,8vh,66px); display:flex; align-items:center; justify-content:center; gap:10px; transition:transform .12s ease; }
 .k-book-cta:active{ transform:scale(0.98); }
-.k-find-ride{ color:var(--mute-dark); font-size:clamp(12px,0.5vw + 0.6vh,15px); padding:4px; transition:color .15s ease; }
-.k-find-ride:active{ color:var(--paper); }
+
+/* Subtle gear utility menu in the header — tucks "Find my ride" away so the
+   entrance stays clean and the body gets the freed space. */
+.k-gear-wrap{ position:relative; display:flex; }
+.k-gear{ width:38px; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:var(--mute-dark); border:1px solid transparent; transition:color .16s ease, background .16s ease, border-color .16s ease; }
+.k-gear:hover{ color:#fff; }
+.k-gear[aria-expanded="true"]{ color:#fff; background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.12); }
+.k-gear-menu{ position:absolute; top:calc(100% + 8px); right:0; z-index:20; min-width:200px; background:#1a1a17; border:1px solid var(--line-dark); border-radius:12px; padding:6px; box-shadow:0 14px 34px rgba(0,0,0,0.55); animation:k-rise .18s var(--ease) both; }
+.k-gear-item{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; color:var(--paper); font-family:var(--body); font-size:15px; padding:11px 12px; border-radius:8px; transition:background .14s ease; }
+.k-gear-item:hover, .k-gear-item:active{ background:rgba(255,255,255,0.07); }
 
 /* Shared QR primitives — the confirmation screen reuses .k-qr-box / .k-qr-text. */
 .k-qr-box{ width:clamp(150px, 18vh, 220px); aspect-ratio:1; background:#fff; border-radius:12px; padding:clamp(8px,1vh,14px); flex-shrink:0; }
@@ -111,13 +119,14 @@
 .k-qr-text h2{ font-family:var(--display); font-weight:500; font-size:clamp(14px, 0.8vw + 0.9vh, 24px); color:var(--paper); }
 .k-qr-text p{ margin-top:4px; font-size:clamp(11px, 0.5vw + 0.6vh, 17px); color:var(--mute-dark); line-height:1.35; }
 
-/* Phone: you're already on your phone, so drop the QR panel, stack the cards,
-   and release the kiosk's fixed one-screen lock so the page scrolls naturally. */
+/* Phone: keep the SAME one-screen layout (no scrolling — the cards flex to fill
+   and everything fits in one viewport just like the tablet). Just go single
+   column, drop the QR (you're already on your phone), and hide the clock (the
+   phone's status bar already shows the time) so the header stays uncluttered. */
 @media (max-width:600px){
-  .kiosk-screen.k-attract{ height:auto; min-height:100dvh; overflow-y:auto; }
   .k-attract-main{ grid-template-columns:1fr; }
   .k-qr-panel{ display:none; }
-  .k-cases{ grid-template-rows:none; }
+  .k-clock{ display:none; }
 }
 
 /* ============ FLOW (light multi-step screens) ============ */

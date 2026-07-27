@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/Icon';
 import QrCode from '../components/QrCode';
 import VoiceOrb from '../../components/VoiceOrb';
@@ -27,6 +27,8 @@ const CASES = [
 export default function Attract({ onBookHere, onMyRides, onTalk }) {
   const [time, setTime] = useState(() => new Date());
   const [hi, setHi] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 15000);
@@ -38,6 +40,16 @@ export default function Attract({ onBookHere, onMyRides, onTalk }) {
     const id = setInterval(() => setHi((i) => (i + 1) % HEADLINES.length), 4600);
     return () => clearInterval(id);
   }, []);
+
+  // Close the gear menu on an outside tap or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('pointerdown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [menuOpen]);
 
   const h = HEADLINES[hi];
 
@@ -55,6 +67,27 @@ export default function Attract({ onBookHere, onMyRides, onTalk }) {
                 </button>
               )}
               <span className="k-clock">{time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              {/* Subtle utility menu — keeps "Find my ride" tucked away so the
+                  entrance stays uncluttered and the body has more room. */}
+              <div className="k-gear-wrap" ref={menuRef}>
+                <button
+                  className="k-gear"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  aria-label="Menu"
+                  aria-haspopup="true"
+                  aria-expanded={menuOpen}
+                >
+                  <Icon name="gear" size={20} color="currentColor" />
+                </button>
+                {menuOpen && (
+                  <div className="k-gear-menu" role="menu">
+                    <button className="k-gear-item" role="menuitem" onClick={() => { setMenuOpen(false); onMyRides(); }}>
+                      <Icon name="search" size={18} color="currentColor" />
+                      Find my ride
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -91,7 +124,6 @@ export default function Attract({ onBookHere, onMyRides, onTalk }) {
             <button className="k-book-cta" onClick={onBookHere}>
               Book my ride <Icon name="arrowRight" size={22} color="var(--ink)" />
             </button>
-            <button className="k-find-ride" onClick={onMyRides}>Already booked? Find your ride</button>
           </div>
         </div>
       </section>
