@@ -16,7 +16,7 @@ const EMPTY_BOOKING = {
   payment: null,
 };
 
-export default function KioskApp() {
+export default function KioskApp({ onDriverMode }) {
   const [screen, setScreen] = useState('attract'); // attract | route | phone | pay | confirm | track | rides
   const [booking, setBooking] = useState(EMPTY_BOOKING);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
@@ -78,6 +78,7 @@ export default function KioskApp() {
           onBookHere={() => setScreen('route')}
           onMyRides={() => setScreen('rides')}
           onTalk={() => setAssistantOpen(true)}
+          onDriverMode={onDriverMode}
         />
         {assistantLayer}
       </>

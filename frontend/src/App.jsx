@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import DriverEntry from './components/DriverEntry';
 import KioskApp from './kiosk/KioskApp';
 import DriverApp from './driver/DriverApp';
 
@@ -19,10 +18,6 @@ export default function App() {
     return <DriverApp onExit={() => setMode('rider')} />;
   }
 
-  return (
-    <>
-      <KioskApp />
-      <DriverEntry onSelectDriverMode={() => setMode('driver')} />
-    </>
-  );
+  // Driver mode is reached from the Attract screen's gear menu (top-right).
+  return <KioskApp onDriverMode={() => setMode('driver')} />;
 }

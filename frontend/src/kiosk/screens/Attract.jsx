@@ -24,7 +24,7 @@ const CASES = [
   { icon: '🎉', title: 'Events', line: 'Enjoy the night — your ride home is ready.' },
 ];
 
-export default function Attract({ onBookHere, onMyRides, onTalk }) {
+export default function Attract({ onBookHere, onMyRides, onTalk, onDriverMode }) {
   const [time, setTime] = useState(() => new Date());
   const [hi, setHi] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,6 +85,12 @@ export default function Attract({ onBookHere, onMyRides, onTalk }) {
                       <Icon name="search" size={18} color="currentColor" />
                       Find my ride
                     </button>
+                    {onDriverMode && (
+                      <button className="k-gear-item" role="menuitem" onClick={() => { setMenuOpen(false); onDriverMode(); }}>
+                        <Icon name="car" size={18} color="currentColor" />
+                        Driver mode
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
