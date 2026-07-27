@@ -6,10 +6,10 @@ const HOURLY_RATE = Number(process.env.HOURLY_RATE) || 50;
 const ROAD_FACTOR = 1.3;
 const AVG_SPEED_MPH = 28;
 const MIN_FARE = 12;
-// Marketing discount: every quoted fare is 25% below the base rate, to undercut
-// competitors ("Pay 25% less"). Tunable via FARE_MULTIPLIER (0.75 = 25% off);
+// Marketing discount: every quoted fare is 15% below the base rate, to undercut
+// competitors ("Pay 15% less"). Tunable via FARE_MULTIPLIER (0.85 = 15% off);
 // set it to 1 to price at the full rate.
-const FARE_MULTIPLIER = Number(process.env.FARE_MULTIPLIER) || 0.75;
+const FARE_MULTIPLIER = Number(process.env.FARE_MULTIPLIER) || 0.85;
 const MAX_DISTANCE_MILES = 200; // Service area cap — beyond this, warn the rider.
 
 const EARTH_MILES = 3958.8;

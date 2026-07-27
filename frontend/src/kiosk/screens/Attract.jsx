@@ -10,7 +10,7 @@ const HEADLINES = [
   { t: 'What is RoverZoom?' },
   { t: 'The smarter way to schedule rides.', s: 'Avoid last-minute stress.' },
   { t: 'Schedule rides in advance.' },
-  { t: 'Pay 25% less than Uber.', s: 'Spend less with us.' },
+  { t: 'Pay 15% less than Uber.', s: 'Spend less with us.' },
   { t: 'Wake up knowing your ride is booked.', s: 'Perfect for work, flights and appointments.' },
   { t: "Book tomorrow's ride today.", s: 'It only takes one minute.' },
   { t: 'Plan your trip here. Get rewarded.', s: 'Every scheduled ride can save you money.' },
