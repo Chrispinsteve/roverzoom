@@ -1,24 +1,21 @@
-// Driver payout model: drivers keep 57.5% of the STANDARD fare.
+// Driver payout model: drivers keep 57.5% of the STANDARD (pre-discount) fare.
 //
-// The rider-paid fare already has the marketing discount baked in (see
-// FARE_MULTIPLIER in fare.js). The promo comes mostly out of the platform's cut:
-// drivers earn their share of the full, pre-discount fare (giving up only a small
-// slice), so take-home is largely shielded from the discount. Expressed against
-// the discounted fare the rider actually pays (and hands the driver, for
-// cash/Zelle rides), that's a higher effective share:
-//     effective = base_share / fare_multiplier   →   0.575 / 0.85 ≈ 0.676
-const { FARE_MULTIPLIER } = require('./fare');
+// Rider fares carry a time-of-day marketing discount (see fare.js — 25% off in
+// the morning window, 15% otherwise). That promo comes out of the platform's
+// cut, not the driver's: we reconstruct the standard fare using the SAME
+// multiplier that produced this fare (from its scheduled time) and pay the
+// driver their fixed share of it. So take-home is identical whether the rider
+// got 15% or 25% off — the driver's share of the DISCOUNTED fare simply rises
+// to keep the standard-fare share constant.
+const { multiplierForTime } = require('./fare');
 
 // Driver's share of the standard, pre-discount fare (tunable via env).
 const DRIVER_BASE_SHARE = Number(process.env.DRIVER_CUT_PCT) || 0.575;
 
-// Share of the actual (discounted) fare, capped at 100%. This is what keeps
-// take-home flat as the discount changes — deepen the promo and the driver's
-// share of the paid fare rises to match.
-const DRIVER_CUT_PCT = Math.min(1, Math.round((DRIVER_BASE_SHARE / (FARE_MULTIPLIER || 1)) * 10000) / 10000);
-
-function driverPayout(fare) {
-  return Math.round(fare * DRIVER_CUT_PCT * 100) / 100;
+function driverPayout(fare, whenIso) {
+  const multiplier = multiplierForTime(whenIso) || 1;
+  const baseFare = fare / multiplier;
+  return Math.round(baseFare * DRIVER_BASE_SHARE * 100) / 100;
 }
 
-module.exports = { DRIVER_CUT_PCT, DRIVER_BASE_SHARE, driverPayout };
+module.exports = { DRIVER_BASE_SHARE, driverPayout };

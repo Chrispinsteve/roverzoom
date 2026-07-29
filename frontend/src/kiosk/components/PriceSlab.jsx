@@ -4,11 +4,13 @@ import { api } from '../../lib/api';
 
 // Only quotes once both ends have real coordinates — never prices off a
 // half-typed address, so the "locked" price is always the real $50/hr fare.
-export default function PriceSlab({ pickup, dropoff, quote, onQuote }) {
+export default function PriceSlab({ pickup, dropoff, when, quote, onQuote }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const ready = pickup?.lat != null && dropoff?.lat != null;
 
+  // Re-quote when the pickup time changes too — the fare depends on it
+  // (early-morning rides get the deeper discount).
   useEffect(() => {
     if (!ready) {
       setError(false);
@@ -18,13 +20,13 @@ export default function PriceSlab({ pickup, dropoff, quote, onQuote }) {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    api.estimate(pickup, dropoff)
+    api.estimate(pickup, dropoff, when)
       .then((q) => { if (!cancelled) onQuote(q); })
       .catch(() => { if (!cancelled) { setError(true); onQuote(null); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng]);
+  }, [ready, pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, when]);
 
   if (ready && quote) {
     return (
@@ -32,7 +34,7 @@ export default function PriceSlab({ pickup, dropoff, quote, onQuote }) {
         <div className="k-price-live">
           <Icon name="lock" size={22} color="var(--lock-deep)" />
           <div className="k-price-words">
-            <span className="k-price-cap">Price locked</span>
+            <span className="k-price-cap">Price locked{quote.discountPct ? ` · ${quote.discountPct}% off` : ''}</span>
             <span className="k-price-meta">{quote.durationLabel} drive · {quote.distanceMiles} mi</span>
           </div>
           <span className="k-price-num">${quote.fare.toFixed(2)}</span>

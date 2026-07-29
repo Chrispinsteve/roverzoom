@@ -50,12 +50,13 @@ const TOOLS = [
   {
     name: 'get_quote',
     description:
-      "Get the locked price and travel time for a ride between two addresses. Call this before booking, or whenever the rider asks how much a ride costs.",
+      "Get the locked price and travel time for a ride between two addresses. Call this before booking, or whenever the rider asks how much a ride costs. Pass when_iso if you know the pickup time — early-morning rides (4–10am) are cheaper, so the price depends on it.",
     input_schema: {
       type: 'object',
       properties: {
         pickup_address: { type: 'string', description: 'The pickup address or place name, as the rider said it.' },
         dropoff_address: { type: 'string', description: 'The destination address or place name.' },
+        when_iso: { type: 'string', description: 'Optional pickup date and time as ISO 8601, if known. Fares are lower for early-morning rides, so include it for an accurate quote.' },
       },
       required: ['pickup_address', 'dropoff_address'],
     },
@@ -123,7 +124,7 @@ async function toolFindPlace(input) {
 async function toolGetQuote(input) {
   const { p, d } = await resolveEnds(input.pickup_address, input.dropoff_address);
   if (!p || !d) return { error: "Couldn't find one of those addresses — ask the rider to be more specific." };
-  const est = estimate(p, d);
+  const est = estimate(p, d, input.when_iso);
   return {
     fare: est.fare,
     distance_miles: est.distanceMiles,
@@ -137,7 +138,7 @@ async function toolGetQuote(input) {
 async function toolCreateBooking(input) {
   const { p, d } = await resolveEnds(input.pickup_address, input.dropoff_address);
   if (!p || !d) return { error: "Couldn't resolve the addresses to book the ride." };
-  const est = estimate(p, d);
+  const est = estimate(p, d, input.when_iso);
   const pm = ['cash', 'zelle', 'card'].includes(input.payment_method) ? input.payment_method : 'cash';
 
   let reference = makeReference();
@@ -213,6 +214,8 @@ function systemPrompt() {
   return `You are the voice of RoverZoom, a scheduled ride service. You help riders book a car by talking with them out loud.
 
 RoverZoom's promise: the price is locked the moment they book, a driver is guaranteed, and there's no surge. Riders pay the driver in cash, by Zelle, or by card.
+
+Early-bird pricing: rides scheduled between 4 and 10 in the morning are 25% off; every other time is 15% off. So an early-morning ride is cheaper — mention it if it helps the rider save. The quote already reflects this, so always pass the pickup time to get_quote once you know it.
 
 Current date and time: ${new Date().toISOString()}. Use this to turn phrases like "tomorrow at 6" into an exact future ISO 8601 timestamp when booking.
 

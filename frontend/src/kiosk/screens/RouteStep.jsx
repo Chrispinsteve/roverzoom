@@ -4,6 +4,7 @@ import RouteCard from '../components/RouteCard';
 import DestinationChips from '../components/DestinationChips';
 import DateTimeCases from '../components/DateTimeCases';
 import PriceSlab from '../components/PriceSlab';
+import { combineDayTime } from '../lib/datetime';
 import { api } from '../../lib/api';
 
 export default function RouteStep({ booking, onChange, onNext, onBack }) {
@@ -94,6 +95,7 @@ export default function RouteStep({ booking, onChange, onNext, onBack }) {
       <PriceSlab
         pickup={booking.pickup}
         dropoff={booking.dropoff}
+        when={booking.dayIso && booking.timeLabel ? (combineDayTime(booking.dayIso, booking.timeLabel)?.toISOString() || null) : null}
         quote={booking.quote}
         onQuote={(quote) => onChange({ quote })}
       />

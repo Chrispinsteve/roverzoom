@@ -47,7 +47,7 @@ export default function Earnings({ activeTab, onChangeTab }) {
     <DriverShell activeTab={activeTab} onChangeTab={onChangeTab}>
       <div className="body">
         <h1 className="title rise" style={{ fontSize: 26 }}>Earnings</h1>
-        <p className="subtitle rise-1">You keep {data ? data.driverSharePct : 80}% of every fare</p>
+        <p className="subtitle rise-1">Rider discounts come off our cut — your pay stays protected.</p>
 
         {error && <p className="error-text">{error}</p>}
         {!data && !error && <p className="muted center" style={{ marginTop: 24 }}>Loading…</p>}

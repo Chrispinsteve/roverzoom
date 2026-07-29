@@ -34,8 +34,8 @@ router.get('/reverse-geocode', async (req, res) => {
 
 // POST /api/estimate  { pickup:{lat,lng}, dropoff:{lat,lng} }
 router.post('/estimate', (req, res) => {
-  const { pickup, dropoff } = req.body || {};
-  res.json(estimate(pickup, dropoff));
+  const { pickup, dropoff, when } = req.body || {};
+  res.json(estimate(pickup, dropoff, when));
 });
 
 module.exports = router;

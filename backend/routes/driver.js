@@ -1,7 +1,7 @@
 const express = require('express');
 const supabase = require('../db/supabase');
 const { requireDriver, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
-const { driverPayout, DRIVER_CUT_PCT } = require('../services/payout');
+const { driverPayout } = require('../services/payout');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
 const { stripe } = require('../services/stripe');
@@ -17,7 +17,7 @@ const router = express.Router();
 const AVAILABLE_GRACE_HOURS = Number(process.env.AVAILABLE_GRACE_HOURS) || 6;
 
 function withPayout(booking) {
-  return { ...booking, driver_payout: driverPayout(Number(booking.fare)) };
+  return { ...booking, driver_payout: driverPayout(Number(booking.fare), booking.scheduled_at) };
 }
 
 // GET /api/driver/schedule — this driver's own upcoming + recent bookings.
@@ -124,7 +124,7 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
     try {
       const { data: booking, error: fetchErr } = await supabase
         .from('bookings')
-        .select('fare, status, driver_id')
+        .select('fare, scheduled_at, status, driver_id')
         .eq('id', bookingId)
         .maybeSingle();
       if (fetchErr) throw fetchErr;
@@ -135,14 +135,14 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
         return res.status(409).json({ error: 'Trip is not in progress.' });
       }
 
-      const amount = driverPayout(Number(booking.fare));
+      const amount = driverPayout(Number(booking.fare), booking.scheduled_at);
       const { data, error } = await supabase.rpc('complete_booking', {
         p_booking_id: bookingId,
         p_driver_id: req.driver.id,
         p_earnings_amount: amount,
       });
       if (error) throw error;
-      return res.json(withPayout(data));
+      return res.json(withPayout({ ...data, scheduled_at: data.scheduled_at || booking.scheduled_at }));
     } catch (err) {
       console.error('complete booking error', err.message);
       return res.status(500).json({ error: 'Could not complete trip.' });
@@ -251,7 +251,6 @@ router.get('/earnings', requireDriver, async (req, res) => {
     res.json({
       todayTotal: Math.round(todayTotal * 100) / 100,
       weekTotal: Math.round(weekTotal * 100) / 100,
-      driverSharePct: Math.round(DRIVER_CUT_PCT * 100),
       recent: earnings || [],
       payouts: payouts || [],
     });

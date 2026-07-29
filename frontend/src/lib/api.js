@@ -26,8 +26,8 @@ export async function req(path, options = {}) {
 export const api = {
   geocode: (q) => req(`/geocode?q=${encodeURIComponent(q)}`),
   reverseGeocode: (lat, lng) => req(`/reverse-geocode?lat=${lat}&lng=${lng}`),
-  estimate: (pickup, dropoff) =>
-    req('/estimate', { method: 'POST', body: JSON.stringify({ pickup, dropoff }) }),
+  estimate: (pickup, dropoff, when) =>
+    req('/estimate', { method: 'POST', body: JSON.stringify({ pickup, dropoff, when }) }),
   createBooking: (payload) =>
     req('/bookings', { method: 'POST', body: JSON.stringify(payload) }),
   getBooking: (ref) => req(`/bookings/${ref}`),
