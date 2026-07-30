@@ -35,6 +35,10 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   // the moment the user actually edits this pre-filled text.
   const initialConfirmedQuery = useRef(value?.lat ? (value.address || '') : null);
   const wrapperRef = useRef(null);
+  // Live mirror of `confirmed` so the blur-resolve below never acts on a stale
+  // closure value when a dropdown pick lands in the same tick.
+  const confirmedRef = useRef(confirmed);
+  useEffect(() => { confirmedRef.current = confirmed; }, [confirmed]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -100,6 +104,34 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
     onSelect({ address: r.address, lat: r.lat, lng: r.lng });
   };
 
+  // When the user leaves the field having typed an address but NOT tapped a
+  // suggestion, resolve the text to coordinates automatically — otherwise a
+  // perfectly valid typed address is a dead end (no coords → no price → the
+  // Continue button never enables). Runs on a short delay so a dropdown pick
+  // (which sets confirmed) wins first; guarded by the live confirmedRef.
+  const resolveTypedAddress = async () => {
+    const q = query.trim();
+    if (confirmedRef.current || justPicked.current || q.length < 5) return;
+    if (debounce.current) clearTimeout(debounce.current);
+    setLoading(true);
+    try {
+      const r = await api.geocode(q);
+      if (r && r.length && r[0] && Number.isFinite(r[0].lat) && Number.isFinite(r[0].lng)) {
+        const top = r[0];
+        justPicked.current = true;
+        setQuery(top.label + (top.sublabel ? ', ' + top.sublabel : ''));
+        setResults([]);
+        setOpen(false);
+        setConfirmed(true);
+        onSelect({ address: top.address, lat: top.lat, lng: top.lng });
+      }
+    } catch {
+      /* leave the typed text as-is; the dropdown is still available on refocus */
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="field" ref={wrapperRef}>
       {label && <label className="label">{label}</label>}
@@ -123,6 +155,7 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
           onFocus={() => {
             if (results.length > 0 && !confirmed) setOpen(true);
           }}
+          onBlur={() => setTimeout(resolveTypedAddress, 160)}
         />
         {/* Selection indicator */}
         {confirmed && (
