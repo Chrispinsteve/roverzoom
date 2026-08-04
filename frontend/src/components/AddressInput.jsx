@@ -131,12 +131,25 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
     if (confirmedRef.current || justPicked.current || q.length < 5) return;
     if (debounce.current) clearTimeout(debounce.current);
     setLoading(true);
+    const firstHit = async (p) => {
+      try { const r = await p; return (Array.isArray(r) && r.find((x) => x && Number.isFinite(x.lat) && Number.isFinite(x.lng))) || null; }
+      catch { return null; }
+    };
     try {
-      // Precise (Google-preferred) lookup for the committed address, so a typed
-      // house number resolves to the exact house when Google is active.
-      const r = await api.geocodePrecise(q);
-      if (r && r.length && r[0] && Number.isFinite(r[0].lat) && Number.isFinite(r[0].lng)) {
-        const top = r[0];
+      // A typed address must NEVER be a dead end. Resolve to coordinates so it can
+      // be priced, trying in order: the precise (Google-when-active) lookup, the
+      // plain free lookup, then the same query with the house number stripped
+      // (streets/areas are far better covered than individual houses). Whatever
+      // hits, keep the rider's FULL typed text as the address (via
+      // mergeHouseNumber) so the driver sees the exact house even when only the
+      // street/area could be placed on the map.
+      let top = await firstHit(api.geocodePrecise(q));
+      if (!top) top = await firstHit(api.geocode(q));
+      if (!top) {
+        const noNum = q.replace(/^\s*\d+[a-z]?\s+/i, '').trim();
+        if (noNum && noNum !== q) top = await firstHit(api.geocode(noNum));
+      }
+      if (top) {
         const address = mergeHouseNumber(q, top.address);
         justPicked.current = true;
         setQuery(address);
