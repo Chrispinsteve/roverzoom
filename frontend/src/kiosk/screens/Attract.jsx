@@ -27,6 +27,7 @@ const CASES = [
 export default function Attract({ onBookHere, onMyRides, onTalk, onDriverMode }) {
   const [time, setTime] = useState(() => new Date());
   const [hi, setHi] = useState(0);
+  const [dealKey, setDealKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -38,6 +39,15 @@ export default function Attract({ onBookHere, onMyRides, onTalk, onDriverMode })
   // Advance the headline marquee. ~4.6s each is long enough to read the pair.
   useEffect(() => {
     const id = setInterval(() => setHi((i) => (i + 1) % HEADLINES.length), 4600);
+    return () => clearInterval(id);
+  }, []);
+
+  // Keep re-dealing the use-case cards (slow, continuous poker flip) so the
+  // screen keeps drawing a phone rider's eye. Bumping dealKey re-keys the cards,
+  // replaying the CSS flip. Skipped for reduced-motion.
+  useEffect(() => {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const id = setInterval(() => setDealKey((k) => k + 1), 12000);
     return () => clearInterval(id);
   }, []);
 
@@ -115,7 +125,7 @@ export default function Attract({ onBookHere, onMyRides, onTalk, onDriverMode })
 
             <div className="k-cases">
               {CASES.map((c) => (
-                <button key={c.title} className="k-case" onClick={onBookHere}>
+                <button key={`${dealKey}|${c.title}`} className="k-case" onClick={onBookHere}>
                   <span className="k-case-ic" aria-hidden="true">{c.icon}</span>
                   <span className="k-case-tx">
                     <span className="k-case-title">{c.title}</span>

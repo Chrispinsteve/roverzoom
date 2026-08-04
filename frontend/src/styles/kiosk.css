@@ -70,6 +70,13 @@
 /* Fixed size — the logo must never resize or reflow between orientations. */
 .k-brand-img{ height:28px; display:block; flex-shrink:0; }
 .k-clock{ font-family:var(--display); font-size:14px; color:var(--mute-dark); font-variant-numeric:tabular-nums; flex-shrink:0; }
+/* Faint color glows on the near-black ground give the frosted-glass panels
+   below something to sit over and tint, so they read as glass, not flat cards. */
+.k-attract{ background:
+  radial-gradient(1000px 560px at 82% 6%, rgba(88,150,236,0.13), transparent 60%),
+  radial-gradient(760px 520px at 4% 98%, rgba(122,110,232,0.09), transparent 58%),
+  var(--ink); }
+
 /* Rotating headline marquee — the attract centerpiece. Each pair rises/fades in
    as the copy changes (keyed re-mount replays the animation). min-height keeps
    the block from jumping between title-only and title+subtext slides. */
@@ -86,21 +93,22 @@
    collide with the CTA. Children below get min-height:0 + overflow:hidden so
    they shrink within this row instead of spilling. */
 .k-attract-main{ flex:1; min-height:0; display:grid; grid-template-columns:0.82fr 1.18fr; grid-template-rows:minmax(0,1fr); gap:clamp(10px,1.8vw,26px); align-items:stretch; }
-.k-qr-panel{ min-height:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:clamp(8px,1.6vh,18px); border:1px solid var(--line-dark); border-radius:var(--k-radius-lg); padding:clamp(12px,2vh,28px); background:#131311; }
+.k-qr-panel{ min-height:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:clamp(8px,1.6vh,18px); border:1px solid rgba(255,255,255,0.10); border-radius:var(--k-radius-lg); padding:clamp(12px,2vh,28px); background:rgba(255,255,255,0.05); -webkit-backdrop-filter:blur(16px) saturate(150%); backdrop-filter:blur(16px) saturate(150%); box-shadow:inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 30px rgba(0,0,0,0.28); }
 .k-qr-panel-cap h2{ font-family:var(--display); font-weight:500; font-size:clamp(15px,0.7vw + 0.9vh,23px); color:var(--paper); }
 .k-qr-panel-cap p{ margin-top:4px; font-size:clamp(11.5px,0.5vw + 0.6vh,16px); color:var(--mute-dark); }
 
-.k-cases{ min-height:0; display:grid; grid-template-rows:repeat(4,1fr); gap:clamp(7px,1.2vh,14px); perspective:1200px; }
-/* Each card flips in like a dealt poker card as the screen loads (staggered).
-   `backwards` fill keeps it hidden (edge-on) during its stagger delay, then
-   reverts to base after — so the tap scale (:active) still works. */
-.k-case{ min-height:0; overflow:hidden; display:flex; align-items:center; gap:clamp(10px,1.4vw,18px); text-align:left; border:1px solid var(--line-dark); border-radius:var(--k-radius); padding:clamp(6px,1vh,18px) clamp(12px,1.4vw,22px); background:#131311; transform-origin:center; animation:k-deal .52s var(--ease) backwards; transition:border-color .16s ease, transform .12s ease; }
-.k-case:nth-child(1){ animation-delay:.06s; }
-.k-case:nth-child(2){ animation-delay:.17s; }
-.k-case:nth-child(3){ animation-delay:.28s; }
-.k-case:nth-child(4){ animation-delay:.39s; }
-@keyframes k-deal{ from{ opacity:0; transform:rotateY(72deg) translateY(7px); } to{ opacity:1; transform:rotateY(0) translateY(0); } }
-.k-case:hover{ border-color:#3b3b37; }
+.k-cases{ min-height:0; display:grid; grid-template-rows:repeat(4,1fr); gap:clamp(7px,1.2vh,14px); perspective:1400px; }
+/* Frosted-glass cards that keep dealing in with a slow, staggered poker flip
+   (re-keyed on a timer in Attract.jsx). `backwards` fill keeps each hidden
+   (edge-on) through its stagger delay, then reverts to base after — so the tap
+   scale (:active) still works. */
+.k-case{ min-height:0; overflow:hidden; display:flex; align-items:center; gap:clamp(10px,1.4vw,18px); text-align:left; border:1px solid rgba(255,255,255,0.10); border-radius:var(--k-radius); padding:clamp(6px,1vh,18px) clamp(12px,1.4vw,22px); background:rgba(255,255,255,0.055); -webkit-backdrop-filter:blur(16px) saturate(150%); backdrop-filter:blur(16px) saturate(150%); box-shadow:inset 0 1px 0 rgba(255,255,255,0.09), 0 10px 30px rgba(0,0,0,0.30); transform-origin:center; animation:k-deal .9s var(--ease) backwards; transition:border-color .18s ease, background .18s ease, transform .12s ease; }
+.k-case:nth-child(1){ animation-delay:.08s; }
+.k-case:nth-child(2){ animation-delay:.26s; }
+.k-case:nth-child(3){ animation-delay:.44s; }
+.k-case:nth-child(4){ animation-delay:.62s; }
+@keyframes k-deal{ from{ opacity:0; transform:rotateY(78deg) translateY(8px); } to{ opacity:1; transform:rotateY(0) translateY(0); } }
+.k-case:hover{ background:rgba(255,255,255,0.10); border-color:rgba(255,255,255,0.20); }
 .k-case:active{ transform:scale(0.985); }
 .k-case-ic{ flex-shrink:0; width:clamp(38px,5vh,54px); height:clamp(38px,5vh,54px); border-radius:12px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; font-size:clamp(19px,1vw + 1.3vh,28px); }
 .k-case-tx{ display:flex; flex-direction:column; min-width:0; gap:2px; }
