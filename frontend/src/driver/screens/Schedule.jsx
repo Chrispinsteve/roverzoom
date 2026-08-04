@@ -45,11 +45,16 @@ function groupByDay(bookings) {
 }
 
 function TripRowBody({ booking }) {
+  const canceled = booking.status === 'canceled';
+  const done = booking.status === 'completed';
   return (
     <div className="drv-trip-body">
       <div className="drv-trip-time">{timeLabel(booking.scheduled_at)}</div>
       <div className="drv-trip-route">{booking.pickup_address} → {booking.dropoff_address}</div>
-      <div className="drv-trip-meta">{booking.distance_miles} mi · you earn ${booking.driver_payout.toFixed(2)}</div>
+      <div className="drv-trip-meta">
+        {booking.distance_miles} mi
+        {canceled ? '' : ` · you ${done ? 'earned' : 'earn'} $${booking.driver_payout.toFixed(2)}`}
+      </div>
     </div>
   );
 }
@@ -113,7 +118,15 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
   const confirmedDates = new Set((mine || []).filter((b) => b.status !== 'canceled').map((b) => new Date(b.scheduled_at).toDateString()));
   const pendingDates = new Set((available || []).map((b) => new Date(b.scheduled_at).toDateString()));
 
-  const baseList = tab === 'mine' ? mine : available;
+  // Split the driver's own bookings into the active pipeline (Upcoming) and
+  // finished ones (History), so past rides aren't mixed into the schedule.
+  const isPast = (b) => b.status === 'completed' || b.status === 'canceled';
+  const mineActive = mine ? mine.filter((b) => !isPast(b)) : null;
+  const mineHistory = mine
+    ? mine.filter(isPast).sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at)) // most recent first
+    : null;
+
+  const baseList = tab === 'available' ? available : tab === 'history' ? mineHistory : mineActive;
   const list = selectedDate ? (baseList || []).filter((b) => new Date(b.scheduled_at).toDateString() === selectedDate) : baseList;
 
   return (
@@ -138,8 +151,9 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
         )}
 
         <div className="drv-tabs rise-1">
-          <button className={`drv-tab ${tab === 'mine' ? 'active' : ''}`} onClick={() => setTab('mine')}>My Schedule</button>
-          <button className={`drv-tab ${tab === 'available' ? 'active' : ''}`} onClick={() => setTab('available')}>Available Trips</button>
+          <button className={`drv-tab ${tab === 'mine' ? 'active' : ''}`} onClick={() => setTab('mine')}>Upcoming</button>
+          <button className={`drv-tab ${tab === 'available' ? 'active' : ''}`} onClick={() => setTab('available')}>Available</button>
+          <button className={`drv-tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>History</button>
         </div>
 
         {error && <p className="error-text">{error}</p>}
@@ -159,7 +173,10 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
 
               {list && list.length === 0 && (
                 <p className="muted center" style={{ marginTop: 24 }}>
-                  {selectedDate ? 'No trips on this date.' : (tab === 'mine' ? 'No upcoming trips yet.' : 'No trips available right now.')}
+                  {selectedDate ? 'No trips on this date.'
+                    : tab === 'mine' ? 'No upcoming trips yet.'
+                    : tab === 'history' ? 'No past rides yet.'
+                    : 'No trips available right now.'}
                 </p>
               )}
 
