@@ -1,13 +1,28 @@
 const express = require('express');
-const { geocode, reverseGeocode } = require('../services/geocode');
+const { geocode, reverseGeocode, googleGeocode, isGoogleEnabled } = require('../services/geocode');
 const { estimate } = require('../services/fare');
 
 const router = express.Router();
 
-// GET /api/geocode?q=...
+// GET /api/geocode?q=...[&precise=1]
+// The plain form powers the as-you-type dropdown (fast, free provider, hit on
+// every keystroke). `precise=1` is the commit-time lookup (on blur / final
+// resolve): it prefers Google — which has house-number-level data the free
+// provider lacks — so a typed street address resolves to the exact house. Only
+// one such call per address, so Google cost stays low. Falls back to free.
 router.get('/geocode', async (req, res) => {
+  const q = req.query.q || '';
+  const precise = req.query.precise === '1';
   try {
-    const results = await geocode(req.query.q || '');
+    if (precise && isGoogleEnabled()) {
+      try {
+        const g = await googleGeocode(q);
+        if (g) return res.json([g]);
+      } catch (err) {
+        console.warn('google precise geocode failed, falling back:', err.message);
+      }
+    }
+    const results = await geocode(q);
     res.json(results);
   } catch (err) {
     console.error('geocode error', err.message);

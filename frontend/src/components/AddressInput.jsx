@@ -12,6 +12,19 @@ import { api } from '../lib/api';
 // 4. When user modifies a previously-picked address → clear the "selected" state
 //    so they know they need to pick again (or continue with typed text).
 
+// The free geocoder often has no house-number data and returns just the street,
+// dropping the number the rider typed. If the typed text starts with a street
+// number the matched address doesn't contain, prepend it — so the DRIVER still
+// gets the exact house (coords stay street-level, but the address text is
+// complete). A no-op once Google, which has house-level data, is active.
+function mergeHouseNumber(typed, resolved) {
+  const num = (String(typed).match(/^\s*(\d+[a-z]?)\b/i) || [])[1];
+  if (num && resolved && !new RegExp(`(^|\\D)${num}(\\D|$)`).test(resolved)) {
+    return `${num} ${resolved}`;
+  }
+  return resolved;
+}
+
 export default function AddressInput({ label, iconName, placeholder, value, onSelect }) {
   const [query, setQuery] = useState(value?.address || '');
   const [results, setResults] = useState([]);
@@ -95,13 +108,17 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   // User picks a result from the dropdown — this is the critical path.
   const pick = (r) => {
     justPicked.current = true;
-    setQuery(r.label + (r.sublabel ? ', ' + r.sublabel : ''));
+    const address = mergeHouseNumber(query, r.address);
+    // Named places (airport, hotel) read nicer as their label; a street address
+    // shows the full text so the preserved house number is visible.
+    const display = address !== r.address ? address : (r.label + (r.sublabel ? ', ' + r.sublabel : ''));
+    setQuery(display);
     setResults([]);
     setOpen(false);
     setConfirmed(true);
     setLoading(false);
     // Store the full address WITH coordinates.
-    onSelect({ address: r.address, lat: r.lat, lng: r.lng });
+    onSelect({ address, lat: r.lat, lng: r.lng });
   };
 
   // When the user leaves the field having typed an address but NOT tapped a
@@ -115,15 +132,18 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
     if (debounce.current) clearTimeout(debounce.current);
     setLoading(true);
     try {
-      const r = await api.geocode(q);
+      // Precise (Google-preferred) lookup for the committed address, so a typed
+      // house number resolves to the exact house when Google is active.
+      const r = await api.geocodePrecise(q);
       if (r && r.length && r[0] && Number.isFinite(r[0].lat) && Number.isFinite(r[0].lng)) {
         const top = r[0];
+        const address = mergeHouseNumber(q, top.address);
         justPicked.current = true;
-        setQuery(top.label + (top.sublabel ? ', ' + top.sublabel : ''));
+        setQuery(address);
         setResults([]);
         setOpen(false);
         setConfirmed(true);
-        onSelect({ address: top.address, lat: top.lat, lng: top.lng });
+        onSelect({ address, lat: top.lat, lng: top.lng });
       }
     } catch {
       /* leave the typed text as-is; the dropdown is still available on refocus */

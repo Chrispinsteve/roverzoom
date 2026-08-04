@@ -25,6 +25,8 @@ export async function req(path, options = {}) {
 
 export const api = {
   geocode: (q) => req(`/geocode?q=${encodeURIComponent(q)}`),
+  // Commit-time lookup (on blur): prefers Google for house-number precision.
+  geocodePrecise: (q) => req(`/geocode?q=${encodeURIComponent(q)}&precise=1`),
   reverseGeocode: (lat, lng) => req(`/reverse-geocode?lat=${lat}&lng=${lng}`),
   estimate: (pickup, dropoff, when) =>
     req('/estimate', { method: 'POST', body: JSON.stringify({ pickup, dropoff, when }) }),

@@ -247,4 +247,4 @@ async function reverseGeocode(lat, lng) {
   };
 }
 
-module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween };
+module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween, googleGeocode, isGoogleEnabled };
