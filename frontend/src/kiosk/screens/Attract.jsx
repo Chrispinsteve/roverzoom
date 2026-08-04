@@ -47,7 +47,7 @@ export default function Attract({ onBookHere, onMyRides, onTalk, onDriverMode })
   // replaying the CSS flip. Skipped for reduced-motion.
   useEffect(() => {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-    const id = setInterval(() => setDealKey((k) => k + 1), 12000);
+    const id = setInterval(() => setDealKey((k) => k + 1), 14000);
     return () => clearInterval(id);
   }, []);
 
