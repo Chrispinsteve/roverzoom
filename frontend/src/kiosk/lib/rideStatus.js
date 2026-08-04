@@ -38,6 +38,12 @@ export function isTerminal(status) {
   return status === 'completed' || status === 'canceled';
 }
 
+// A rider can cancel any time before the ride actually starts (i.e. not once
+// it's in progress, and not once it's already finished/canceled).
+export function isCancelable(status) {
+  return status !== 'in_progress' && !isTerminal(status);
+}
+
 // The big headline + supporting line at the top of the Track screen.
 export function statusHeadline(status) {
   switch (status) {

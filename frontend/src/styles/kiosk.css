@@ -259,6 +259,9 @@
 .k-ride-actions{ margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
 .k-mini-btn{ border:1.5px solid var(--line); border-radius:10px; padding:10px 16px; font-size:15px; min-height:44px; }
 .k-mini-btn-primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); font-weight:600; }
+.k-mini-btn-danger{ border-color:#E7CAC5; color:var(--danger); }
+.k-mini-btn-danger:active{ background:#FBF1EF; }
+.k-mini-btn-danger:disabled{ opacity:0.5; }
 
 /* status pills (My Rides) — friendly, colour-coded by lifecycle stage */
 .k-tag-go{ background:var(--lock-bg); color:var(--lock-deep); }
@@ -337,6 +340,9 @@
 .k-track-step.current .k-track-step-label{ color:var(--ink); font-weight:650; }
 
 .k-track-ticket{ margin-top:clamp(14px,2.4vh,22px); background:var(--smoke); }
+.k-cancel-btn{ align-self:center; width:100%; max-width:460px; margin-top:clamp(14px,2.4vh,22px); border:1.5px solid #E7CAC5; color:var(--danger); background:var(--paper); border-radius:var(--k-radius); padding:clamp(10px,1.6vh,14px); font-size:16px; font-weight:600; min-height:48px; -webkit-tap-highlight-color:transparent; transition:background .12s ease; }
+.k-cancel-btn:active{ background:#FBF1EF; }
+.k-cancel-btn:disabled{ opacity:0.5; }
 
 /* Track screen keeps the confirm-style stacked actions tidy on wide kiosks */
 .k-confirm-actions .k-next-btn{ flex:0 1 auto; min-width:220px; }

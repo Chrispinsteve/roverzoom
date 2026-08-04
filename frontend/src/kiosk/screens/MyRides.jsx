@@ -3,7 +3,7 @@ import FlowShell from '../components/FlowShell';
 import PhoneKeypad from '../components/PhoneKeypad';
 import { api } from '../../lib/api';
 import { fmtPhone } from '../lib/phone';
-import { statusPill, isTrackable } from '../lib/rideStatus';
+import { statusPill, isTrackable, isCancelable } from '../lib/rideStatus';
 
 function fmtWhen(iso) {
   const d = new Date(iso);
@@ -19,6 +19,22 @@ export default function MyRides({ onBack, onTrack }) {
   const [rides, setRides] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cancelingId, setCancelingId] = useState(null);
+
+  const cancelRide = async (r) => {
+    if (cancelingId) return;
+    if (!window.confirm("Cancel this ride? This can’t be undone.")) return;
+    setCancelingId(r.id);
+    setError('');
+    try {
+      const updated = await api.cancelBooking(r.id);
+      setRides((list) => list.map((x) => (x.id === r.id ? { ...x, ...updated } : x)));
+    } catch (err) {
+      setError(err.message || 'Could not cancel the ride.');
+    } finally {
+      setCancelingId(null);
+    }
+  };
 
   const find = async () => {
     if (digits.length !== 10 || loading) return;
@@ -100,8 +116,18 @@ export default function MyRides({ onBack, onTrack }) {
                     {isTrackable(r.status) && (
                       <button className="k-mini-btn k-mini-btn-primary" onClick={() => onTrack(r.id)}>Track ride</button>
                     )}
-                    <button className="k-mini-btn" onClick={stub('Reschedule')}>Reschedule</button>
-                    <button className="k-mini-btn" onClick={stub('Cancel')}>Cancel</button>
+                    {isCancelable(r.status) && (
+                      <button className="k-mini-btn" onClick={stub('Reschedule')}>Reschedule</button>
+                    )}
+                    {isCancelable(r.status) && (
+                      <button
+                        className="k-mini-btn k-mini-btn-danger"
+                        onClick={() => cancelRide(r)}
+                        disabled={cancelingId === r.id}
+                      >
+                        {cancelingId === r.id ? 'Canceling…' : 'Cancel'}
+                      </button>
+                    )}
                   </div>
                 </div>
                 );

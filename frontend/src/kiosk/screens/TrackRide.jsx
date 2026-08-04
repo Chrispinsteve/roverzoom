@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import FlowShell from '../components/FlowShell';
 import Icon from '../../components/Icon';
 import { api } from '../../lib/api';
-import { TRACK_STEPS, completedCount, statusHeadline, isTerminal } from '../lib/rideStatus';
+import { TRACK_STEPS, completedCount, statusHeadline, isTerminal, isCancelable } from '../lib/rideStatus';
 
 const POLL_MS = 5000;
 
@@ -18,6 +18,7 @@ function fmtWhen(iso) {
 export default function TrackRide({ reference, initialBooking, onBack, onNewRide }) {
   const [booking, setBooking] = useState(initialBooking || null);
   const [error, setError] = useState('');
+  const [canceling, setCanceling] = useState(false);
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -48,6 +49,21 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
   const head = statusHeadline(status);
   const driver = booking?.driver || null;
   const canceled = status === 'canceled';
+
+  const doCancel = async () => {
+    if (canceling) return;
+    if (!window.confirm("Cancel this ride? This can’t be undone.")) return;
+    setCanceling(true);
+    try {
+      const updated = await api.cancelBooking(reference);
+      setBooking(updated);
+      setError('');
+    } catch (e) {
+      setError(e.message || 'Could not cancel the ride.');
+    } finally {
+      setCanceling(false);
+    }
+  };
 
   const footer = (
     <div className="k-footer-bar">
@@ -130,6 +146,12 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
             <span className="v">${Number(booking.fare).toFixed(2)}</span>
           </div>
         </div>
+      )}
+
+      {booking && isCancelable(status) && (
+        <button className="k-cancel-btn" onClick={doCancel} disabled={canceling}>
+          {canceling ? 'Canceling…' : 'Cancel ride'}
+        </button>
       )}
     </FlowShell>
   );

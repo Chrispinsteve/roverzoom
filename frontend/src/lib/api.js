@@ -33,6 +33,7 @@ export const api = {
   createBooking: (payload) =>
     req('/bookings', { method: 'POST', body: JSON.stringify(payload) }),
   getBooking: (ref) => req(`/bookings/${ref}`),
+  cancelBooking: (ref) => req(`/bookings/${encodeURIComponent(ref)}/cancel`, { method: 'POST' }),
   getBookingsByPhone: (phone) => req(`/bookings/by-phone/${encodeURIComponent(phone)}`),
   getPaymentsConfig: () => req('/payments/config'),
   createPaymentIntent: (bookingId) =>

@@ -136,4 +136,45 @@ router.get('/:ref', async (req, res) => {
   }
 });
 
+// POST /api/bookings/:ref/cancel — rider cancels a ride before it starts.
+// Accepts the UUID id (the private tracking token) or the short reference, same
+// as GET. Matches the app's no-account trust model: whoever holds the tracking
+// link, or knows the phone + reference, can cancel — no separate auth.
+const CANCELABLE = ['confirmed', 'dispatching', 'manual_dispatch_required', 'driver_assigned', 'driver_en_route', 'arrived'];
+router.post('/:ref/cancel', async (req, res) => {
+  const { ref } = req.params;
+  const column = UUID_RE.test(ref) ? 'id' : 'reference';
+  try {
+    const { data: existing, error: fErr } = await supabase
+      .from('bookings').select('id, status').eq(column, ref).maybeSingle();
+    if (fErr) throw fErr;
+    if (!existing) return res.status(404).json({ error: 'Booking not found.' });
+
+    // Already canceled → idempotent success (a double-tap shouldn't error).
+    if (existing.status === 'canceled') {
+      const { data } = await supabase.from('bookings').select(`*, drivers(${DRIVER_PUBLIC_FIELDS})`).eq('id', existing.id).maybeSingle();
+      return res.json(withDriverInfo(data));
+    }
+    if (!CANCELABLE.includes(existing.status)) {
+      return res.status(409).json({ error: 'This ride can no longer be canceled — it has already started or finished.' });
+    }
+
+    // Guarded update: only flips to canceled if the ride is STILL cancelable,
+    // so a driver completing/starting at the same moment can't be clobbered.
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ status: 'canceled' })
+      .eq('id', existing.id)
+      .in('status', CANCELABLE)
+      .select(`*, drivers(${DRIVER_PUBLIC_FIELDS})`)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(409).json({ error: 'This ride can no longer be canceled.' });
+    res.json(withDriverInfo(data));
+  } catch (err) {
+    console.error('cancel booking error', err.message);
+    res.status(500).json({ error: 'Could not cancel the ride.' });
+  }
+});
+
 module.exports = router;
