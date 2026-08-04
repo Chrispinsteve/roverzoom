@@ -90,8 +90,16 @@
 .k-qr-panel-cap h2{ font-family:var(--display); font-weight:500; font-size:clamp(15px,0.7vw + 0.9vh,23px); color:var(--paper); }
 .k-qr-panel-cap p{ margin-top:4px; font-size:clamp(11.5px,0.5vw + 0.6vh,16px); color:var(--mute-dark); }
 
-.k-cases{ min-height:0; display:grid; grid-template-rows:repeat(4,1fr); gap:clamp(7px,1.2vh,14px); }
-.k-case{ min-height:0; overflow:hidden; display:flex; align-items:center; gap:clamp(10px,1.4vw,18px); text-align:left; border:1px solid var(--line-dark); border-radius:var(--k-radius); padding:clamp(6px,1vh,18px) clamp(12px,1.4vw,22px); background:#131311; transition:border-color .16s ease, transform .12s ease; }
+.k-cases{ min-height:0; display:grid; grid-template-rows:repeat(4,1fr); gap:clamp(7px,1.2vh,14px); perspective:1200px; }
+/* Each card flips in like a dealt poker card as the screen loads (staggered).
+   `backwards` fill keeps it hidden (edge-on) during its stagger delay, then
+   reverts to base after — so the tap scale (:active) still works. */
+.k-case{ min-height:0; overflow:hidden; display:flex; align-items:center; gap:clamp(10px,1.4vw,18px); text-align:left; border:1px solid var(--line-dark); border-radius:var(--k-radius); padding:clamp(6px,1vh,18px) clamp(12px,1.4vw,22px); background:#131311; transform-origin:center; animation:k-deal .52s var(--ease) backwards; transition:border-color .16s ease, transform .12s ease; }
+.k-case:nth-child(1){ animation-delay:.06s; }
+.k-case:nth-child(2){ animation-delay:.17s; }
+.k-case:nth-child(3){ animation-delay:.28s; }
+.k-case:nth-child(4){ animation-delay:.39s; }
+@keyframes k-deal{ from{ opacity:0; transform:rotateY(72deg) translateY(7px); } to{ opacity:1; transform:rotateY(0) translateY(0); } }
 .k-case:hover{ border-color:#3b3b37; }
 .k-case:active{ transform:scale(0.985); }
 .k-case-ic{ flex-shrink:0; width:clamp(38px,5vh,54px); height:clamp(38px,5vh,54px); border-radius:12px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; font-size:clamp(19px,1vw + 1.3vh,28px); }
