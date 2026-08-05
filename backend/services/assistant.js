@@ -94,29 +94,32 @@ async function resolveEnds(pickup, dropoff) {
   return { p, d };
 }
 
-async function toolFindPlace(input) {
+async function toolFindPlace(input, location) {
   const name = String(input.query || '').trim();
   if (!name) return { matches: [] };
   const near = String(input.near || '').trim();
 
-  // If we know where the rider is, anchor the search there and only return
-  // nearby matches — never a same-name business in another city (a Publix in
-  // Tampa for a rider in Lantana). Results come back nearest-first.
+  // Anchor the search so we only return NEARBY matches (never a same-name store
+  // in another city). Priority: an explicit "near" the AI passed, else the
+  // rider's live GPS location from the app. Results come back nearest-first.
+  let anchor = null;
   if (near) {
-    const anchor = await geocodeOne(near).catch(() => null);
-    if (anchor) {
-      const rows = await searchNear(name, { lat: anchor.lat, lng: anchor.lng }, 5).catch(() => []);
-      if (rows.length) {
-        return { matches: rows.map((r) => ({ name: r.label, address: r.address, miles_away: Math.round(r.miles) })) };
-      }
-      return { matches: [], note: `No "${name}" found near ${near}. Ask the rider for the street address or a nearby cross street.` };
+    anchor = await geocodeOne(near).catch(() => null);
+  } else if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
+    anchor = { lat: location.lat, lng: location.lng };
+  }
+  if (anchor) {
+    const rows = await searchNear(name, { lat: anchor.lat, lng: anchor.lng }, 5).catch(() => []);
+    if (rows.length) {
+      return { matches: rows.map((r) => ({ name: r.label, address: r.address, miles_away: Math.round(r.miles) })) };
     }
+    return { matches: [], note: `No "${name}" found nearby. Ask the rider for the street address or a nearby cross street.` };
   }
 
-  // No usable location to anchor on — best-effort plain search.
+  // No location to anchor on — best-effort plain search.
   const rows = await geocode(near ? `${name}, ${near}` : name, 5).catch(() => []);
   if (!rows.length) {
-    return { matches: [], note: 'No place found by that name — and no pickup location to search near. Ask the rider where they are, then a street address if needed.' };
+    return { matches: [], note: 'No place found by that name — and no location to search near. Ask the rider where they are, then a street address if needed.' };
   }
   return { matches: rows.map((r) => ({ name: r.label, address: r.address })) };
 }
@@ -198,9 +201,9 @@ async function toolGetBookingStatus(input) {
   };
 }
 
-async function runTool(name, input) {
+async function runTool(name, input, location) {
   try {
-    if (name === 'find_place') return await toolFindPlace(input);
+    if (name === 'find_place') return await toolFindPlace(input, location);
     if (name === 'get_quote') return await toolGetQuote(input);
     if (name === 'create_booking') return await toolCreateBooking(input);
     if (name === 'get_booking_status') return await toolGetBookingStatus(input);
@@ -210,7 +213,10 @@ async function runTool(name, input) {
   }
 }
 
-function systemPrompt() {
+function systemPrompt(location) {
+  const here = location && Number.isFinite(location.lat) && Number.isFinite(location.lng)
+    ? `\nThe rider is opening the app from their current location right now: ${location.address || `${location.lat}, ${location.lng}`}. Treat this as their most likely PICKUP — offer it (e.g. "Should I pick you up from there?") and use it as the pickup unless they name another. When they name a place to GO, you can call find_place with NO "near" value and it searches around their current location automatically.\n`
+    : '';
   return `You are the voice of RoverZoom, a scheduled ride service. You help riders book a car by talking with them out loud.
 
 RoverZoom's promise: the price is locked the moment they book, a driver is guaranteed, and there's no surge. Riders pay the driver in cash, by Zelle, or by card.
@@ -218,11 +224,11 @@ RoverZoom's promise: the price is locked the moment they book, a driver is guara
 Early-bird pricing: rides scheduled between 4 and 10 in the morning are 25% off; every other time is 15% off. So an early-morning ride is cheaper — mention it if it helps the rider save. The quote already reflects this, so always pass the pickup time to get_quote once you know it.
 
 Current date and time: ${new Date().toISOString()}. Use this to turn phrases like "tomorrow at 6" into an exact future ISO 8601 timestamp when booking.
-
+${here}
 How to behave:
 - Your replies are READ ALOUD by a text-to-speech voice. Keep every reply to one or two short spoken sentences. No lists, no markdown, no emojis, no code. Say prices in words, like "fifty-two dollars".
 - A booking needs: pickup, destination, date and time, the rider's name, and their phone number. Ask only for what's still missing, one item at a time. Keep it conversational.
-- Riders often name a place instead of an address — a business, hotel, store, mall, airport, or landmark ("Publix", "the Marriott", "Fort Lauderdale airport"). When they do, use find_place. ALWAYS pass "near": the rider's pickup address if you have it, otherwise their city or neighborhood — this pins the branch closest to them instead of a same-name store in another city. If you don't yet know where the rider is, ask for their pickup FIRST, then search. Matches come back nearest-first with how many miles away each is; take the closest, or if two are similarly close, name them and ask which. Then always quote and book with the full resolved address — never a bare name, and never invent one.
+- Riders often name a place instead of an address — a business, hotel, store, mall, airport, or landmark ("Publix", "the Marriott", "Fort Lauderdale airport"). When they do, use find_place. Pass "near" (the pickup area) when you know a specific one; if the rider is at their current location shown above, you can OMIT "near" and it searches around them. This pins the branch closest to them, not a same-name store in another city. If you have no location at all, ask where they are first. Matches come back nearest-first with how many miles away each is; take the closest, or if two are similarly close, name them and ask which. Then always quote and book with the full resolved address — never a bare name, and never invent one.
 - Use get_quote to price a ride. Always tell the rider the locked price and get a clear yes before booking.
 - Call create_booking only after you have everything and they've confirmed. Default payment to cash unless they say otherwise.
 - After booking, read back the confirmation code clearly (say the characters) and tell them a driver will be assigned soon and they'll get a tracking text.
@@ -231,9 +237,10 @@ How to behave:
 - Answer only the final spoken sentence to the rider — do not narrate your reasoning.`;
 }
 
-// history: [{ role: 'user'|'assistant', text }], message: latest spoken/typed text.
+// history: [{ role: 'user'|'assistant', text }], message: latest spoken/typed text,
+// location: optional { address, lat, lng } — the rider's live GPS location.
 // Returns { reply, booking } where booking is set if a ride was booked this turn.
-async function runAssistant(history, message) {
+async function runAssistant(history, message, location) {
   const a = anthropic();
   if (!a) {
     const e = new Error('assistant_not_configured');
@@ -254,7 +261,7 @@ async function runAssistant(history, message) {
     const resp = await a.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: systemPrompt(),
+      system: systemPrompt(location),
       tools: TOOLS,
       messages,
     });
@@ -264,7 +271,7 @@ async function runAssistant(history, message) {
       const toolResults = [];
       for (const block of resp.content) {
         if (block.type === 'tool_use') {
-          const result = await runTool(block.name, block.input);
+          const result = await runTool(block.name, block.input, location);
           if (block.name === 'create_booking' && result && result.reference) booking = result;
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
         }

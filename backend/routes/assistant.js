@@ -27,12 +27,17 @@ router.post('/speak', async (req, res) => {
 // POST /api/assistant — one turn of the voice conversation.
 // Body: { history: [{role, text}], message }  ->  { reply, booking? }
 router.post('/', async (req, res) => {
-  const { history, message } = req.body || {};
+  const { history, message, location } = req.body || {};
   if (!message || typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({ error: 'A message is required.' });
   }
+  // Sanitize the rider's location to just what the assistant needs.
+  let loc = null;
+  if (location && Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lng))) {
+    loc = { lat: Number(location.lat), lng: Number(location.lng), address: typeof location.address === 'string' ? location.address.slice(0, 200) : null };
+  }
   try {
-    const result = await runAssistant(Array.isArray(history) ? history : [], message.trim().slice(0, 2000));
+    const result = await runAssistant(Array.isArray(history) ? history : [], message.trim().slice(0, 2000), loc);
     res.json(result);
   } catch (err) {
     if (err.code === 'not_configured') {

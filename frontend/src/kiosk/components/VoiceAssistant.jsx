@@ -39,7 +39,7 @@ function decodeAudio(ctx, arrayBuffer) {
 export default function VoiceAssistant({ onClose, onBooked }) {
   const [state, setState] = useState('idle');
   const [caption, setCaption] = useState(
-    CAN_LISTEN ? "Tap the orb and tell me where you're going." : "Type where you're going and I'll book it."
+    CAN_LISTEN ? "Tap the orb once, then just talk — I'll keep listening." : "Type where you're going and I'll book it."
   );
   const [error, setError] = useState('');
   const [typed, setTyped] = useState('');
@@ -54,6 +54,8 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   const audioCtxRef = useRef(null);
   const sourceRef = useRef(null);
   const premiumRef = useRef(null); // null = unknown, true = neural voice, false = not configured
+  const conversingRef = useRef(false); // hands-free conversation active — keeps the mic open between turns
+  const locationRef = useRef(null);    // rider's live GPS { lat, lng, address }
 
   const getCtx = () => {
     if (!audioCtxRef.current) {
@@ -70,6 +72,18 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   }, []);
 
   useEffect(() => { stateRef.current = state; }, [state]);
+
+  // Grab the rider's current location once, on open, so the assistant can offer
+  // it as the pickup and search places near them. Best-effort — a denial is fine.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      let address = null;
+      try { const r = await api.reverseGeocode(lat, lng); address = r && r.address; } catch { /* ignore */ }
+      if (mountedRef.current) locationRef.current = { lat, lng, address };
+    }, () => {}, { enableHighAccuracy: true, timeout: 9000, maximumAge: 60000 });
+  }, []);
 
   // While thinking, rotate the playful "working" phrases so the wait feels alive.
   useEffect(() => {
@@ -195,13 +209,31 @@ export default function VoiceAssistant({ onClose, onBooked }) {
         setCaption(finalText || interim || 'Listening…');
       };
       rec.onerror = (e) => {
-        if (e.error === 'not-allowed') { setError('Microphone access is off. Turn it on, or type below.'); }
-        setState('idle');
+        // Hard errors end the conversation (and prevent an auto-restart loop).
+        // 'no-speech'/'aborted' are normal — they fall through to onend, which
+        // re-opens the mic so a hands-free conversation isn't dropped by a pause.
+        if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(e.error)) {
+          conversingRef.current = false;
+          setError(
+            e.error === 'audio-capture' ? 'No microphone found — you can type below.'
+              : e.error === 'network' ? 'Voice needs a connection — you can type below.'
+              : 'Microphone access is off. Turn it on, or type below.'
+          );
+          setState('idle');
+        }
       };
       rec.onend = () => {
         const t = finalText.trim();
-        if (t) sendTurn(t);
-        else if (stateRef.current === 'listening') { setState('idle'); setCaption('I didn’t catch that — tap the orb to try again.'); }
+        if (t) { sendTurn(t); return; }
+        // Nothing caught. In a hands-free conversation keep the mic open
+        // (auto-restart) so the rider never has to re-tap between turns.
+        if (conversingRef.current && mountedRef.current) {
+          setTimeout(() => {
+            if (conversingRef.current && mountedRef.current && stateRef.current === 'listening') startListening();
+          }, 300);
+        } else if (stateRef.current === 'listening') {
+          setState('idle'); setCaption('Tap the orb to talk.');
+        }
       };
       recRef.current = rec;
       rec.start();
@@ -213,14 +245,15 @@ export default function VoiceAssistant({ onClose, onBooked }) {
     if (!text || !text.trim()) return;
     setError(''); setCaption(text); setState('thinking');
     try {
-      const { reply, booking } = await api.assistant(historyRef.current, text);
+      const { reply, booking } = await api.assistant(historyRef.current, text, locationRef.current);
       if (!mountedRef.current) return;
       historyRef.current = [...historyRef.current, { role: 'user', text }, { role: 'assistant', text: reply }].slice(-16);
       setCaption(reply); setState('speaking');
       if (booking && onBooked) onBooked(booking);
       await speak(reply);
       if (!mountedRef.current) return;
-      if (CAN_LISTEN) startListening(); else setState('idle');
+      // Continue the hands-free conversation (no re-tap) if it's still active.
+      if (CAN_LISTEN && conversingRef.current) startListening(); else setState('idle');
     } catch (e) {
       if (!mountedRef.current) return;
       setError(e.message || 'Something went wrong.'); setState('idle');
@@ -230,8 +263,16 @@ export default function VoiceAssistant({ onClose, onBooked }) {
   const onOrbTap = () => {
     primeTTS();
     if (state === 'thinking') return;
-    if (state === 'listening') { try { recRef.current && recRef.current.stop(); } catch { /* ignore */ } return; }
-    if (state === 'speaking') { stopSpeech(); }
+    // Tapping while listening or speaking STOPS the hands-free conversation.
+    if (state === 'listening' || state === 'speaking') {
+      conversingRef.current = false;
+      stopSpeech();
+      try { recRef.current && recRef.current.stop(); } catch { /* ignore */ }
+      setState('idle'); setCaption('Tap the orb to talk.');
+      return;
+    }
+    // Idle → start a hands-free conversation (mic stays open between turns).
+    conversingRef.current = true;
     if (CAN_LISTEN) startListening();
   };
 
@@ -266,7 +307,7 @@ export default function VoiceAssistant({ onClose, onBooked }) {
 
       {CAN_LISTEN ? (
         <button className="rz-va-hint" onClick={onOrbTap}>
-          {state === 'listening' ? 'Tap to stop' : state === 'idle' ? 'Tap the orb to talk' : ' '}
+          {state === 'listening' ? 'Listening… tap to stop' : state === 'idle' ? 'Tap the orb, then just talk' : ' '}
         </button>
       ) : (
         <form className="rz-va-type" onSubmit={submitTyped}>
