@@ -785,7 +785,7 @@ input, textarea { font-family: inherit; }
 
 /* Schedule screen: My Schedule / Available Trips tabs + agenda rows */
 .drv-tabs {
-  display: flex; gap: 4px; margin-bottom: 20px;
+  display: flex; gap: 4px; margin-bottom: 12px;
   background: var(--canvas); padding: 4px; border-radius: var(--r-md); border: 1px solid var(--line);
 }
 .drv-tab {
@@ -801,7 +801,7 @@ input, textarea { font-family: inherit; }
 }
 .drv-trip-row:disabled { opacity: 0.5; }
 .drv-trip-body { flex: 1; min-width: 0; }
-.drv-trip-time { font-size: 13px; font-weight: 700; color: var(--ink); }
+.drv-trip-time { font-size: 15px; font-weight: 700; color: var(--ink); }
 .drv-trip-route {
   font-size: 14px; color: var(--ink-2); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -815,6 +815,27 @@ input, textarea { font-family: inherit; }
   flex-shrink: 0; font-size: 11.5px; font-weight: 600; color: var(--ink-3);
   text-transform: uppercase; letter-spacing: 0.03em;
 }
+
+/* Schedule screen — phone-first: compact title, pinned tabs, a collapsible
+   date filter, and the trip list as the scrolling hero (sticky day headers). */
+.drv-sched-title { font-size: 23px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
+.drv-cal-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.drv-cal-toggle {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px; border-radius: var(--r-md);
+  border: 1px solid var(--line-2); background: var(--card);
+  color: var(--ink-2); font-size: 14px; font-weight: 600;
+}
+.drv-cal-toggle.active { color: var(--ink); border-color: var(--ink-4); }
+.drv-cal-toggle .drv-cal-chev { margin-left: auto; font-size: 10px; color: var(--ink-4); }
+.drv-cal-clear { font-size: 13px; font-weight: 600; color: var(--ink-3); text-decoration: underline; padding: 8px 4px; }
+.drv-trip-group { margin-bottom: 14px; }
+.drv-trip-daylabel {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--canvas); padding: 6px 0 8px;
+  font-size: 13px; font-weight: 700; color: var(--ink-3); letter-spacing: 0.01em;
+}
+.drv-trip-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 
 /* Month-grid planning board: green = confirmed (assigned to me), yellow =
    pending (unclaimed). Empty days show nothing but the date. */
