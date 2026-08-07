@@ -10,9 +10,15 @@ function isIOS() {
 }
 
 export function mapsUrl(lat, lng, address) {
-  const dest = (lat != null && lng != null)
-    ? `${lat},${lng}`
-    : encodeURIComponent(address || '');
+  // Prefer the rider's ADDRESS TEXT over our stored lat/lng. When a rider types
+  // an address without picking a suggestion, we keep their exact text but the
+  // coordinates come from the free geocoder, which can snap to a nearby block or
+  // the street centroid — so navigating by coords sends the driver to the wrong
+  // spot. Apple/Google geocode the address string precisely; fall back to coords
+  // only when there's no address.
+  const dest = (address && address.trim())
+    ? encodeURIComponent(address.trim())
+    : `${lat},${lng}`;
   // Apple Maps opens natively on iOS from a maps.apple.com link; daddr =
   // destination, dirflg=d = driving directions from the driver's location.
   if (isIOS()) return `https://maps.apple.com/?daddr=${dest}&dirflg=d`;
