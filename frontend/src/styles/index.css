@@ -211,6 +211,10 @@ input, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
 }
+/* Keep children at their natural height so a tall screen (e.g. long addresses)
+   SCROLLS via .body's overflow, instead of flex-shrinking the rows until their
+   content clips. `.spacer` still grows to push footer buttons down. */
+.body > * { flex-shrink: 0; }
 
 .title {
   font-size: 30px;

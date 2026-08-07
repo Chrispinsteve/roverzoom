@@ -3,6 +3,7 @@ import Icon from '../../components/Icon';
 import PassengerRow from '../components/PassengerRow';
 import InstructionBanner from '../components/InstructionBanner';
 import { mapsUrl } from '../lib/maps';
+import { shortAddress } from '../lib/address';
 
 function etaLabel(booking) {
   const start = booking.started_at ? new Date(booking.started_at).getTime() : Date.now();
@@ -19,7 +20,7 @@ export default function OnTrip({ booking, onEndTrip }) {
     }>
       <div className="body">
         <div className="rise">
-          <InstructionBanner icon="flag" title="Head to dropoff" lines={[booking.dropoff_address]} />
+          <InstructionBanner icon="flag" title="Head to dropoff" lines={[shortAddress(booking.dropoff_address)]} />
         </div>
 
         <a

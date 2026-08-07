@@ -2,6 +2,7 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import PassengerRow from '../components/PassengerRow';
 import { mapsUrl } from '../lib/maps';
+import { shortAddress } from '../lib/address';
 
 // Post-claim only — the exact dropoff (redacted to city/area pre-claim on
 // the Requests screen) is unlocked here, along with the real "Open in Maps"
@@ -22,11 +23,11 @@ export default function RideDetails({ booking, onStartNavigation }) {
             <div className="rail-body">
               <div className="rail-slot top">
                 <div className="rail-label">Pickup</div>
-                <div className="rail-value">{booking.pickup_address}</div>
+                <div className="rail-value">{shortAddress(booking.pickup_address)}</div>
               </div>
               <div className="rail-slot">
                 <div className="rail-label">Dropoff</div>
-                <div className="rail-value">{booking.dropoff_address}</div>
+                <div className="rail-value">{shortAddress(booking.dropoff_address)}</div>
               </div>
             </div>
           </div>

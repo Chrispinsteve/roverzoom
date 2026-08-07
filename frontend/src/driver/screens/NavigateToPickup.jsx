@@ -3,6 +3,7 @@ import Icon from '../../components/Icon';
 import PassengerRow from '../components/PassengerRow';
 import InstructionBanner from '../components/InstructionBanner';
 import { mapsUrl } from '../lib/maps';
+import { shortAddress } from '../lib/address';
 
 export default function NavigateToPickup({ booking, onArrived }) {
   return (
@@ -16,7 +17,7 @@ export default function NavigateToPickup({ booking, onArrived }) {
           <InstructionBanner
             icon="arrowUp"
             title="Head to pickup"
-            lines={[booking.pickup_address, `${booking.distance_miles} mi · ~${booking.duration_minutes} min`]}
+            lines={[shortAddress(booking.pickup_address), `${booking.distance_miles} mi · ~${booking.duration_minutes} min`]}
           />
         </div>
 
