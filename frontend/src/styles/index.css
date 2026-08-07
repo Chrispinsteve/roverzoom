@@ -800,6 +800,8 @@ input, textarea { font-family: inherit; }
   padding: 14px 16px; margin-bottom: 10px; text-align: left;
 }
 .drv-trip-row:disabled { opacity: 0.5; }
+.drv-trip-row-tap { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.drv-trip-row-tap:active { background: var(--canvas-2); }
 .drv-trip-body { flex: 1; min-width: 0; }
 .drv-trip-time { font-size: 15px; font-weight: 700; color: var(--ink); }
 .drv-trip-route {

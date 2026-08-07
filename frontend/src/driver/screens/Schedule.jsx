@@ -60,7 +60,7 @@ function TripRowBody({ booking }) {
   );
 }
 
-export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) {
+export default function Schedule({ driver, onOpenTrip, activeTab, onChangeTab }) {
   const [tab, setTab] = useState('mine'); // 'mine' (Upcoming) | 'available' | 'history'
   const [mine, setMine] = useState(null);
   const [available, setAvailable] = useState(null);
@@ -101,12 +101,17 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
     }
   };
 
+  // Claiming just parks the trip in Upcoming — it does NOT start navigation.
+  // Switch to Upcoming and refresh so the driver sees it land among their
+  // other scheduled trips.
   const claim = async (bookingId) => {
     setClaimingId(bookingId);
     setError('');
     try {
-      const claimed = await driverApi.claimBooking(bookingId);
-      onClaimed(claimed);
+      await driverApi.claimBooking(bookingId);
+      setSelectedDate(null);
+      setTab('mine');
+      await load();
     } catch (e) {
       setError(e.message);
       await load();
@@ -194,29 +199,53 @@ export default function Schedule({ driver, onClaimed, activeTab, onChangeTab }) 
               {list && groupByDay(list).map((group) => (
                 <div key={group.key} className="drv-trip-group">
                   <div className="drv-trip-daylabel">{dayLabel(group.items[0].scheduled_at)}</div>
-                  {group.items.map((b) => (
-                    tab === 'available' ? (
-                      <button
-                        key={b.id}
-                        className="drv-trip-row"
-                        onClick={() => claim(b.id)}
-                        disabled={claimingId === b.id}
-                      >
-                        <TripRowBody booking={b} />
-                        <span className="drv-trip-claim">{claimingId === b.id ? '…' : 'Claim'}</span>
-                      </button>
-                    ) : (
+                  {group.items.map((b) => {
+                    if (tab === 'available') {
+                      return (
+                        <button
+                          key={b.id}
+                          className="drv-trip-row"
+                          onClick={() => claim(b.id)}
+                          disabled={claimingId === b.id}
+                        >
+                          <TripRowBody booking={b} />
+                          <span className="drv-trip-claim">{claimingId === b.id ? '…' : 'Claim'}</span>
+                        </button>
+                      );
+                    }
+                    if (tab === 'mine') {
+                      // Tap to open details (with a Back button) — NOT to start.
+                      const releasable = b.status === 'driver_assigned' && (new Date(b.scheduled_at) - Date.now()) > 2 * 36e5;
+                      return (
+                        <div
+                          key={b.id}
+                          className="drv-trip-row drv-trip-row-tap"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => onOpenTrip(b)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenTrip(b); } }}
+                        >
+                          <TripRowBody booking={b} />
+                          <div className="drv-trip-side">
+                            <span className="drv-trip-status">{STATUS_LABEL[b.status] || b.status}</span>
+                            {releasable && (
+                              <button className="drv-release" onClick={(e) => { e.stopPropagation(); release(b); }}>Release</button>
+                            )}
+                          </div>
+                          <Icon name="arrowRight" size={16} color="var(--ink-4)" />
+                        </div>
+                      );
+                    }
+                    // history — display only
+                    return (
                       <div key={b.id} className="drv-trip-row">
                         <TripRowBody booking={b} />
                         <div className="drv-trip-side">
                           <span className="drv-trip-status">{STATUS_LABEL[b.status] || b.status}</span>
-                          {b.status === 'driver_assigned' && (new Date(b.scheduled_at) - Date.now()) > 2 * 36e5 && (
-                            <button className="drv-release" onClick={() => release(b)}>Release</button>
-                          )}
                         </div>
                       </div>
-                    )
-                  ))}
+                    );
+                  })}
                 </div>
               ))}
             </>

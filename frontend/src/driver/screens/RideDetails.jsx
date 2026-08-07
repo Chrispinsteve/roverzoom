@@ -6,10 +6,13 @@ import { shortAddress } from '../lib/address';
 
 // Post-claim only — the exact dropoff (redacted to city/area pre-claim on
 // the Requests screen) is unlocked here, along with the real "Open in Maps"
-// link and the driver's real 60% payout.
-export default function RideDetails({ booking, onStartNavigation }) {
+// link and the driver's real payout. Reached by tapping an Upcoming trip, so it
+// has a Back button; "Start Navigation" (only for a not-yet-started trip) is the
+// deliberate action that actually begins the drive.
+export default function RideDetails({ booking, onBack, onStartNavigation }) {
+  const startable = booking.status === 'driver_assigned';
   return (
-    <DriverShell>
+    <DriverShell onBack={onBack}>
       <div className="body">
         <h1 className="title rise" style={{ fontSize: 26 }}>Ride Details</h1>
 
@@ -67,9 +70,11 @@ export default function RideDetails({ booking, onStartNavigation }) {
           <Icon name="navArrow" size={18} color="var(--ink-2)" />
           Open in Maps
         </a>
-        <button className="btn rise-3" onClick={onStartNavigation} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          Start Navigation
-        </button>
+        {startable && (
+          <button className="btn rise-3" onClick={onStartNavigation} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            Start Navigation
+          </button>
+        )}
       </div>
     </DriverShell>
   );

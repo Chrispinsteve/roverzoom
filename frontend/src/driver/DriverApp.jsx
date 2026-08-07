@@ -19,11 +19,12 @@ import PassengerPickup from './screens/PassengerPickup';
 import OnTrip from './screens/OnTrip';
 import TripComplete from './screens/TripComplete';
 
-// Which trip-lifecycle screen a booking's real status maps to. A driver
-// re-opening the app mid-trip resumes at exactly the right screen instead
-// of losing their place.
+// Which trip-lifecycle screen an ACTIVE (already-started) trip maps to. A driver
+// re-opening the app mid-trip resumes at exactly the right screen. Note:
+// `driver_assigned` (claimed but NOT yet started) is deliberately NOT here —
+// claiming a scheduled ride doesn't put the driver "on the road", it just adds
+// the trip to their Upcoming list. Only starting navigation makes a trip active.
 const STAGE_BY_STATUS = {
-  driver_assigned: 'details',
   driver_en_route: 'navigate',
   arrived: 'pickup',
   in_progress: 'onTrip',
@@ -73,6 +74,7 @@ export default function DriverApp({ onExit }) {
   const driver = driverOverride || authDriver;
 
   const [activeBooking, setActiveBooking] = useState(undefined); // undefined = not checked yet, null = none
+  const [viewingBooking, setViewingBooking] = useState(null); // a claimed trip opened for details (has a Back button)
   const [justCompleted, setJustCompleted] = useState(null);
 
   const refreshActiveBooking = useCallback(async () => {
@@ -115,9 +117,21 @@ export default function DriverApp({ onExit }) {
   // Still resolving whether there's an in-progress trip to resume into.
   if (activeBooking === undefined) return <AuthLoading />;
 
-  // A just-claimed or newly-advanced booking — update local state and let
-  // the render below pick the right lifecycle screen from its status.
+  // A newly-advanced ACTIVE booking — update local state and let the render
+  // below pick the right lifecycle screen from its status.
   const onBookingUpdate = (booking) => setActiveBooking(booking);
+
+  // Claiming just parks the trip in Upcoming — send the driver to their
+  // Schedule to see it, do NOT drop them into navigation.
+  const goToSchedule = () => { setViewingBooking(null); setTab('schedule'); };
+
+  // Deliberate "hit the road now" for a chosen upcoming trip: mark it en route,
+  // which promotes it to the active, full-screen trip.
+  const startNavigation = async (booking) => {
+    const updated = await driverApi.setBookingStatus(booking.id, 'en_route');
+    setViewingBooking(null);
+    setActiveBooking(updated);
+  };
 
   const advance = async (event) => {
     const updated = await driverApi.setBookingStatus(activeBooking.id, event);
@@ -139,17 +153,9 @@ export default function DriverApp({ onExit }) {
     );
   }
 
-  // --- Active trip: full-screen focus mode, no tab bar ----------------------
+  // --- Active (started) trip: full-screen focus mode, no tab bar -----------
   if (activeBooking) {
     const stage = STAGE_BY_STATUS[activeBooking.status];
-    if (stage === 'details') {
-      return (
-        <RideDetails
-          booking={activeBooking}
-          onStartNavigation={() => advance('en_route')}
-        />
-      );
-    }
     if (stage === 'navigate') {
       return <NavigateToPickup booking={activeBooking} onArrived={() => advance('arrived')} />;
     }
@@ -159,6 +165,19 @@ export default function DriverApp({ onExit }) {
     if (stage === 'onTrip') {
       return <OnTrip booking={activeBooking} onEndTrip={() => advance('complete')} />;
     }
+  }
+
+  // --- Viewing a claimed (not-yet-started) trip's details — has a Back button.
+  // Opening details is NOT claiming or starting: the driver can browse a
+  // scheduled trip and return; only "Start Navigation" begins the drive.
+  if (viewingBooking) {
+    return (
+      <RideDetails
+        booking={viewingBooking}
+        onBack={() => setViewingBooking(null)}
+        onStartNavigation={() => startNavigation(viewingBooking)}
+      />
+    );
   }
 
   // --- Idle: tab shell --------------------------------------------------------
@@ -179,13 +198,13 @@ export default function DriverApp({ onExit }) {
     return (
       <Requests
         driver={driver}
-        onClaimed={onBookingUpdate}
+        onClaimed={goToSchedule}
         {...tabProps}
       />
     );
   }
   if (tab === 'schedule') {
-    return <Schedule driver={driver} onClaimed={onBookingUpdate} {...tabProps} />;
+    return <Schedule driver={driver} onOpenTrip={setViewingBooking} {...tabProps} />;
   }
   if (tab === 'earnings') {
     return <Earnings {...tabProps} />;
