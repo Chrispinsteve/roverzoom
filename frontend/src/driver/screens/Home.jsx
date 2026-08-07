@@ -4,6 +4,7 @@ import Icon from '../../components/Icon';
 import Avatar from '../components/Avatar';
 import { driverApi } from '../../lib/driverApi';
 import { mapsUrl } from '../lib/maps';
+import { shortAddress } from '../lib/address';
 
 const UPCOMING = ['driver_assigned', 'driver_en_route', 'arrived', 'in_progress'];
 
@@ -31,14 +32,14 @@ function NextRideCard({ booking, onOpenTab }) {
         <span className="drv-next-eyebrow">Next ride</span>
         <span className="drv-next-count">{countdownLabel(booking.scheduled_at)}</span>
       </div>
-      <div className="drv-next-route">{booking.pickup_address} → {booking.dropoff_address}</div>
+      <div className="drv-next-route">{shortAddress(booking.pickup_address)} → {shortAddress(booking.dropoff_address)}</div>
       <div className="drv-next-meta">
         {new Date(booking.scheduled_at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
         {' · '}{booking.rider_name}{' · you earn $'}{booking.driver_payout.toFixed(2)}
       </div>
       <div className="drv-next-actions">
         <a className="drv-next-btn" target="_blank" rel="noopener noreferrer" href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)}>
-          <Icon name="car" size={15} color="var(--ink)" /> Directions
+          <Icon name="car" size={15} color="#fff" /> Directions
         </a>
         <button className="drv-next-btn" onClick={() => onOpenTab('schedule')}>View schedule</button>
       </div>
