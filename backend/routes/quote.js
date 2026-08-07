@@ -48,9 +48,14 @@ router.get('/reverse-geocode', async (req, res) => {
 });
 
 // POST /api/estimate  { pickup:{lat,lng}, dropoff:{lat,lng} }
-router.post('/estimate', (req, res) => {
+router.post('/estimate', async (req, res) => {
   const { pickup, dropoff, when } = req.body || {};
-  res.json(estimate(pickup, dropoff, when));
+  try {
+    res.json(await estimate(pickup, dropoff, when));
+  } catch (err) {
+    console.error('estimate error', err.message);
+    res.status(502).json({ error: 'Could not estimate the fare. Try again.' });
+  }
 });
 
 module.exports = router;

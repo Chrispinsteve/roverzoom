@@ -127,7 +127,7 @@ async function toolFindPlace(input, location) {
 async function toolGetQuote(input) {
   const { p, d } = await resolveEnds(input.pickup_address, input.dropoff_address);
   if (!p || !d) return { error: "Couldn't find one of those addresses — ask the rider to be more specific." };
-  const est = estimate(p, d, input.when_iso);
+  const est = await estimate(p, d, input.when_iso);
   return {
     fare: est.fare,
     distance_miles: est.distanceMiles,
@@ -141,7 +141,7 @@ async function toolGetQuote(input) {
 async function toolCreateBooking(input) {
   const { p, d } = await resolveEnds(input.pickup_address, input.dropoff_address);
   if (!p || !d) return { error: "Couldn't resolve the addresses to book the ride." };
-  const est = estimate(p, d, input.when_iso);
+  const est = await estimate(p, d, input.when_iso);
   const pm = ['cash', 'zelle', 'card'].includes(input.payment_method) ? input.payment_method : 'cash';
 
   let reference = makeReference();

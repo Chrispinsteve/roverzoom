@@ -1,6 +1,9 @@
 // Fare model: $50 per hour of estimated trip duration, then a marketing
 // discount applied on top. Includes distance cap, human-readable duration,
-// and service-area warning.
+// and service-area warning. Distance/duration come from a real routing engine
+// (see ./routing); the haversine below is only the fallback.
+
+const { roadRoute } = require('./routing');
 
 const HOURLY_RATE = Number(process.env.HOURLY_RATE) || 50;
 const ROAD_FACTOR = 1.3;
@@ -55,22 +58,38 @@ function formatDuration(minutes) {
   return `${h} hr ${m} min`;
 }
 
-function estimate(pickup, dropoff, whenIso) {
-  let distanceMiles = 6;
-  if (
-    pickup?.lat != null && pickup?.lng != null &&
-    dropoff?.lat != null && dropoff?.lng != null
-  ) {
-    distanceMiles = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) * ROAD_FACTOR;
+async function estimate(pickup, dropoff, whenIso) {
+  const hasCoords = pickup?.lat != null && pickup?.lng != null && dropoff?.lat != null && dropoff?.lng != null;
+
+  let distanceMiles = 6;    // rough default when there are no coordinates yet
+  let routedMinutes = null; // real driving minutes when a route is available
+
+  if (hasCoords) {
+    const route = await roadRoute(pickup, dropoff);
+    if (route && Number.isFinite(route.miles)) {
+      distanceMiles = route.miles;      // actual road distance
+      routedMinutes = route.minutes;    // actual driving time
+    } else {
+      // Routing unavailable — fall back to straight-line × road factor.
+      distanceMiles = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) * ROAD_FACTOR;
+    }
   }
 
   // Cap at service area max
   const tooFar = distanceMiles > MAX_DISTANCE_MILES;
   const cappedMiles = tooFar ? MAX_DISTANCE_MILES : distanceMiles;
 
-  const durationMinutes = Math.max(8, Math.round((cappedMiles / AVG_SPEED_MPH) * 60));
+  // Displayed drive time: the real routed time, else derived from distance/speed
+  // (also when the distance was capped, since the routed time no longer matches).
+  const rawMinutes = (routedMinutes != null && !tooFar) ? routedMinutes : (cappedMiles / AVG_SPEED_MPH) * 60;
+  const durationMinutes = Math.max(8, Math.round(rawMinutes));
+
+  // Fare is DISTANCE-based: the hourly rate ÷ the effective speed gives a
+  // per-mile rate (50 / 28 ≈ $1.79/mi). Pricing this off real road distance
+  // (not the real fast highway time) keeps highway/airport trips from being
+  // underpriced, while matching what the old time×rate model effectively charged.
   const multiplier = multiplierForTime(whenIso);
-  const baseFare = Math.max(MIN_FARE, (durationMinutes / 60) * HOURLY_RATE);
+  const baseFare = Math.max(MIN_FARE, cappedMiles * (HOURLY_RATE / AVG_SPEED_MPH));
   const fare = Math.round(baseFare * multiplier * 100) / 100;
 
   return {

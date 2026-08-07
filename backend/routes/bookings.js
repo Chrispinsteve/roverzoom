@@ -33,7 +33,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Payment method must be card, cash, or zelle.' });
   }
 
-  const { distanceMiles, durationMinutes, fare } = estimate(pickup, dropoff, scheduledAt);
+  const { distanceMiles, durationMinutes, fare } = await estimate(pickup, dropoff, scheduledAt);
 
   try {
     // Generate a unique reference (retry a couple of times on the rare collision).
