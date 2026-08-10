@@ -60,4 +60,6 @@ export const driverApi = {
     authedReq(`/driver/bookings/${bookingId}/rate-rider`, { method: 'POST', body: JSON.stringify({ rating }) }),
   getPayoutStatus: () => authedReq('/driver/payouts/status'),
   startPayoutOnboarding: () => authedReq('/driver/payouts/onboard', { method: 'POST' }),
+  getScreeningStatus: () => authedReq('/driver/screening/status'),
+  startScreening: () => authedReq('/driver/screening/start', { method: 'POST' }),
 };

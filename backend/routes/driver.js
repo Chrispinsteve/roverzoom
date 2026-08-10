@@ -5,6 +5,8 @@ const { driverPayout } = require('../services/payout');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
 const { stripe } = require('../services/stripe');
+const checkr = require('../services/checkr');
+const { getScreening, setScreening } = require('../services/screening');
 
 const router = express.Router();
 
@@ -435,6 +437,56 @@ router.get('/payouts/status', requireDriver, async (req, res) => {
   } catch (err) {
     console.error('payout status error', err.message);
     res.status(500).json({ error: 'Could not fetch payout status.' });
+  }
+});
+
+// --- Driver background check: Checkr ---------------------------------------
+// Hosted flow: we create a candidate + invitation, the driver completes the
+// SSN/DOB/license entry on Checkr's page, and the /api/checkr/webhook activates
+// them when the report comes back clear. Dormant unless CHECKR_API_KEY is set.
+
+// POST /api/driver/screening/start — begin (or resume) the background check.
+// Returns { status, url } where url is Checkr's hosted invitation to open.
+router.post('/screening/start', requireDriver, async (req, res) => {
+  if (!checkr.isConfigured()) return res.status(503).json({ error: 'Background checks are not configured yet.' });
+  if (!req.driver.auth_user_id) return res.status(400).json({ error: 'This account can’t start a background check.' });
+  try {
+    const scr = await getScreening(req.driver);
+    if (scr.status === 'clear') return res.json({ status: 'clear' });
+
+    let candidateId = scr.candidateId;
+    if (!candidateId) {
+      const parts = (req.driver.name || '').trim().split(/\s+/);
+      const cand = await checkr.createCandidate({
+        email: req.driver.email,
+        firstName: parts[0] || undefined,
+        lastName: parts.slice(1).join(' ') || undefined,
+        driverId: req.driver.id,
+      });
+      candidateId = cand.id;
+    }
+    const inv = await checkr.createInvitation({
+      candidateId,
+      pkg: process.env.CHECKR_PACKAGE || 'driver_pro',
+      state: process.env.CHECKR_WORK_STATE || 'FL',
+    });
+    await setScreening(req.driver.auth_user_id, { candidateId, status: 'pending', invitationUrl: inv.invitation_url });
+    res.json({ status: 'pending', url: inv.invitation_url });
+  } catch (err) {
+    console.error('screening start error', err.message);
+    res.status(500).json({ error: 'Could not start the background check. Please try again.' });
+  }
+});
+
+// GET /api/driver/screening/status — where the driver's check stands.
+router.get('/screening/status', requireDriver, async (req, res) => {
+  if (!checkr.isConfigured()) return res.json({ configured: false, status: 'not_configured' });
+  try {
+    const scr = await getScreening(req.driver);
+    res.json({ configured: true, status: scr.status, url: scr.invitationUrl });
+  } catch (err) {
+    console.error('screening status error', err.message);
+    res.status(500).json({ error: 'Could not fetch screening status.' });
   }
 });
 

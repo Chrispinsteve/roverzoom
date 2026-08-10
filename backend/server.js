@@ -7,6 +7,7 @@ const bookingRoutes = require('./routes/bookings');
 const driverRoutes = require('./routes/driver');
 const paymentsRoutes = require('./routes/payments');
 const assistantRoutes = require('./routes/assistant');
+const checkrRoutes = require('./routes/checkr');
 
 const app = express();
 app.use(cors());
@@ -17,6 +18,8 @@ app.use(cors());
 // handler the body has already been consumed/parsed and constructEvent()
 // fails. Every other /api/payments/* route gets normal JSON parsing.
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+// Checkr webhook likewise needs the raw body to verify its signature.
+app.use('/api/checkr/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'roverzoom-api' }));
@@ -25,6 +28,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/assistant', assistantRoutes);
+app.use('/api/checkr', checkrRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
