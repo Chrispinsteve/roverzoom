@@ -70,4 +70,11 @@ export const api = {
 
   aiStatus: () => req('/ai/status'),
   aiChat: (history) => req('/ai/chat', { method: 'POST', body: JSON.stringify({ history }) }),
+
+  // Card payments (Stripe). config reports whether card charging is live
+  // and the publishable key; create-intent returns a clientSecret for the
+  // booking. Both no-op gracefully when Stripe isn't configured server-side.
+  paymentsConfig: () => req('/payments/config'),
+  createPaymentIntent: (bookingId) =>
+    req('/payments/create-intent', { method: 'POST', body: JSON.stringify({ bookingId }) }),
 };

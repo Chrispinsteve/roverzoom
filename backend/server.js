@@ -8,6 +8,8 @@ const aiRoutes = require('./routes/ai');
 const driverRoutes = require('./routes/driver');
 const trackRoutes = require('./routes/track');
 const adminRoutes = require('./routes/admin');
+const paymentsRoutes = require('./routes/payments');
+const checkrRoutes = require('./routes/checkr');
 
 const app = express();
 
@@ -51,6 +53,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 }));
 
+// Stripe + Checkr webhooks verify a signature over the RAW body, so they must
+// be registered (scoped to their exact paths) BEFORE the global json parser
+// below, or the body is already consumed by the time they run.
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/checkr/webhook', express.raw({ type: 'application/json' }));
+
 // Location batches are the largest payload the API takes (up to 200
 // pings), and they are still small. Capping the body size stops an
 // oversized or malicious POST from being parsed into memory at all.
@@ -63,6 +71,8 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/track', trackRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/checkr', checkrRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars

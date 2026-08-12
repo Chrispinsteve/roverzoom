@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../db/supabase');
 const { estimateRoute } = require('../services/fare');
 const { makeReference } = require('../services/reference');
+const { sendBookingConfirmation } = require('../services/sms');
 
 const router = express.Router();
 
@@ -76,6 +77,11 @@ router.post('/', async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Best-effort booking confirmation text — never let an SMS hiccup turn a
+    // successful save into a 500 that makes the rider re-book.
+    sendBookingConfirmation(data).catch((e) =>
+      console.warn('[bookings] confirmation SMS failed (non-fatal):', e.message));
 
     // The tracking URL is assembled here rather than in the browser so
     // the same string can be dropped straight into the confirmation SMS

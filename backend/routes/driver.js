@@ -3,6 +3,10 @@ const supabase = require('../db/supabase');
 const { requireDriver, requireActiveDriver } = require('../middleware/requireDriver');
 const { estimateRoute } = require('../services/fare');
 const google = require('../services/googleMaps');
+const { stripe } = require('../services/stripe');
+const { sendDriverAcceptedNotification } = require('../services/sms');
+const checkr = require('../services/checkr');
+const { getScreening, setScreening } = require('../services/screening');
 
 const router = express.Router();
 
@@ -106,6 +110,11 @@ router.post('/bookings/:bookingId/claim', requireDriver, requireActiveDriver, as
     // stored columns instead of re-billing Google.
     ensureRouteCached(data).catch((e) =>
       console.warn('[driver] route cache failed (non-fatal):', e.message));
+
+    // Best-effort: text the rider that a driver accepted, with the live
+    // tracking link. Never let an SMS hiccup fail the claim.
+    sendDriverAcceptedNotification(data, req.driver).catch((e) =>
+      console.warn('[driver] accepted SMS failed (non-fatal):', e.message));
 
     res.json(data);
   } catch (err) {
@@ -437,6 +446,127 @@ async function refreshEta(bookingId, newest) {
     .update({ eta_seconds: route.durationSeconds, eta_updated_at: new Date().toISOString() })
     .eq('id', bookingId);
 }
+
+// --- Driver payouts: Stripe Connect Express --------------------------------
+// A pointer to the driver's Connect account lives in Supabase Auth app_metadata
+// (server-controlled), since this environment can't add a drivers column.
+async function getConnectAccountId(driver) {
+  if (!driver.auth_user_id) return null;
+  const { data, error } = await supabase.auth.admin.getUserById(driver.auth_user_id);
+  if (error) throw error;
+  return data?.user?.app_metadata?.stripe_connect_account_id || null;
+}
+async function setConnectAccountId(driver, accountId) {
+  const { data, error: getErr } = await supabase.auth.admin.getUserById(driver.auth_user_id);
+  if (getErr) throw getErr;
+  const app_metadata = { ...(data?.user?.app_metadata || {}), stripe_connect_account_id: accountId };
+  const { error } = await supabase.auth.admin.updateUserById(driver.auth_user_id, { app_metadata });
+  if (error) throw error;
+}
+function appBaseUrl() {
+  return (process.env.PUBLIC_APP_URL || process.env.PUBLIC_BASE_URL || 'https://www.roverzoom.com').replace(/\/+$/, '');
+}
+
+// POST /api/driver/payouts/onboard — start/resume Stripe Connect onboarding.
+router.post('/payouts/onboard', requireDriver, async (req, res) => {
+  const s = stripe();
+  if (!s) return res.status(503).json({ error: 'Payouts are not configured yet.' });
+  if (!req.driver.auth_user_id) return res.status(400).json({ error: 'This account can’t set up payouts.' });
+  try {
+    let accountId = await getConnectAccountId(req.driver);
+    if (!accountId) {
+      const account = await s.accounts.create({
+        type: 'express',
+        email: req.driver.email || undefined,
+        business_type: 'individual',
+        capabilities: { transfers: { requested: true } },
+        metadata: { driver_id: req.driver.id },
+      });
+      accountId = account.id;
+      await setConnectAccountId(req.driver, accountId);
+    }
+    const base = appBaseUrl();
+    const link = await s.accountLinks.create({
+      account: accountId,
+      refresh_url: `${base}/?driver=payouts&refresh=1`,
+      return_url: `${base}/?driver=payouts`,
+      type: 'account_onboarding',
+    });
+    res.json({ url: link.url });
+  } catch (err) {
+    console.error('payout onboard error', err.message);
+    const notEnabled = /connect/i.test(err.message || '');
+    res.status(notEnabled ? 503 : 500).json({
+      error: notEnabled
+        ? 'Stripe Connect isn’t enabled on this platform account yet.'
+        : 'Could not start payout setup. Please try again.',
+    });
+  }
+});
+
+// GET /api/driver/payouts/status
+router.get('/payouts/status', requireDriver, async (req, res) => {
+  const s = stripe();
+  if (!s) return res.json({ configured: false, connected: false, payoutsEnabled: false });
+  try {
+    const accountId = await getConnectAccountId(req.driver);
+    if (!accountId) return res.json({ configured: true, connected: false, payoutsEnabled: false });
+    const acct = await s.accounts.retrieve(accountId);
+    res.json({
+      configured: true,
+      connected: true,
+      detailsSubmitted: !!acct.details_submitted,
+      payoutsEnabled: !!acct.payouts_enabled,
+    });
+  } catch (err) {
+    console.error('payout status error', err.message);
+    res.status(500).json({ error: 'Could not fetch payout status.' });
+  }
+});
+
+// --- Driver background check: Checkr ---------------------------------------
+// POST /api/driver/screening/start — begin (or resume) the hosted check.
+router.post('/screening/start', requireDriver, async (req, res) => {
+  if (!checkr.isConfigured()) return res.status(503).json({ error: 'Background checks are not configured yet.' });
+  if (!req.driver.auth_user_id) return res.status(400).json({ error: 'This account can’t start a background check.' });
+  try {
+    const scr = await getScreening(req.driver);
+    if (scr.status === 'clear') return res.json({ status: 'clear' });
+    let candidateId = scr.candidateId;
+    if (!candidateId) {
+      const parts = (req.driver.name || '').trim().split(/\s+/);
+      const cand = await checkr.createCandidate({
+        email: req.driver.email,
+        firstName: parts[0] || undefined,
+        lastName: parts.slice(1).join(' ') || undefined,
+        driverId: req.driver.id,
+      });
+      candidateId = cand.id;
+    }
+    const inv = await checkr.createInvitation({
+      candidateId,
+      pkg: process.env.CHECKR_PACKAGE || 'driver_pro',
+      state: process.env.CHECKR_WORK_STATE || 'FL',
+    });
+    await setScreening(req.driver.auth_user_id, { candidateId, status: 'pending', invitationUrl: inv.invitation_url });
+    res.json({ status: 'pending', url: inv.invitation_url });
+  } catch (err) {
+    console.error('screening start error', err.message);
+    res.status(500).json({ error: 'Could not start the background check. Please try again.' });
+  }
+});
+
+// GET /api/driver/screening/status
+router.get('/screening/status', requireDriver, async (req, res) => {
+  if (!checkr.isConfigured()) return res.json({ configured: false, status: 'not_configured' });
+  try {
+    const scr = await getScreening(req.driver);
+    res.json({ configured: true, status: scr.status, url: scr.invitationUrl });
+  } catch (err) {
+    console.error('screening status error', err.message);
+    res.status(500).json({ error: 'Could not fetch screening status.' });
+  }
+});
 
 module.exports = router;
 module.exports.ACTIVE_TRIP_STATUSES = ACTIVE_TRIP_STATUSES;

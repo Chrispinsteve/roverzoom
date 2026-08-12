@@ -2,6 +2,53 @@ import { useEffect, useRef, useState } from 'react';
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import Avatar from '../components/Avatar';
+import { driverApi } from '../../lib/driverApi';
+
+// Payouts via Stripe Connect Express. Renders nothing until Stripe is configured
+// server-side, so it's invisible (and the manual flow unaffected) until then.
+function PayoutsSection() {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    driverApi.getPayoutStatus().then(setStatus).catch(() => setStatus({ configured: false }));
+  }, []);
+
+  const start = async () => {
+    setBusy(true); setError('');
+    try { const { url } = await driverApi.startPayoutOnboarding(); window.location.href = url; }
+    catch (e) { setError(e.message || 'Could not start payout setup.'); setBusy(false); }
+  };
+
+  if (!status || !status.configured) return null;
+  const enabled = status.payoutsEnabled;
+  const inProgress = status.connected && !enabled;
+
+  return (
+    <div className="drv-card rise" style={{ marginTop: 4 }}>
+      <div className="drv-card-top">
+        <span className="drv-card-label">Getting paid</span>
+        <span className="drv-card-icon"><Icon name="wallet" size={17} color="var(--ink-3)" /></span>
+      </div>
+      {enabled ? (
+        <div className="drv-card-value" style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="check" size={16} color="var(--positive)" stroke={3} /> Payouts active
+        </div>
+      ) : (
+        <>
+          <p className="drv-card-sub" style={{ marginBottom: 10 }}>
+            {inProgress ? 'Finish verifying to start getting paid.' : 'Add your bank or debit card — secured by Stripe.'}
+          </p>
+          <button className="btn btn-ghost" disabled={busy} onClick={start} style={{ width: '100%' }}>
+            {busy ? 'Opening…' : inProgress ? 'Finish payout setup' : 'Set up payouts'}
+          </button>
+          {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
+        </>
+      )}
+    </div>
+  );
+}
 
 function StatCard({ icon, label, value, sub }) {
   return (
@@ -80,6 +127,8 @@ export default function Dashboard({ driver, online, earningsToday, ridesComplete
         <StatCard icon="bars" label="Today's Earnings" value={`$${earningsToday.toFixed(2)}`} sub={`${ridesCompleted} rides completed`} />
         <StatCard icon="shieldCheck" label="Driver Score" value={`${driver.rating} ★`} sub="Excellent" />
         <StatCard icon="wallet" label="Next Payout" value={payoutDate} />
+
+        <PayoutsSection />
 
         <div className="spacer" />
 

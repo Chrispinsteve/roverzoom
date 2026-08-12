@@ -14,6 +14,8 @@ import { api } from './lib/api';
 // booking flow never download it.
 const DriverApp = lazy(() => import('./driver/DriverApp'));
 const TrackRide = lazy(() => import('./steps/TrackRide'));
+// Pulls in the Stripe libraries — lazy so riders paying cash never load them.
+const CardPayment = lazy(() => import('./steps/CardPayment'));
 
 function ScreenLoading() {
   return (
@@ -71,6 +73,15 @@ export default function App() {
     setInitDropoff(null);
   };
 
+  // Every booking flow finishes here. A card booking detours through the
+  // Stripe payment screen first; cash goes straight to the confirmation.
+  // CardPayment itself falls through to 'done' when Stripe isn't configured,
+  // so this stays correct whether or not card charging is live.
+  const finishBooking = (b) => {
+    setBooking(b);
+    setScreen(b && b.payment_method === 'card' ? 'pay' : 'done');
+  };
+
   // Tracking is a standalone public page: no driver entry point, no
   // booking wizard chrome. Checked before everything else so a rider
   // opening the link from an SMS lands directly on their trip.
@@ -118,7 +129,7 @@ export default function App() {
         initialPickup={initPickup}
         initialDropoff={initDropoff}
         onBack={reset}
-        onComplete={(b) => { setBooking(b); setScreen('done'); }}
+        onComplete={finishBooking}
       />
     );
   } else if (screen === 'voice') {
@@ -126,13 +137,19 @@ export default function App() {
       <VoiceFlow
         onBack={reset}
         onSwitchToText={() => setScreen('ai')}
-        onBookingComplete={(b) => { setBooking(b); setScreen('done'); }}
+        onBookingComplete={finishBooking}
       />
     );
   } else if (screen === 'ai') {
-    content = <AIFlow onBack={reset} onBookingComplete={(b) => { setBooking(b); setScreen('done'); }} />;
+    content = <AIFlow onBack={reset} onBookingComplete={finishBooking} />;
   } else if (screen === 'aiCheckout') {
-    content = <AICheckout draft={draft} onBack={() => setScreen('ai')} onComplete={(b) => { setBooking(b); setScreen('done'); }} />;
+    content = <AICheckout draft={draft} onBack={() => setScreen('ai')} onComplete={finishBooking} />;
+  } else if (screen === 'pay') {
+    content = (
+      <Suspense fallback={<ScreenLoading />}>
+        <CardPayment booking={booking} onDone={() => setScreen('done')} />
+      </Suspense>
+    );
   } else if (screen === 'done') {
     content = <Confirmation booking={booking} onNewBooking={reset} />;
   }

@@ -40,4 +40,10 @@ export const driverApi = {
 
   setOnline: (online) =>
     authedReq('/driver/online', { method: 'POST', body: JSON.stringify({ online }) }),
+
+  // Payouts (Stripe Connect Express) + background check (Checkr).
+  getPayoutStatus: () => authedReq('/driver/payouts/status'),
+  startPayoutOnboarding: () => authedReq('/driver/payouts/onboard', { method: 'POST' }),
+  getScreeningStatus: () => authedReq('/driver/screening/status'),
+  startScreening: () => authedReq('/driver/screening/start', { method: 'POST' }),
 };
