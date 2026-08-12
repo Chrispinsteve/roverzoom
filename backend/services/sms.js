@@ -105,10 +105,20 @@ async function sendDriverAcceptedNotification(booking, driver) {
   return sendSms(booking.rider_phone, body);
 }
 
+// 3. Sent when the driver marks "arrived" — the moment the rider most
+// wants a nudge, since they may have put the phone down after booking.
+async function sendArrivalNotification(booking) {
+  if (!booking?.rider_phone) return { sent: false, reason: 'no_phone' };
+  const link = booking.track_token ? ` ${trackingUrl(booking.track_token)}` : '';
+  const body = `RoverZoom: Your driver has arrived at the pickup. Head out when you're ready.${link}`;
+  return sendSms(booking.rider_phone, body);
+}
+
 module.exports = {
   sendSms,
   sendBookingConfirmation,
   sendDriverAcceptedNotification,
+  sendArrivalNotification,
   trackingUrl,
   toE164,
   isConfigured,

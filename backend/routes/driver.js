@@ -4,7 +4,7 @@ const { requireDriver, requireActiveDriver } = require('../middleware/requireDri
 const { estimateRoute } = require('../services/fare');
 const google = require('../services/googleMaps');
 const { stripe } = require('../services/stripe');
-const { sendDriverAcceptedNotification } = require('../services/sms');
+const { sendDriverAcceptedNotification, sendArrivalNotification } = require('../services/sms');
 const checkr = require('../services/checkr');
 const { getScreening, setScreening } = require('../services/screening');
 
@@ -222,6 +222,15 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
       // Entering the passenger-carrying leg: the cached route is now
       // pickup->dropoff, so refresh it if it was never computed.
       ensureRouteCached(data).catch(() => {});
+    }
+
+    // Ping the rider the instant the driver marks "arrived" — best-effort,
+    // never let a texting hiccup fail the transition the driver is waiting
+    // on. `data` is the full updated row, so it carries rider_phone +
+    // track_token.
+    if (next === 'arrived') {
+      sendArrivalNotification(data).catch((e) =>
+        console.warn('[driver] arrival SMS failed (non-fatal):', e.message));
     }
 
     res.json(data);

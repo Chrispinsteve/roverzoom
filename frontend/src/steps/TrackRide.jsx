@@ -4,6 +4,7 @@ import Icon from '../components/Icon';
 import LiveMap from '../components/LiveMap';
 import RouteRail from '../components/RouteRail';
 import { useTracking } from '../lib/useTracking';
+import { api } from '../lib/api';
 import { GoogleMapsProvider } from '../lib/GoogleMapsProvider';
 
 // ============================================================
@@ -180,8 +181,69 @@ function Timeline({ status, timeline }) {
   );
 }
 
+// Shown when this device is not the one the link was bound to. The rider
+// takes the link over by proving they hold the booking's phone number —
+// the recovery key a random forwarder of the link does not have.
+function DeviceLocked({ token, onRecovered }) {
+  const [phone, setPhone] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (!phone.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.rebindTrack(token, phone.trim());
+      onRecovered();
+    } catch (e) {
+      setError(e.message || 'Could not verify that number.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Shell step={0} totalSteps={0}>
+      <div className="body">
+        <div style={{ textAlign: 'center', marginTop: 40, marginBottom: 22 }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: '50%', background: 'var(--canvas-2)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+          }}>
+            <Icon name="shieldCheck" size={26} color="var(--ink-2)" />
+          </div>
+          <h1 className="title" style={{ fontSize: 22 }}>Tracking is open on another device</h1>
+          <p className="subtitle">
+            For safety, a tracking link works on one device at a time. If this is your
+            phone, confirm the number on your booking to move tracking here.
+          </p>
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor="rebind-phone">Phone number on the booking</label>
+          <input
+            id="rebind-phone"
+            className="input"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="(555) 123-4567"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          />
+        </div>
+        {error && <p className="error-text" style={{ marginTop: 10 }}>{error}</p>}
+        <button className="btn" style={{ marginTop: 16 }} disabled={busy || !phone.trim()} onClick={submit}>
+          {busy ? 'Verifying…' : 'Track on this phone'}
+        </button>
+      </div>
+    </Shell>
+  );
+}
+
 function TrackRideInner({ token, onExit }) {
-  const { data, error, loading } = useTracking(token);
+  const { data, error, loading, retry } = useTracking(token);
 
   const vehicle = data?.driver?.location || null;
   const stale = vehicle?.ageSeconds != null && vehicle.ageSeconds > STALE_AFTER_SECONDS;
@@ -190,6 +252,13 @@ function TrackRideInner({ token, onExit }) {
     () => STATUS_COPY[data?.status] || { title: 'Your ride', sub: '' },
     [data?.status]
   );
+
+  // Kept after every hook above so the hook order never changes between
+  // renders. A locked device can only be resolved by phone recovery, so
+  // this takes priority over the generic error screen below.
+  if (error && error.code === 'device_locked') {
+    return <DeviceLocked token={token} onRecovered={retry} />;
+  }
 
   if (loading && !data) {
     return (

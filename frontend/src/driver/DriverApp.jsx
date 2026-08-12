@@ -128,11 +128,14 @@ function DriverAppInner({ onExit }) {
 
   const tripStage = stageForBooking(activeBooking);
 
-  // Capture GPS for the whole assigned window, not only once the trip
-  // starts. Dispatch and the rider both need to see the car approaching
-  // the pickup — which is precisely the stretch a rider is anxious about
-  // and most likely to be watching.
-  const trackingActive = !!activeBooking && ['driver_assigned', 'driver_en_route', 'arrived', 'in_progress']
+  // Capture GPS only once the driver actually starts heading to the
+  // pickup (driver_en_route onward), not the moment they claim the trip.
+  // Claiming is not hitting the road — a driver can accept a ride days
+  // ahead, and streaming their location from claim time would put their
+  // phone on the map while they're at home. This also lines up exactly
+  // with the rider tracking gate (see routes/track.js), which withholds
+  // the driver's position until this same status.
+  const trackingActive = !!activeBooking && ['driver_en_route', 'arrived', 'in_progress']
     .includes(activeBooking.status);
 
   const { position, error: locationError, permission } = useDriverLocation({

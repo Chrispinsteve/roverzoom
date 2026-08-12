@@ -1,3 +1,5 @@
+import { getDeviceSecret, resetDeviceSecret } from './trackDevice';
+
 const BASE = import.meta.env.VITE_API_URL || '';
 
 export async function req(path, options = {}) {
@@ -63,8 +65,21 @@ export const api = {
   getBooking: (ref) => req(`/bookings/${ref}`),
 
   // Public rider tracking. Takes the 32-char track_token, NOT the
-  // RZ-XXXXX reference.
-  track: (token) => req(`/track/${encodeURIComponent(token)}`),
+  // RZ-XXXXX reference. The device secret rides in a header so the server
+  // can bind the link to this one device (see lib/trackDevice.js).
+  track: (token) =>
+    req(`/track/${encodeURIComponent(token)}`, {
+      headers: { 'X-Track-Device': getDeviceSecret(token) || '' },
+    }),
+
+  // Move a locked tracking link to THIS device by proving the booking's
+  // phone number. Rotates to a fresh secret first so we don't resubmit the
+  // value the server just refused.
+  rebindTrack: (token, phone) =>
+    req(`/track/${encodeURIComponent(token)}/rebind`, {
+      method: 'POST',
+      body: JSON.stringify({ phone, deviceSecret: resetDeviceSecret(token) }),
+    }),
 
   mapsStatus: () => req('/maps/status'),
 

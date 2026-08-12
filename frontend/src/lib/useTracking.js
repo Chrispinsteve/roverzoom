@@ -66,8 +66,11 @@ export function useTracking(token) {
       timerRef.current = setTimeout(poll, next.pollIntervalMs || 10000);
     } catch (err) {
       // 404 (bad token) and 410 (expired) are terminal — retrying cannot
-      // fix either, and continuing would just generate noise.
-      if (err.status === 404 || err.status === 410) {
+      // fix either, and continuing would just generate noise. A 403
+      // device_locked is terminal too: this device is not the bound one,
+      // and only the phone-number recovery flow can change that, so stop
+      // and let the UI offer it rather than re-polling into the same wall.
+      if (err.status === 404 || err.status === 410 || err.code === 'device_locked') {
         stoppedRef.current = true;
         setError(err);
         return;
@@ -81,6 +84,17 @@ export function useTracking(token) {
       setLoading(false);
     }
   }, [token]);
+
+  // Resume polling after a terminal stop that has since been resolved —
+  // specifically a device lock cleared by phone-number recovery.
+  const retry = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    stoppedRef.current = false;
+    failuresRef.current = 0;
+    setError(null);
+    setLoading(true);
+    poll();
+  }, [poll]);
 
   useEffect(() => {
     stoppedRef.current = false;
@@ -110,5 +124,5 @@ export function useTracking(token) {
     };
   }, [poll]);
 
-  return { data, error, loading };
+  return { data, error, loading, retry };
 }

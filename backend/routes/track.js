@@ -38,9 +38,64 @@
 // ============================================================
 
 const express = require('express');
+const crypto = require('crypto');
 const supabase = require('../db/supabase');
 
 const router = express.Router();
+
+// ------------------------------------------------------------
+// Single-device binding (trust on first use)
+//
+// The link is a bearer credential, so on its own it works on any number
+// of phones. To limit a live trip to the one device the rider is actually
+// using, the FIRST device to present a secret claims the link; later
+// devices are refused with 403 device_locked. The rider moves the link to
+// a new phone via POST /:token/rebind, proving possession of the booking's
+// phone number.
+//
+// Everything here is OPTIONAL. The two columns it needs (track_device_hash,
+// track_bound_at) arrive in migration 003. Until that runs, isMissingColumn
+// catches the "column does not exist" error and the endpoint serves
+// tracking with no lock — exactly the old behaviour.
+// ------------------------------------------------------------
+
+// Postgres 42703 = undefined_column. Supabase surfaces it in either the
+// code or the message depending on the path, so check both.
+function isMissingColumn(err) {
+  return !!err && (err.code === '42703' || /column .* does not exist/i.test(err.message || ''));
+}
+
+function hashDevice(secret) {
+  return crypto.createHash('sha256').update(String(secret)).digest('hex');
+}
+
+// Compare on the last 10 digits so formatting differences (spaces, +1,
+// dashes) never cause a legitimate rider to fail recovery.
+function phonesMatch(a, b) {
+  const da = String(a || '').replace(/\D/g, '');
+  const db = String(b || '').replace(/\D/g, '');
+  return da.length >= 10 && db.length >= 10 && da.slice(-10) === db.slice(-10);
+}
+
+// Small in-memory throttle on recovery so the phone-number check can't be
+// brute-forced by someone who has the link but is guessing the number. The
+// link is already a 128-bit secret, so this only has to stop scripted
+// guessing, not a determined attacker with unlimited attempts.
+const REBIND_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const REBIND_MAX = 6;
+const rebindAttempts = new Map(); // token -> { count, resetAt }
+
+function rebindAllowed(token) {
+  const now = Date.now();
+  const rec = rebindAttempts.get(token);
+  if (!rec || now > rec.resetAt) {
+    rebindAttempts.set(token, { count: 1, resetAt: now + REBIND_WINDOW_MS });
+    return true;
+  }
+  if (rec.count >= REBIND_MAX) return false;
+  rec.count += 1;
+  return true;
+}
 
 // Mirrors the driver route's definition. Only during these statuses is a
 // driver's live position exposed to the rider.
@@ -73,22 +128,66 @@ router.get('/:token', async (req, res) => {
     // Explicit column list, never '*'. If a column holding something
     // sensitive is added to bookings later, it does not silently start
     // appearing in a public response.
-    const { data: booking, error } = await supabase
+    const BASE_COLS = [
+      'id', 'reference', 'status', 'scheduled_at',
+      'pickup_address', 'pickup_lat', 'pickup_lng',
+      'dropoff_address', 'dropoff_lat', 'dropoff_lng',
+      'distance_miles', 'duration_minutes', 'fare', 'payment_method',
+      'route_polyline', 'eta_seconds', 'eta_updated_at',
+      'driver_id', 'accepted_at', 'en_route_at', 'arrived_at',
+      'started_at', 'completed_at', 'canceled_at',
+    ];
+    // The binding column is requested only when it exists. On a database
+    // that has not run migration 003 the first query fails with an
+    // undefined-column error; we retry with the base list and treat the
+    // lock as simply not enabled.
+    let bindingEnabled = true;
+    let { data: booking, error } = await supabase
       .from('bookings')
-      .select([
-        'id', 'reference', 'status', 'scheduled_at',
-        'pickup_address', 'pickup_lat', 'pickup_lng',
-        'dropoff_address', 'dropoff_lat', 'dropoff_lng',
-        'distance_miles', 'duration_minutes', 'fare', 'payment_method',
-        'route_polyline', 'eta_seconds', 'eta_updated_at',
-        'driver_id', 'accepted_at', 'en_route_at', 'arrived_at',
-        'started_at', 'completed_at', 'canceled_at',
-      ].join(','))
+      .select([...BASE_COLS, 'track_device_hash'].join(','))
       .eq('track_token', token)
       .maybeSingle();
 
+    if (error && isMissingColumn(error)) {
+      bindingEnabled = false;
+      ({ data: booking, error } = await supabase
+        .from('bookings')
+        .select(BASE_COLS.join(','))
+        .eq('track_token', token)
+        .maybeSingle());
+    }
+
     if (error) throw error;
     if (!booking) return res.status(404).json({ error: 'Tracking link not found.' });
+
+    // --- Single-device lock (trust on first use) ---
+    // Checked before anything else is returned so a non-owning device
+    // never sees trip details. The device secret rides in a header set by
+    // the rider's browser (see lib/trackDevice.js); we only ever see and
+    // store its hash.
+    if (bindingEnabled) {
+      const provided = req.get('x-track-device');
+      const providedHash = provided ? hashDevice(provided) : null;
+      const stored = booking.track_device_hash || null;
+
+      if (!stored) {
+        // First device to show up with a secret claims the link.
+        if (providedHash) {
+          await supabase
+            .from('bookings')
+            .update({ track_device_hash: providedHash, track_bound_at: new Date().toISOString() })
+            .eq('id', booking.id)
+            .is('track_device_hash', null); // lose the race safely if two devices arrive at once
+        }
+        // No secret yet (e.g. a cached older client): allow through — the
+        // browser will send one on its next poll and claim the link then.
+      } else if (providedHash !== stored) {
+        return res.status(403).json({
+          error: 'This tracking link is being used on another device.',
+          code: 'device_locked',
+        });
+      }
+    }
 
     // Expire the link a couple of hours past the end of the trip.
     const endedAt = booking.completed_at || booking.canceled_at;
@@ -190,6 +289,67 @@ router.get('/:token', async (req, res) => {
   } catch (err) {
     console.error('track fetch error', err.message);
     res.status(500).json({ error: 'Could not load tracking info.' });
+  }
+});
+
+// ============================================================
+// POST /api/track/:token/rebind  { phone, deviceSecret }
+// ============================================================
+// Moves a locked tracking link to the device making this request. The
+// caller must prove they hold the booking's phone number — the same
+// number the confirmation and tracking texts were sent to — which is the
+// one thing a random forwarder of the link does not have.
+router.post('/:token/rebind', async (req, res) => {
+  const { token } = req.params;
+  if (!token || !/^[a-f0-9]{32}$/i.test(token)) {
+    return res.status(404).json({ error: 'Tracking link not found.' });
+  }
+
+  const { phone, deviceSecret } = req.body || {};
+  if (!phone || !deviceSecret) {
+    return res.status(400).json({ error: 'Enter the phone number on this booking.' });
+  }
+
+  if (!rebindAllowed(token)) {
+    return res.status(429).json({
+      error: 'Too many attempts. Please wait a bit and try again.',
+      code: 'rate_limited',
+    });
+  }
+
+  try {
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .select('id, rider_phone')
+      .eq('track_token', token)
+      .maybeSingle();
+
+    // Migration 003 not run yet — the lock isn't active, so there is
+    // nothing to move. Tell the client plainly rather than 500.
+    if (error && isMissingColumn(error)) {
+      return res.status(409).json({ error: 'Device locking is not enabled.', code: 'binding_disabled' });
+    }
+    if (error) throw error;
+    if (!booking) return res.status(404).json({ error: 'Tracking link not found.' });
+
+    if (!phonesMatch(phone, booking.rider_phone)) {
+      // Deliberately vague: do not confirm or deny the number, just refuse.
+      return res.status(403).json({
+        error: 'That phone number does not match this booking.',
+        code: 'phone_mismatch',
+      });
+    }
+
+    const { error: updErr } = await supabase
+      .from('bookings')
+      .update({ track_device_hash: hashDevice(deviceSecret), track_bound_at: new Date().toISOString() })
+      .eq('id', booking.id);
+    if (updErr) throw updErr;
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('track rebind error', err.message);
+    res.status(500).json({ error: 'Could not move tracking to this device.' });
   }
 });
 
