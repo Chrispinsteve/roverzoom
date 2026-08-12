@@ -15,17 +15,7 @@ async function requireDriver(req, res, next) {
 
   try {
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) {
-      // A fetch-level failure means WE couldn't reach the Auth API (bad
-      // SUPABASE_URL/key, network) — a server problem, not the driver's
-      // session. Answering 401 here would tell every client "log in again"
-      // for an outage no re-login can fix.
-      if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0 || (error.status || 0) >= 500)) {
-        console.error('requireDriver: auth service unreachable —', error.message);
-        return res.status(503).json({ error: 'Could not verify your session right now. Try again in a moment.' });
-      }
-      return res.status(401).json({ error: 'Invalid or expired session.', code: 'session_invalid' });
-    }
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid or expired session.' });
 
     const { data: driver, error: driverErr } = await supabase
       .from('drivers')
@@ -57,18 +47,4 @@ function requireActiveDriver(req, res, next) {
   next();
 }
 
-// Gates ride-request access on profile completion (photo + license +
-// insurance all uploaded) — the "open marketplace, but controlled" model:
-// there's no online/offline toggle, so this is the one real access control
-// on who can see/claim rides.
-function requireCompleteProfile(req, res, next) {
-  if (!req.driver.profile_completed_at) {
-    return res.status(403).json({
-      error: 'Complete your profile (photo, license, insurance) to see ride requests.',
-      code: 'profile_incomplete',
-    });
-  }
-  next();
-}
-
-module.exports = { requireDriver, requireActiveDriver, requireCompleteProfile };
+module.exports = { requireDriver, requireActiveDriver };

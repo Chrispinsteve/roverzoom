@@ -211,10 +211,6 @@ input, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
 }
-/* Keep children at their natural height so a tall screen (e.g. long addresses)
-   SCROLLS via .body's overflow, instead of flex-shrinking the rows until their
-   content clips. `.spacer` still grows to push footer buttons down. */
-.body > * { flex-shrink: 0; }
 
 .title {
   font-size: 30px;
@@ -636,85 +632,6 @@ input, textarea { font-family: inherit; }
 }
 .drv-icon-btn:active { transform: scale(0.92); }
 
-/* Driver mode is a true app frame: the stage is EXACTLY viewport-height
-   (not min-height, which lets tall content grow the page and scroll the
-   whole document, tab bar and all). With the height fixed, .body becomes
-   the only scroll region and the header/tab bar never move. */
-.app[data-theme="dark"] .stage {
-  height: min(960px, calc(100dvh - 40px));
-}
-@media (max-width: 600px) {
-  .app[data-theme="dark"] .stage { height: 100dvh; }
-}
-
-/* Schedule screen: the page itself never scrolls — the calendar, filter
-   chip, and My Schedule/Available tabs stay pinned; only the trip list
-   below them scrolls. */
-.drv-schedule-body { overflow-y: hidden; }
-.drv-schedule-body > * { flex-shrink: 0; }
-.drv-schedule-scroll {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 8px;
-}
-
-/* Persistent bottom tab bar — pinned below .body (the only scrollable
-   flex child of .stage), never scrolls away. Hidden entirely during an
-   active trip (DriverShell renders it only when activeTab is passed). */
-.drv-tabbar {
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  border-top: 1px solid var(--line-2);
-  background: var(--canvas);
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
-}
-.drv-tabbar-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 6px 2px;
-  font-size: 11px; font-weight: 600;
-  color: var(--ink-4);
-  border-radius: var(--r-sm);
-}
-.drv-tabbar-btn.active { color: var(--ink); }
-.drv-tabbar-btn:active { background: var(--canvas-2); }
-
-.drv-empty-state {
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  gap: 10px; margin-top: 48px; padding: 0 24px;
-  color: var(--ink-3); font-size: 14.5px; line-height: 1.5;
-}
-
-/* Profile-completion gate banner (Home) — the "controlled at some level"
-   access gate, since there's no online/offline toggle. */
-.drv-gate-banner {
-  display: block; width: 100%; text-align: left;
-  background: var(--card); border: 1.5px solid #eab308;
-  border-radius: var(--r-md); padding: 16px 18px; margin-bottom: 18px;
-}
-.drv-gate-banner-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.drv-gate-banner-title { font-size: 15px; font-weight: 700; color: var(--ink); }
-.drv-gate-banner-sub { margin-top: 4px; font-size: 13px; color: var(--ink-3); }
-.drv-gate-checklist { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.drv-gate-chip {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12.5px; font-weight: 600; color: var(--ink-3);
-  background: var(--canvas-2); border-radius: 999px; padding: 5px 10px;
-}
-.drv-gate-chip.done { color: var(--positive); }
-
-/* Profile tab — document upload rows */
-.drv-doc-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 14px 0; border-bottom: 1px solid var(--line-2);
-}
-.drv-doc-row:last-of-type { border-bottom: none; }
-.drv-doc-label { font-size: 15px; font-weight: 600; color: var(--ink); }
-.drv-doc-hint { margin-top: 2px; font-size: 12.5px; color: var(--ink-3); }
-.drv-doc-done { display: flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 600; color: var(--positive); flex-shrink: 0; white-space: nowrap; }
-.drv-doc-upload-btn { width: auto; min-height: 40px; padding: 8px 18px; flex-shrink: 0; cursor: pointer; }
-
 .drv-profile { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
 .drv-profile-name { font-size: 18px; font-weight: 700; color: var(--ink); }
 .drv-profile-meta { display: flex; align-items: center; gap: 10px; margin-top: 3px; font-size: 13.5px; color: var(--ink-3); }
@@ -738,6 +655,44 @@ input, textarea { font-family: inherit; }
 .drv-go-caption { text-align: center; font-size: 13px; color: var(--positive); margin: 10px 0 0; }
 
 .drv-rail-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+
+/* Live map container (Google Maps renders inside this) */
+.drv-map {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #14161a 0%, #1c1e22 100%);
+  overflow: hidden;
+}
+.drv-map-svg { width: 100%; height: 100%; display: block; }
+.drv-map-route-shadow { fill: none; stroke: rgba(0,0,0,0.5); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.drv-map-route { fill: none; stroke: rgba(255,255,255,0.9); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.drv-map-label {
+  position: absolute; transform: translate(-50%, -50%);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(255,255,255,0.32);
+}
+.drv-map-car {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 28px; height: 28px; border-radius: 50%; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.drv-map-square {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 12px; height: 12px; border-radius: 3px; background: #fff;
+  box-shadow: 0 0 0 5px rgba(255,255,255,0.15);
+}
+.drv-map-fabs {
+  position: absolute; top: 14px; right: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.drv-map-fab {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(12,13,15,0.6); border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* Turn-by-turn instruction banner */
 .drv-instruction {
@@ -785,7 +740,7 @@ input, textarea { font-family: inherit; }
 
 /* Schedule screen: My Schedule / Available Trips tabs + agenda rows */
 .drv-tabs {
-  display: flex; gap: 4px; margin-bottom: 12px;
+  display: flex; gap: 4px; margin-bottom: 20px;
   background: var(--canvas); padding: 4px; border-radius: var(--r-md); border: 1px solid var(--line);
 }
 .drv-tab {
@@ -800,10 +755,8 @@ input, textarea { font-family: inherit; }
   padding: 14px 16px; margin-bottom: 10px; text-align: left;
 }
 .drv-trip-row:disabled { opacity: 0.5; }
-.drv-trip-row-tap { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.drv-trip-row-tap:active { background: var(--canvas-2); }
 .drv-trip-body { flex: 1; min-width: 0; }
-.drv-trip-time { font-size: 15px; font-weight: 700; color: var(--ink); }
+.drv-trip-time { font-size: 13px; font-weight: 700; color: var(--ink); }
 .drv-trip-route {
   font-size: 14px; color: var(--ink-2); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -817,27 +770,6 @@ input, textarea { font-family: inherit; }
   flex-shrink: 0; font-size: 11.5px; font-weight: 600; color: var(--ink-3);
   text-transform: uppercase; letter-spacing: 0.03em;
 }
-
-/* Schedule screen — phone-first: compact title, pinned tabs, a collapsible
-   date filter, and the trip list as the scrolling hero (sticky day headers). */
-.drv-sched-title { font-size: 23px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
-.drv-cal-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.drv-cal-toggle {
-  flex: 1; display: flex; align-items: center; gap: 8px;
-  padding: 11px 14px; border-radius: var(--r-md);
-  border: 1px solid var(--line-2); background: var(--card);
-  color: var(--ink-2); font-size: 14px; font-weight: 600;
-}
-.drv-cal-toggle.active { color: var(--ink); border-color: var(--ink-4); }
-.drv-cal-toggle .drv-cal-chev { margin-left: auto; font-size: 10px; color: var(--ink-4); }
-.drv-cal-clear { font-size: 13px; font-weight: 600; color: var(--ink-3); text-decoration: underline; padding: 8px 4px; }
-.drv-trip-group { margin-bottom: 14px; }
-.drv-trip-daylabel {
-  position: sticky; top: 0; z-index: 2;
-  background: var(--canvas); padding: 6px 0 8px;
-  font-size: 13px; font-weight: 700; color: var(--ink-3); letter-spacing: 0.01em;
-}
-.drv-trip-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 
 /* Month-grid planning board: green = confirmed (assigned to me), yellow =
    pending (unclaimed). Empty days show nothing but the date. */
@@ -860,10 +792,7 @@ input, textarea { font-family: inherit; }
 }
 .drv-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .drv-cal-cell {
-  /* Capped height (not aspect-ratio) so cells stay compact on wide driver
-     screens — a square cell there balloons the calendar and shoves the tabs
-     and trip list off the bottom of the fixed-height Schedule frame. */
-  height: clamp(40px, 6vh, 54px); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   border-radius: 10px; gap: 3px; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums;
 }
 .drv-cal-cell.empty { visibility: hidden; }
@@ -936,33 +865,38 @@ input, textarea { font-family: inherit; }
 }
 .theme-toggle:active { transform: scale(0.92); }
 
-/* ===== Driver-side improvements ===== */
-.drv-live{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--positive);}
-.drv-live-dot{width:8px; height:8px; border-radius:50%; background:var(--positive); animation:drvpulse 1.6s ease-in-out infinite;}
-@keyframes drvpulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
-.drv-notice{font-size:14px; font-weight:600; color:var(--ink-2); background:var(--bg-2, #F6F5F2); border-radius:10px; padding:10px 14px; margin-top:8px;}
-.drv-req-chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:12px;}
-.drv-req-chip{font-size:12.5px; font-weight:600; background:var(--bg-2, #F6F5F2); color:var(--ink-2); border-radius:999px; padding:5px 11px;}
-.drv-conflict{display:flex; align-items:center; gap:7px; margin-top:10px; font-size:13px; font-weight:600; color:#8A6A1F; background:#F7EFD8; border-radius:9px; padding:8px 12px;}
-/* White spotlight card on the dark driver home — fixed colors (NOT theme
-   tokens): the driver app is always dark, where var(--ink) is light, which
-   previously made this card white with white text (invisible). */
-.drv-next{background:#fff; color:#0B0B0B; border-radius:var(--r-md, 14px); padding:16px 18px; margin-bottom:14px;}
-.drv-next-top{display:flex; justify-content:space-between; align-items:baseline; gap:10px;}
-.drv-next-eyebrow{font-size:11.5px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#6E6D68;}
-.drv-next-count{font-weight:700; font-size:16px; color:#0F7B54; white-space:nowrap;}
-.drv-next-route{margin-top:8px; font-size:15.5px; font-weight:600; line-height:1.4; color:#0B0B0B;}
-.drv-next-meta{margin-top:4px; font-size:13px; color:#6E6D68;}
-.drv-next-actions{display:flex; gap:9px; margin-top:14px;}
-.drv-next-btn{flex:1; display:flex; align-items:center; justify-content:center; gap:7px; background:#0B0B0B; color:#fff; border-radius:10px; min-height:44px; font-size:13.5px; font-weight:650; text-decoration:none;}
-.drv-next-btn:active{transform:scale(0.98);}
-.drv-release{font-size:12.5px; font-weight:600; color:var(--ink-3); text-decoration:underline; padding:2px 4px;}
-.drv-release:active{color:var(--ink);}
-.drv-chart{display:flex; gap:8px; align-items:stretch; height:120px; margin-top:18px; padding:14px 14px 10px; border:1.5px solid var(--line-2, #E3E1DC); border-radius:var(--r-md, 14px);}
-.drv-chart-col{flex:1; display:flex; flex-direction:column; align-items:center; min-width:0;}
-.drv-chart-amt{font-size:10.5px; font-weight:650; color:var(--ink-3); height:14px;}
-.drv-chart-barwrap{flex:1; width:100%; display:flex; align-items:flex-end; justify-content:center;}
-.drv-chart-bar{width:70%; max-width:26px; border-radius:6px 6px 2px 2px; background:var(--line-2, #E3E1DC); transition:height .3s ease;}
-.drv-chart-bar.today{background:var(--positive);}
-.drv-chart-day{margin-top:5px; font-size:11px; font-weight:600; color:var(--ink-4);}
-.drv-chart-day.today{color:var(--positive);}
+
+/* ============================================================
+   Live map additions
+   ============================================================ */
+
+/* Pulse ring under the moving vehicle marker. Kept in CSS rather than
+   inline so it can be suppressed for reduced-motion users — a marker
+   that pulses forever is exactly the kind of persistent animation the
+   setting exists to stop. */
+@keyframes rz-map-pulse {
+  0%   { transform: scale(0.6); opacity: 0.9; }
+  70%  { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="rz-map-pulse"] { animation: none !important; }
+}
+
+/* Google injects its own DOM inside the map container. Clipping to the
+   container's radius keeps the tiles from squaring off the rounded
+   corners the rest of the UI uses. */
+.drv-map > div { border-radius: inherit; }
+
+/* Inline location warning on the driver trip screens. */
+.drv-loc-warning {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  margin: 10px 0 0;
+}

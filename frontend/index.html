@@ -2,33 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Kiosk stability: lock the zoom. Without maximum-scale/user-scalable,
-         iOS Safari auto-zooms into any tapped control and never zooms back out,
-         and a stray pinch stays stuck — so the tablet ends up zoomed and the
-         layout no longer fits. Locking scale keeps the fixed one-screen layout
-         rock-steady (this is a fixed-layout booking kiosk, not a scroll page). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#0B0B0B" />
-    <link rel="icon" type="image/png" href="/icon-192.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <!-- iOS Safari only drops the browser URL/navigation bar (launches
-         full-screen from the home screen) when it sees THIS apple- tag; the
-         generic mobile-web-app-capable above only covers Android and iOS 16.4+.
-         status-bar-style "black" = dark bar + white text, matching the dark
-         entry screens; content sits below it (opaque, no overlap). -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="RoverZoom" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f4f5" />
+    <link rel="icon" type="image/png" href="/logo-mark.png" />
     <title>RoverZoom — Book a scheduled ride</title>
-    <!-- Tell search engines the real home is roverzoom.com, not the raw
-         *.vercel.app deployment URL, so that's what gets indexed/surfaced. -->
-    <link rel="canonical" href="https://www.roverzoom.com/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>

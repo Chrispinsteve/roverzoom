@@ -1,44 +1,59 @@
-// Fare model: $50 per hour of estimated trip duration, then a marketing
-// discount applied on top. Includes distance cap, human-readable duration,
-// and service-area warning. Distance/duration come from a real routing engine
-// (see ./routing); the haversine below is only the fallback.
+// ============================================================
+// Fare model: $50 per hour of estimated trip duration.
+// ============================================================
+// Two estimators live here:
+//
+//   estimate()       — synchronous, straight-line (haversine x road
+//                      factor). Zero dependencies, zero cost, always
+//                      available. This is the fallback and the original
+//                      behaviour.
+//
+//   estimateRoute()  — async, real Google driving route with
+//                      traffic-aware duration. Opt-in via
+//                      USE_GOOGLE_ROUTING=true.
+//
+// Why this is opt-in rather than just switched on:
+//
+// Fare here is a pure function of DURATION (durationMinutes / 60 x
+// $50). The straight-line estimator assumes a flat 28 mph average for
+// every trip, and that single assumption is wrong in BOTH directions
+// depending on the trip profile:
+//
+//   West Palm Beach -> Miami Intl   quotes 181 min / $150.83
+//                                   actual ~70 min  / ~$58
+//                                   -> overcharges ~2.6x
+//
+//   Miami Beach -> Brickell         quotes  12 min / $12 (min fare)
+//                                   actual ~20 min  / ~$17
+//                                   -> undercharges
+//
+// Highway miles are covered far faster than 28 mph and dense urban
+// miles far slower, so the flat average punishes long airport runs —
+// the exact rides a scheduled-booking product is built to win — while
+// quietly underpricing short city hops. The overcharge is the more
+// urgent commercial problem: a $150 quote on a $58 ride does not lose
+// margin, it loses the booking outright.
+//
+// Turning real routing on is still a pricing change, not just a
+// technical upgrade, so it stays behind a flag. Run both estimators
+// side by side on real bookings, look at the delta across your actual
+// trip mix, then decide whether $50/hr is still the right rate once
+// duration is honest. The flag makes that decision deliberate and
+// reversible rather than a side effect of deploying a map.
+// ============================================================
 
-const { roadRoute } = require('./routing');
+const google = require('./googleMaps');
 
 const HOURLY_RATE = Number(process.env.HOURLY_RATE) || 50;
 const ROAD_FACTOR = 1.3;
 const AVG_SPEED_MPH = 28;
 const MIN_FARE = 12;
-// Time-of-day marketing discount ("up to 25% less"): rides scheduled in the
-// early-morning window get the deeper discount, everything else the standard one.
-// Both tunable via env; set to 1 for full price.
-const FARE_MULTIPLIER_MORNING = Number(process.env.FARE_MULTIPLIER_MORNING) || 0.75; // 25% off, 4–10am
-const FARE_MULTIPLIER_DEFAULT = Number(process.env.FARE_MULTIPLIER) || 0.85;         // 15% off otherwise
-const MORNING_START_HOUR = 4;
-const MORNING_END_HOUR = 10; // window is [4:00, 10:00) local time
-// The service runs on Eastern time (Florida); the scheduled time is stored in
-// UTC, so we read its hour in this zone to decide the discount (handles DST).
-const SERVICE_TZ = process.env.SERVICE_TZ || 'America/New_York';
 const MAX_DISTANCE_MILES = 200; // Service area cap — beyond this, warn the rider.
 
-// Which discount multiplier applies to a ride at this scheduled time. No time
-// given (e.g. an early price peek before a slot is chosen) → the standard one.
-function multiplierForTime(whenIso) {
-  if (!whenIso) return FARE_MULTIPLIER_DEFAULT;
-  const d = new Date(whenIso);
-  if (isNaN(d.getTime())) return FARE_MULTIPLIER_DEFAULT;
-  let hour;
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: SERVICE_TZ, hour: 'numeric', hour12: false }).formatToParts(d);
-    hour = Number((parts.find((p) => p.type === 'hour') || {}).value);
-  } catch {
-    hour = d.getHours();
-  }
-  if (hour === 24) hour = 0; // some environments render midnight as 24
-  return (hour >= MORNING_START_HOUR && hour < MORNING_END_HOUR) ? FARE_MULTIPLIER_MORNING : FARE_MULTIPLIER_DEFAULT;
-}
+const USE_GOOGLE_ROUTING = String(process.env.USE_GOOGLE_ROUTING || '').toLowerCase() === 'true';
 
 const EARTH_MILES = 3958.8;
+const METERS_PER_MILE = 1609.344;
 const toRad = (d) => (d * Math.PI) / 180;
 
 function haversineMiles(lat1, lng1, lat2, lng2) {
@@ -58,49 +73,85 @@ function formatDuration(minutes) {
   return `${h} hr ${m} min`;
 }
 
-async function estimate(pickup, dropoff, whenIso) {
-  const hasCoords = pickup?.lat != null && pickup?.lng != null && dropoff?.lat != null && dropoff?.lng != null;
-
-  let distanceMiles = 6;    // rough default when there are no coordinates yet
-  let routedMinutes = null; // real driving minutes when a route is available
-
-  if (hasCoords) {
-    const route = await roadRoute(pickup, dropoff);
-    if (route && Number.isFinite(route.miles)) {
-      distanceMiles = route.miles;      // actual road distance
-      routedMinutes = route.minutes;    // actual driving time
-    } else {
-      // Routing unavailable — fall back to straight-line × road factor.
-      distanceMiles = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) * ROAD_FACTOR;
-    }
-  }
-
-  // Cap at service area max
+// Shared final step so both estimators price identically off their
+// respective distance/duration inputs. Keeping this in one place is what
+// guarantees that switching estimators changes the measurement and
+// nothing else about how money is computed.
+function priceFrom(distanceMiles, durationMinutes, source, polyline) {
   const tooFar = distanceMiles > MAX_DISTANCE_MILES;
   const cappedMiles = tooFar ? MAX_DISTANCE_MILES : distanceMiles;
-
-  // Displayed drive time: the real routed time, else derived from distance/speed
-  // (also when the distance was capped, since the routed time no longer matches).
-  const rawMinutes = (routedMinutes != null && !tooFar) ? routedMinutes : (cappedMiles / AVG_SPEED_MPH) * 60;
-  const durationMinutes = Math.max(8, Math.round(rawMinutes));
-
-  // Fare is DISTANCE-based: the hourly rate ÷ the effective speed gives a
-  // per-mile rate (50 / 28 ≈ $1.79/mi). Pricing this off real road distance
-  // (not the real fast highway time) keeps highway/airport trips from being
-  // underpriced, while matching what the old time×rate model effectively charged.
-  const multiplier = multiplierForTime(whenIso);
-  const baseFare = Math.max(MIN_FARE, cappedMiles * (HOURLY_RATE / AVG_SPEED_MPH));
-  const fare = Math.round(baseFare * multiplier * 100) / 100;
+  const minutes = Math.max(8, Math.round(durationMinutes));
+  const fare = Math.max(MIN_FARE, Math.round((minutes / 60) * HOURLY_RATE * 100) / 100);
 
   return {
     distanceMiles: Math.round(cappedMiles * 10) / 10,
-    durationMinutes,
-    durationLabel: formatDuration(durationMinutes),
+    durationMinutes: minutes,
+    durationLabel: formatDuration(minutes),
     fare,
-    discountPct: Math.round((1 - multiplier) * 100),
     tooFar,
     rawDistanceMiles: tooFar ? Math.round(distanceMiles * 10) / 10 : undefined,
+    source,
+    polyline: polyline || null,
   };
 }
 
-module.exports = { estimate, haversineMiles, HOURLY_RATE, multiplierForTime };
+/**
+ * Straight-line estimate. Synchronous, always succeeds.
+ * Kept as-is so existing callers and the fallback path are unchanged.
+ */
+function estimate(pickup, dropoff) {
+  let distanceMiles = 6;
+  if (
+    pickup?.lat != null && pickup?.lng != null &&
+    dropoff?.lat != null && dropoff?.lng != null
+  ) {
+    distanceMiles = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) * ROAD_FACTOR;
+  }
+  const cappedMiles = Math.min(distanceMiles, MAX_DISTANCE_MILES);
+  const durationMinutes = Math.max(8, Math.round((cappedMiles / AVG_SPEED_MPH) * 60));
+  return priceFrom(distanceMiles, durationMinutes, 'haversine', null);
+}
+
+/**
+ * Real-route estimate, with automatic fallback.
+ *
+ * Always resolves — never rejects. If Google is unconfigured, disabled,
+ * rate-limited or simply down, this returns exactly what estimate()
+ * would have returned. A rider must always be able to get a price.
+ *
+ * @param {{lat,lng}} pickup
+ * @param {{lat,lng}} dropoff
+ * @param {string=} scheduledAt ISO timestamp — enables traffic prediction
+ *                              for the actual hour of the ride.
+ */
+async function estimateRoute(pickup, dropoff, scheduledAt = null) {
+  const fallback = estimate(pickup, dropoff);
+
+  if (!USE_GOOGLE_ROUTING || !google.isConfigured()) return fallback;
+  if (pickup?.lat == null || dropoff?.lat == null) return fallback;
+
+  try {
+    const route = await google.getRoute(pickup, dropoff, scheduledAt);
+    if (!route || route.distanceMeters == null || route.durationSeconds == null) {
+      return fallback;
+    }
+    return priceFrom(
+      route.distanceMeters / METERS_PER_MILE,
+      route.durationSeconds / 60,
+      'google',
+      route.polyline
+    );
+  } catch (err) {
+    console.warn('[fare] routing failed, using straight-line estimate:', err.message);
+    return fallback;
+  }
+}
+
+module.exports = {
+  estimate,
+  estimateRoute,
+  haversineMiles,
+  formatDuration,
+  HOURLY_RATE,
+  USE_GOOGLE_ROUTING,
+};

@@ -2,15 +2,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install && npm install --prefix backend",
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [{ "type": "host", "value": "roverzooma.vercel.app" }],
-      "destination": "https://www.roverzoom.com/$1",
-      "permanent": true
-    }
-  ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
+    { "source": "/api/(.*)", "destination": "/api" },
+    {
+      "//": "SPA fallback. Without this /track/<token> 404s on Vercel: the static host looks for a file at that path and there isn't one, because the route is resolved client-side in App.jsx. The API rule above is listed first and wins for /api/*, so this does not shadow it.",
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }

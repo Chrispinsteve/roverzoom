@@ -2,17 +2,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/index.css';
-import './styles/kiosk.css';
 
-// Canonicalize the host: forward the raw Vercel URL to the real domain so a
-// scanned QR or shared tracking link only ever lives on roverzoom.com (and
-// carries the same path/query, e.g. ?track=…). This is a client-side backstop;
-// vercel.json also redirects this host server-side (before the app loads). Both
-// target the www host, which serves 200 directly (no apex→www hop).
-if (window.location.hostname === 'roverzooma.vercel.app') {
-  window.location.replace('https://www.roverzoom.com' + window.location.pathname + window.location.search + window.location.hash);
-}
-
+// NOTE: GoogleMapsProvider is deliberately NOT mounted here.
+//
+// Wrapping at the root would be the conventional placement (it is what
+// Bibior does), but importing the provider here pulls
+// @react-google-maps/api into the main bundle — measured at +178 kB
+// raw / +42 kB gzipped on every page load, including the landing page
+// and the whole booking wizard, none of which render a map.
+//
+// The provider is mounted inside DriverApp and TrackRide instead, and
+// both are lazy-loaded from App.jsx, so the maps library ships as a
+// separate chunk fetched only when a map is actually about to appear.
+// useJsApiLoader dedupes the script injection globally by id, so having
+// the provider in two places loads Google's script exactly once.
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
