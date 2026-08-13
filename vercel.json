@@ -4,10 +4,6 @@
   "installCommand": "npm install && npm install --prefix backend",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
-    {
-      "//": "SPA fallback. Without this /track/<token> 404s on Vercel: the static host looks for a file at that path and there isn't one, because the route is resolved client-side in App.jsx. The API rule above is listed first and wins for /api/*, so this does not shadow it.",
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
