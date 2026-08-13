@@ -56,8 +56,15 @@ router.post('/ensure-profile', requireUser, async (req, res) => {
       vehicle_model: meta.vehicle_model || null,
       vehicle_color: meta.vehicle_color || null,
       vehicle_plate: meta.vehicle_plate || null,
-      // status/rating/rides_completed/is_online omitted — they take DEFAULTs,
-      // exactly as the trigger guarantees. A client must never self-activate.
+      // Match the signup trigger exactly, which sets 'active' (the current
+      // temporary stance until verification/an admin dashboard exists). Without
+      // this the row would default to 'pending_verification' and a self-healed
+      // driver would be stranded on the review screen — the opposite of what a
+      // trigger-created account gets. This is a hardcoded server value, never
+      // read from client-controlled metadata, so it can't be used to
+      // self-activate anything the trigger wouldn't have. rating/rides_completed
+      // stay at their DEFAULTs.
+      status: 'active',
     };
 
     if (!insert.name || !insert.phone) {
