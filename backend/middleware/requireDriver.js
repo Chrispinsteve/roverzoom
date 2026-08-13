@@ -33,6 +33,26 @@ async function requireDriver(req, res, next) {
   }
 }
 
+// Like requireDriver, but does NOT require a driver row to exist — it only
+// proves who the caller is. Used by the self-healing profile endpoint, which
+// runs precisely when there is no driver row yet (a signup whose creation
+// trigger never fired). Attaches the verified auth user as req.authUser.
+async function requireUser(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Missing auth token.' });
+
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid or expired session.' });
+    req.authUser = data.user;
+    next();
+  } catch (err) {
+    console.error('requireUser error', err.message);
+    res.status(500).json({ error: 'Could not verify session.' });
+  }
+}
+
 // A pending/suspended driver can still read their own profile/schedule
 // (requireDriver alone), but nothing that acts on their behalf — browsing
 // or claiming trips, going online, etc.
@@ -47,4 +67,4 @@ function requireActiveDriver(req, res, next) {
   next();
 }
 
-module.exports = { requireDriver, requireActiveDriver };
+module.exports = { requireDriver, requireUser, requireActiveDriver };

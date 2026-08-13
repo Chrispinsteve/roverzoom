@@ -1,6 +1,6 @@
 const express = require('express');
 const supabase = require('../db/supabase');
-const { requireDriver, requireActiveDriver } = require('../middleware/requireDriver');
+const { requireDriver, requireUser, requireActiveDriver } = require('../middleware/requireDriver');
 const { estimateRoute } = require('../services/fare');
 const google = require('../services/googleMaps');
 const { stripe } = require('../services/stripe');
@@ -44,6 +44,90 @@ const STATUS_TIMESTAMP = {
   completed:       'completed_at',
   canceled:        'canceled_at',
 };
+
+// ============================================================
+// Self-healing driver profile
+// ============================================================
+//
+// POST /api/driver/ensure-profile
+//
+// Normally the drivers row is created atomically with the auth account by
+// the on_auth_user_created trigger (schema.sql). If that trigger is not
+// installed on a given database — or an account was created before it
+// existed — a driver can log in successfully yet have no profile row, and
+// every driver endpoint then 403s "no driver profile". That is the exact
+// dead-end this repairs.
+//
+// It runs under requireUser (proves identity, does NOT need a driver row)
+// and, using the service role, creates the missing row from the SAME
+// whitelist the trigger uses: name/phone/vehicle_* come from the user's own
+// signup metadata; email from the real auth row; status/rating/etc. are
+// never accepted from the client and take their column DEFAULTs. Idempotent:
+// if a row already exists it is returned untouched.
+router.post('/ensure-profile', requireUser, async (req, res) => {
+  const user = req.authUser;
+  try {
+    // Already have a profile? Return it — this endpoint is safe to call on
+    // every load without creating duplicates.
+    const { data: existing, error: exErr } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+    if (exErr) throw exErr;
+    if (existing) return res.json({ driver: existing, created: false });
+
+    const meta = user.user_metadata || {};
+    const insert = {
+      auth_user_id: user.id,
+      name: meta.name || null,
+      phone: meta.phone || null,
+      email: user.email || null,
+      vehicle_make: meta.vehicle_make || null,
+      vehicle_model: meta.vehicle_model || null,
+      vehicle_color: meta.vehicle_color || null,
+      vehicle_plate: meta.vehicle_plate || null,
+      // status/rating/rides_completed/is_online intentionally omitted — they
+      // take their DEFAULTs, exactly as the trigger guarantees. A client must
+      // never be able to self-activate by round-tripping this endpoint.
+    };
+
+    // name + phone are NOT NULL in the schema. If signup metadata is missing
+    // them (e.g. an account made outside the normal flow), we can't fabricate
+    // a valid row — say so rather than 500 on a constraint violation.
+    if (!insert.name || !insert.phone) {
+      return res.status(422).json({
+        error: 'Your account is missing details needed to build a driver profile. Please contact support.',
+        code: 'incomplete_signup',
+      });
+    }
+
+    const { data: created, error: insErr } = await supabase
+      .from('drivers')
+      .insert(insert)
+      .select()
+      .single();
+
+    if (insErr) {
+      // A unique-violation here means a driver row with this phone/email
+      // already exists under a different (or detached) auth account. Auto-
+      // adopting it by phone would let someone capture another driver's row,
+      // so this is deliberately handed to support instead.
+      if (insErr.code === '23505') {
+        return res.status(409).json({
+          error: 'A driver profile with these details already exists. Please contact support to reconnect it.',
+          code: 'profile_conflict',
+        });
+      }
+      throw insErr;
+    }
+
+    res.status(201).json({ driver: created, created: true });
+  } catch (err) {
+    console.error('ensure-profile error', err.message);
+    res.status(500).json({ error: 'Could not set up your driver profile.' });
+  }
+});
 
 // ============================================================
 // Schedule / discovery
