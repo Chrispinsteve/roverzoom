@@ -1,0 +1,377 @@
+/* ============================================================
+   Kiosk rider flow — ported from the approved mockup.
+   Fixed per-screen colors (kiosk=dark, flow=light, confirm=deep
+   green) — NOT theme-toggleable like the old rider flow was.
+   Tokens are scoped to .kiosk-root so they don't collide with the
+   driver side's own [data-theme] tokens defined in index.css.
+   ============================================================ */
+.kiosk-root{
+  --ink:#0B0B0B; --paper:#FFFFFF; --smoke:#F6F5F2; --line:#E3E1DC; --line-dark:#2A2A28;
+  --mute:#6E6D68; --mute-dark:#9B9A94;
+  --lock:#0F7B54; --lock-bg:#DCF2E6; --lock-deep:#07402C;
+  --danger:#B3362B;
+  --k-radius:14px; --k-radius-lg:22px;
+  --display:'Space Grotesk',system-ui,sans-serif; --body:'Inter',system-ui,sans-serif;
+
+  /* Compatibility bridge: AddressInput.jsx / RouteRail.jsx and the shared
+     .input/.field/.results/.route-rail classes (from styles/index.css) read
+     the OLD rider-flow token names. Rather than fork those components,
+     alias the old names onto the new fixed palette here. */
+  --ink-2:#3f3f46; --ink-3: var(--mute); --ink-4: var(--mute-dark);
+  --card: var(--paper); --line-2: var(--line); --canvas: var(--smoke);
+  --r-md: var(--k-radius); --r-lg: var(--k-radius-lg); --r-sm: 10px;
+  --positive: var(--lock);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  font-family: var(--body);
+  /* Without this, text elements that don't set their own `color` (e.g.
+     .k-q, .k-flow-title) inherit body's ALREADY-RESOLVED color from
+     styles/index.css's [data-theme] rules instead of this scope's --ink.
+     On a device in system dark mode that resolves to light/white text —
+     invisible on this scope's fixed-white .k-flow background. */
+  color: var(--ink);
+}
+.kiosk-root *{ box-sizing:border-box; }
+/* :where() zeroes this reset's specificity so any single-class button style
+   (.k-big-cta, .k-next-btn, etc.) wins normally instead of losing to this
+   class+type selector, which would otherwise always beat a plain class
+   regardless of source order — it was silently stripping the black
+   background off every primary CTA button. */
+:where(.kiosk-root button){ font-family:inherit; cursor:pointer; border:none; background:none; font-size:inherit; color:inherit; -webkit-tap-highlight-color:transparent; }
+:where(.kiosk-root input, .kiosk-root select){ font-family:inherit; font-size:inherit; color:inherit; -webkit-tap-highlight-color:transparent; }
+/* Kills the browser's default tap/focus ring on every interactive element
+   (a bright generic-blue box on some tablets, an ugly flash on tap on
+   others) so touch feels intentional instead of cheap. A hard rectangular
+   outline also looks wrong sitting outside this design's rounded corners —
+   so instead of a generic outline, every focusable control gets its own
+   quiet, on-brand treatment scoped to its own shape: .k-dt-case's border
+   darkens (see below), .input gets index.css's soft shadow ring, and plain
+   buttons keep a restrained ink outline for keyboard users only (mouse/tap
+   essentially never triggers :focus-visible on a <button>). Selects and
+   text inputs are excluded here since they already have their own inline
+   treatments and a generic ring would double up/clash with those. */
+.kiosk-root :where(button, input, select, a){ -webkit-tap-highlight-color:transparent; }
+.kiosk-root select:focus{ outline:none; }
+.kiosk-root button:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+
+/* Hard cap, not a floor: min-height only ever grows a page, it can never
+   prevent overflow. Every screen in the kiosk flow must fit in exactly one
+   viewport in either orientation with zero scrolling, so this is height +
+   overflow:hidden instead — combined with the fluid, vh-aware sizing below,
+   content shrinks to fit rather than pushing the page taller than the
+   screen. */
+.kiosk-screen{ height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+
+/* ============ KIOSK (dark attract screen) ============ */
+.k-kiosk{ background:var(--ink); color:var(--paper); }
+.k-kiosk-wrap{ flex:1; min-height:0; display:flex; flex-direction:column; max-width:1080px; width:100%; margin:0 auto; padding:clamp(10px,2.2vh,40px) clamp(16px,3vw,48px); }
+.k-kiosk-top{ flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+/* Fixed size — the logo must never resize or reflow between orientations. */
+.k-brand-img{ height:28px; display:block; flex-shrink:0; }
+.k-clock{ font-family:var(--display); font-size:14px; color:var(--mute-dark); font-variant-numeric:tabular-nums; flex-shrink:0; }
+/* Faint color glows on the near-black ground give the frosted-glass panels
+   below something to sit over and tint, so they read as glass, not flat cards. */
+.k-attract{ background:
+  radial-gradient(1000px 560px at 82% 6%, rgba(88,150,236,0.13), transparent 60%),
+  radial-gradient(760px 520px at 4% 98%, rgba(122,110,232,0.09), transparent 58%),
+  var(--ink); }
+
+/* Rotating headline marquee — the attract centerpiece. Each pair rises/fades in
+   as the copy changes (keyed re-mount replays the animation). min-height keeps
+   the block from jumping between title-only and title+subtext slides. */
+.k-rotator{ flex-shrink:0; margin:clamp(6px,1.8vh,34px) 0 clamp(6px,1.4vh,22px); min-height:clamp(58px,11vh,150px); display:flex; flex-direction:column; justify-content:center; }
+.k-rotator-title{ font-family:var(--display); font-weight:600; font-size:clamp(22px, 2.3vw + 1.7vh, 54px); line-height:1.06; letter-spacing:-0.015em; max-width:22ch; color:var(--paper); animation:k-rise .55s var(--ease) both; }
+.k-rotator-sub{ margin-top:clamp(6px,1.1vh,15px); font-size:clamp(13px, 0.7vw + 0.9vh, 21px); color:var(--mute-dark); max-width:46ch; animation:k-rise .55s var(--ease) .06s both; }
+@keyframes k-rise{ from{ opacity:0; transform:translateY(13px); } to{ opacity:1; transform:translateY(0); } }
+
+/* Two-up body: QR to continue on phone (left) + tappable use-case cards (right),
+   both stretching to fill the space between the marquee and the CTA. */
+/* grid-template-rows:minmax(0,1fr) is load-bearing: it forces the single row to
+   FILL the flex-allocated height AND allows it to shrink (min 0). Without it the
+   row is auto-sized to content, so on short screens the cards overflow and
+   collide with the CTA. Children below get min-height:0 + overflow:hidden so
+   they shrink within this row instead of spilling. */
+.k-attract-main{ flex:1; min-height:0; display:grid; grid-template-columns:0.82fr 1.18fr; grid-template-rows:minmax(0,1fr); gap:clamp(10px,1.8vw,26px); align-items:stretch; }
+.k-qr-panel{ min-height:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:clamp(8px,1.6vh,18px); border:1px solid rgba(255,255,255,0.10); border-radius:var(--k-radius-lg); padding:clamp(12px,2vh,28px); background:rgba(255,255,255,0.05); -webkit-backdrop-filter:blur(16px) saturate(150%); backdrop-filter:blur(16px) saturate(150%); box-shadow:inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 30px rgba(0,0,0,0.28); }
+.k-qr-panel-cap h2{ font-family:var(--display); font-weight:500; font-size:clamp(15px,0.7vw + 0.9vh,23px); color:var(--paper); }
+.k-qr-panel-cap p{ margin-top:4px; font-size:clamp(11.5px,0.5vw + 0.6vh,16px); color:var(--mute-dark); }
+
+.k-cases{ min-height:0; display:grid; grid-template-rows:repeat(4,1fr); gap:clamp(7px,1.2vh,14px); perspective:1400px; }
+/* Frosted-glass cards that keep dealing in with a slow, staggered poker flip
+   (re-keyed on a timer in Attract.jsx). `backwards` fill keeps each hidden
+   (edge-on) through its stagger delay, then reverts to base after — so the tap
+   scale (:active) still works. */
+.k-case{ min-height:0; overflow:hidden; display:flex; align-items:center; gap:clamp(10px,1.4vw,18px); text-align:left; border:1px solid rgba(255,255,255,0.10); border-radius:var(--k-radius); padding:clamp(6px,1vh,18px) clamp(12px,1.4vw,22px); background:rgba(255,255,255,0.055); -webkit-backdrop-filter:blur(16px) saturate(150%); backdrop-filter:blur(16px) saturate(150%); box-shadow:inset 0 1px 0 rgba(255,255,255,0.09), 0 10px 30px rgba(0,0,0,0.30); transform-origin:center; animation:k-deal 1.4s var(--ease) backwards; transition:border-color .18s ease, background .18s ease, transform .12s ease; }
+.k-case:nth-child(1){ animation-delay:.1s; }
+.k-case:nth-child(2){ animation-delay:.4s; }
+.k-case:nth-child(3){ animation-delay:.7s; }
+.k-case:nth-child(4){ animation-delay:1s; }
+@keyframes k-deal{ from{ opacity:0; transform:rotateY(78deg) translateY(8px); } to{ opacity:1; transform:rotateY(0) translateY(0); } }
+.k-case:hover{ background:rgba(255,255,255,0.10); border-color:rgba(255,255,255,0.20); }
+.k-case:active{ transform:scale(0.985); }
+.k-case-ic{ flex-shrink:0; width:clamp(38px,5vh,54px); height:clamp(38px,5vh,54px); border-radius:12px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; font-size:clamp(19px,1vw + 1.3vh,28px); }
+.k-case-tx{ display:flex; flex-direction:column; min-width:0; gap:2px; }
+.k-case-title{ font-family:var(--display); font-weight:600; font-size:clamp(14px,0.6vw + 0.9vh,21px); color:var(--paper); }
+.k-case-line{ font-size:clamp(11.5px,0.5vw + 0.6vh,16px); color:var(--mute-dark); line-height:1.3; }
+
+/* Primary CTA sits on the dark ground, so it's inverted (white) to read as THE
+   action; the "find your ride" link stays quiet beneath it. */
+.k-attract-cta{ flex-shrink:0; margin-top:clamp(10px,2vh,26px); display:flex; flex-direction:column; align-items:center; gap:clamp(6px,1.2vh,12px); }
+.k-book-cta{ width:100%; max-width:520px; background:var(--paper); color:var(--ink); font-family:var(--display); font-weight:600; font-size:clamp(16px,0.7vw + 1.1vh,24px); padding:clamp(11px,1.7vh,20px) clamp(20px,2vw,30px); border-radius:var(--k-radius); min-height:clamp(46px,8vh,66px); display:flex; align-items:center; justify-content:center; gap:10px; transition:transform .12s ease; }
+.k-book-cta:active{ transform:scale(0.98); }
+
+/* Subtle gear utility menu in the header — tucks "Find my ride" away so the
+   entrance stays clean and the body gets the freed space. */
+.k-gear-wrap{ position:relative; display:flex; }
+.k-gear{ width:38px; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:var(--mute-dark); border:1px solid transparent; transition:color .16s ease, background .16s ease, border-color .16s ease; }
+.k-gear:hover{ color:#fff; }
+.k-gear[aria-expanded="true"]{ color:#fff; background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.12); }
+.k-gear-menu{ position:absolute; top:calc(100% + 8px); right:0; z-index:20; min-width:200px; background:#1a1a17; border:1px solid var(--line-dark); border-radius:12px; padding:6px; box-shadow:0 14px 34px rgba(0,0,0,0.55); animation:k-rise .18s var(--ease) both; }
+.k-gear-item{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; color:var(--paper); font-family:var(--body); font-size:15px; padding:11px 12px; border-radius:8px; transition:background .14s ease; }
+.k-gear-item:hover, .k-gear-item:active{ background:rgba(255,255,255,0.07); }
+
+/* Shared QR primitives — the confirmation screen reuses .k-qr-box / .k-qr-text. */
+.k-qr-box{ width:clamp(150px, 18vh, 220px); aspect-ratio:1; background:#fff; border-radius:12px; padding:clamp(8px,1vh,14px); flex-shrink:0; }
+.k-qr-panel .k-qr-box{ width:auto; height:clamp(118px,22vh,240px); aspect-ratio:1; max-width:100%; padding:clamp(10px,1.4vh,16px); }
+.k-qr-box svg, .k-qr-box canvas{ width:100%; height:100%; display:block; object-fit:contain; }
+/* min-width:0 keeps caption text wrapping instead of forcing the row wider. */
+.k-qr-text{ min-width:0; }
+.k-qr-text h2{ font-family:var(--display); font-weight:500; font-size:clamp(14px, 0.8vw + 0.9vh, 24px); color:var(--paper); }
+.k-qr-text p{ margin-top:4px; font-size:clamp(11px, 0.5vw + 0.6vh, 17px); color:var(--mute-dark); line-height:1.35; }
+
+/* Phone: keep the SAME one-screen layout (no scrolling — the cards flex to fill
+   and everything fits in one viewport just like the tablet). Just go single
+   column, drop the QR (you're already on your phone), and hide the clock (the
+   phone's status bar already shows the time) so the header stays uncluttered. */
+@media (max-width:600px){
+  .k-attract-main{ grid-template-columns:1fr; }
+  .k-qr-panel{ display:none; }
+  .k-clock{ display:none; }
+}
+
+/* ============ FLOW (light multi-step screens) ============ */
+.k-flow{ background:var(--paper); }
+.k-flow-head{ flex-shrink:0; display:flex; align-items:center; gap:12px; padding:clamp(6px,1.2vh,10px) clamp(16px,3vw,28px); border-bottom:1px solid var(--line); background:var(--paper); }
+.k-back-btn{ width:44px; height:44px; border-radius:50%; border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.k-back-btn:active{ background:var(--smoke); }
+.k-flow-title{ font-family:var(--display); font-weight:500; font-size:19px; }
+.k-steps{ margin-left:auto; display:flex; gap:7px; align-items:center; }
+.k-dot{ width:9px; height:9px; border-radius:50%; background:var(--line); }
+.k-dot.on{ background:var(--ink); width:26px; border-radius:5px; }
+/* Scrolls internally ONLY as a last resort — the fluid sizing throughout
+   this section is tuned so that in practice it never needs to. The footer
+   button lives in .k-flow-footer, a separate pinned sibling below, so it's
+   never part of this scrollable region and is always reachable. */
+.k-flow-body{ flex:1; min-height:0; overflow-y:auto; width:100%; max-width:620px; margin:0 auto; padding:clamp(6px,1.2vh,10px) clamp(16px,3vw,28px) 8px; display:flex; flex-direction:column; }
+.k-q{ font-family:var(--display); font-weight:600; font-size:clamp(18px, 1.6vw + 1.4vh, 25px); line-height:1.15; letter-spacing:-0.01em; }
+.k-q-sub{ margin-top:4px; color:var(--mute); font-size:clamp(13px, 0.5vw + 0.6vh, 15px); }
+.k-field-label{ display:block; font-size:13.5px; font-weight:600; color:var(--mute); margin:clamp(10px,2vh,20px) 0 6px; letter-spacing:0.02em; }
+.k-chips{ display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; margin-top:6px; padding-bottom:2px; scrollbar-width:none; }
+.k-chips::-webkit-scrollbar{ display:none; }
+.k-chip{ border:1.5px solid var(--line); border-radius:999px; padding:8px 14px; font-size:14px; min-height:38px; background:var(--paper); transition:all .12s; white-space:nowrap; flex-shrink:0; -webkit-tap-highlight-color:transparent; }
+.k-chip:active{ transform:scale(0.97); }
+.k-chip.sel{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.k-price-slab{ margin-top:clamp(12px,2.2vh,22px); border-radius:var(--k-radius); padding:clamp(10px,1.6vh,14px) 18px; background:var(--smoke); border:1.5px solid var(--line); transition:all .3s ease; }
+.k-price-slab.locked{ background:var(--lock-bg); border:1.5px solid var(--lock); animation:k-stamp .35s ease; }
+@keyframes k-stamp{ 0%{transform:scale(0.96); opacity:0.4;} 60%{transform:scale(1.015);} 100%{transform:scale(1);} }
+.k-price-cap{ font-size:15.5px; font-weight:600; color:var(--lock-deep); }
+.k-price-num{ font-family:var(--display); font-weight:600; font-size:clamp(25px,3.4vw,31px); color:var(--lock-deep); font-variant-numeric:tabular-nums; }
+.k-price-meta{ font-size:13px; color:var(--lock); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* Pinned outside the scrollable .k-flow-body — always visible, never needs
+   scrolling to reach, regardless of how much content is above it. */
+.k-flow-footer{ flex-shrink:0; width:100%; max-width:620px; margin:0 auto; padding:0 clamp(16px,3vw,28px) clamp(10px,1.6vh,16px); }
+.k-footer-bar{ padding-top:10px; display:flex; justify-content:center; }
+.k-footer-inner{ width:100%; display:flex; gap:12px; align-items:center; }
+.k-next-btn{ flex:1; background:var(--ink); color:var(--paper); font-family:var(--display); font-weight:500; font-size:18px; min-height:54px; border-radius:var(--k-radius); display:flex; align-items:center; justify-content:center; gap:10px; transition:opacity .15s, transform .12s; -webkit-tap-highlight-color:transparent; }
+.k-next-btn:disabled{ opacity:0.25; cursor:default; }
+.k-next-btn:not(:disabled):active{ transform:scale(0.985); }
+.k-next-price{ font-variant-numeric:tabular-nums; color:#8FE0BC; }
+
+/* route card */
+.k-route-card{ margin-top:18px; border:1.5px solid var(--line); border-radius:var(--k-radius); background:var(--paper); padding:4px 14px; }
+.k-r-row{ display:flex; align-items:center; gap:12px; min-height:60px; }
+.k-rail{ position:relative; width:14px; align-self:stretch; display:flex; align-items:center; justify-content:center; }
+.k-pin{ width:11px; height:11px; border-radius:50%; z-index:1; }
+.k-pin-o{ border:2.5px solid var(--lock); background:var(--paper); }
+.k-pin-f{ background:var(--ink); }
+.k-rail-line{ position:absolute; top:calc(50% + 9px); bottom:-32px; left:50%; width:0; border-left:2px dotted var(--line); transform:translateX(-50%); }
+.k-r-field{ flex:1; padding:8px 0; min-width:0; }
+.k-r-cap{ display:block; font-size:11.5px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:var(--lock); }
+.k-r-action{ font-size:13px; font-weight:600; color:var(--lock); border:1.5px solid var(--lock-bg); background:var(--lock-bg); border-radius:999px; padding:7px 13px; flex-shrink:0; }
+.k-r-action:active{ transform:scale(0.96); }
+.k-r-div{ height:1px; background:var(--line); margin-left:26px; }
+/* the reused AddressInput needs its outer .field margin + label collapsed
+   when nested inside a route-card row */
+.k-route-card .field{ margin-bottom:0; flex:1; }
+.k-route-card .label{ display:none; }
+.k-route-card .input{ border:none; background:transparent; padding:2px 0 0 0; font-size:17px; min-height:auto; }
+.k-route-card .input:focus{ box-shadow:none; }
+
+.k-price-wait{ font-size:14px; color:var(--mute); text-align:center; padding:4px 0; }
+.k-price-live{ display:flex; align-items:center; gap:12px; }
+.k-lock-ic{ width:22px; height:22px; color:var(--lock-deep); flex-shrink:0; }
+.k-price-words{ display:flex; flex-direction:column; flex:1; min-width:0; }
+
+/* date & time cases */
+.k-dt-cases{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+.k-dt-case{ position:relative; border:1.5px solid var(--line); border-radius:var(--k-radius); padding:clamp(6px,1.2vh,9px) 14px; min-height:clamp(46px,7vh,60px); background:var(--paper); transition:border-color .15s; }
+.k-dt-case:focus-within{ border-color:var(--ink); }
+.k-dt-case select{ appearance:none; -webkit-appearance:none; border:none; background:transparent; width:100%; font-family:var(--display); font-weight:500; font-size:18px; padding:4px 0 0; color:var(--ink); cursor:pointer; }
+.k-dt-case::after{ content:'\25BE'; position:absolute; right:14px; bottom:13px; color:var(--mute); pointer-events:none; font-size:14px; }
+
+/* keypad */
+.k-phone-display{ font-family:var(--display); font-size:clamp(24px,3.4vw,29px); font-weight:500; letter-spacing:0.04em; text-align:center; min-height:42px; margin-top:6px; font-variant-numeric:tabular-nums; }
+.k-phone-display .k-ghost{ color:var(--line); }
+.k-keypad{ display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(6px,1.2vh,9px); max-width:400px; margin:10px auto 0; width:100%; }
+.k-key{ min-height:clamp(40px,7vh,56px); border:1.5px solid var(--line); border-radius:12px; font-family:var(--display); font-size:22px; font-weight:500; background:var(--paper); transition:all .1s; -webkit-tap-highlight-color:transparent; }
+.k-key:active{ background:var(--smoke); transform:scale(0.97); }
+.k-key.util{ font-size:18px; color:var(--mute); }
+
+/* payment */
+.k-pay-cards{ display:grid; gap:12px; margin-top:14px; }
+.k-pay-card{ border:1.5px solid var(--line); border-radius:var(--k-radius); padding:16px 18px; text-align:left; display:flex; gap:18px; align-items:flex-start; background:var(--paper); transition:all .15s; }
+.k-pay-card.sel{ border-color:var(--ink); background:var(--smoke); box-shadow:0 0 0 1.5px var(--ink); }
+.k-pay-icon{ width:52px; height:52px; border-radius:12px; background:var(--smoke); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+.k-pay-card.sel .k-pay-icon{ background:var(--paper); }
+.k-pay-card h3{ font-family:var(--display); font-weight:500; font-size:20px; }
+.k-pay-card p{ margin-top:4px; font-size:15.5px; color:var(--mute); line-height:1.5; }
+.k-pay-badge{ display:inline-block; margin-top:10px; font-size:13px; font-weight:600; color:var(--lock-deep); background:var(--lock-bg); padding:5px 12px; border-radius:999px; }
+
+/* confirmation */
+.k-confirm{ background:var(--lock-deep); color:var(--paper); }
+/* overflow-y:auto is a last-resort fallback (matches .k-flow-body) — the
+   fluid clamp()s below keep this fitting in one viewport in practice. It's
+   centered, so without this a too-tall viewport would clip symmetrically
+   off BOTH the top (check ring) and bottom (reset note) rather than just
+   scroll. */
+.k-confirm-wrap{ flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:clamp(12px,3vh,48px) clamp(20px,4vw,48px); text-align:center; }
+.k-check-ring{ flex-shrink:0; width:clamp(56px,10vh,96px); height:clamp(56px,10vh,96px); border-radius:50%; background:#0F7B54; display:flex; align-items:center; justify-content:center; animation:k-stamp .4s ease; }
+.k-check-ring svg{ width:50%; height:50%; }
+.k-confirm-wrap h1{ flex-shrink:0; font-family:var(--display); font-weight:600; font-size:clamp(22px, 2.4vw + 1.6vh, 42px); margin-top:clamp(10px,2vh,24px); }
+.k-confirm-wrap>p{ flex-shrink:0; margin-top:10px; color:#9AD8BC; font-size:clamp(14px,0.6vw + 0.8vh,18px); max-width:40ch; }
+.k-ticket{ flex-shrink:0; margin-top:clamp(14px,2.4vh,28px); background:var(--paper); color:var(--ink); border-radius:var(--k-radius-lg); padding:clamp(14px,2.2vh,24px) 26px; width:100%; max-width:460px; text-align:left; }
+.k-ticket-row{ display:flex; justify-content:space-between; gap:14px; padding:clamp(6px,1.2vh,10px) 0; border-bottom:1px dashed var(--line); font-size:clamp(14px,0.5vw + 0.7vh,16.5px); }
+.k-ticket-row:last-child{ border-bottom:none; }
+.k-ticket-row .k{ color:var(--mute); }
+.k-ticket-row .v{ font-weight:600; text-align:right; }
+.k-confirm-actions{ flex-shrink:0; margin-top:clamp(12px,2vh,22px); display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+.k-ghost-btn{ border:1.5px solid #2E6B50; color:var(--paper); border-radius:var(--k-radius); padding:clamp(10px,1.6vh,14px) 22px; font-size:17px; min-height:clamp(44px,7vh,56px); -webkit-tap-highlight-color:transparent; }
+.k-reset-note{ flex-shrink:0; margin-top:clamp(10px,2vh,26px); font-size:13.5px; color:#6FB596; }
+
+/* my rides */
+.k-rides-list{ display:grid; gap:14px; margin-top:24px; }
+.k-ride-card{ border:1.5px solid var(--line); border-radius:var(--k-radius-lg); padding:20px 22px; background:var(--paper); }
+.k-ride-when{ font-family:var(--display); font-weight:600; font-size:19px; }
+.k-ride-route{ margin-top:4px; color:var(--mute); font-size:16px; }
+.k-ride-tags{ margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+.k-tag{ font-size:13.5px; font-weight:600; padding:6px 12px; border-radius:999px; background:var(--smoke); color:var(--mute); }
+.k-tag.green{ background:var(--lock-bg); color:var(--lock-deep); }
+.k-ride-driver{ margin-top:14px; padding-top:14px; border-top:1px dashed var(--line); display:flex; align-items:center; gap:12px; }
+.k-ride-driver-photo{ width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.k-ride-driver-info{ min-width:0; }
+.k-ride-driver-name{ font-weight:600; font-size:15px; }
+.k-ride-driver-meta{ margin-top:2px; font-size:13px; color:var(--mute); }
+.k-ride-actions{ margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
+.k-mini-btn{ border:1.5px solid var(--line); border-radius:10px; padding:10px 16px; font-size:15px; min-height:44px; }
+.k-mini-btn-primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); font-weight:600; }
+.k-mini-btn-danger{ border-color:#E7CAC5; color:var(--danger); }
+.k-mini-btn-danger:active{ background:#FBF1EF; }
+.k-mini-btn-danger:disabled{ opacity:0.5; }
+
+/* status pills (My Rides) — friendly, colour-coded by lifecycle stage */
+.k-tag-go{ background:var(--lock-bg); color:var(--lock-deep); }
+.k-tag-done{ background:var(--lock-bg); color:var(--lock-deep); }
+.k-tag-wait{ background:#FBF0D9; color:#7A5B15; }
+.k-tag-canceled{ background:#F3E4E2; color:var(--danger); }
+
+/* phone lookup (My Rides entry) */
+.k-lookup-row{ display:flex; gap:10px; align-items:flex-end; margin-top:12px; }
+.k-lookup-row .k-dt-case{ flex:1; }
+
+@media (max-width:480px){ .k-q{ font-size:18.5px; } .k-price-num{ font-size:23px; } }
+@media (prefers-reduced-motion:reduce){ .kiosk-root *{ animation:none!important; transition:none!important; } }
+
+/* ===== Voice assistant ===== */
+/* "Talk to book" pill in the Attract header — the entry to the voice assistant.
+   Lives on the dark header band so the orb's glow reads; opens the full-screen
+   orb on tap. */
+.k-top-right{ display:flex; align-items:center; gap:clamp(8px,1.4vw,16px); }
+.k-talk-orb{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(120,200,255,0.38); border-radius:999px; padding:4px 14px 4px 4px; transition:border-color .16s ease, transform .12s ease; }
+.k-talk-orb:active{ transform:scale(0.97); }
+.k-talk-orb-viz{ width:40px; height:40px; border-radius:50%; display:block; flex:none; filter:drop-shadow(0 0 12px rgba(80,180,255,0.6)); }
+.k-talk-orb-label{ font-family:var(--display); font-size:clamp(12px,0.5vw+0.7vh,14px); font-weight:500; letter-spacing:0.01em; color:#fff; white-space:nowrap; }
+
+/* Full-screen assistant overlay — self-contained (renders outside the kiosk
+   token scope), committed to a deep-space dark look. */
+.rz-va{ position:fixed; inset:0; z-index:1000; background:radial-gradient(circle at 50% 36%, #0b1017, #05070b 72%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:24px; text-align:center; color:#eef2f9; font-family:'Inter',system-ui,-apple-system,sans-serif; }
+.rz-va-close{ position:absolute; top:16px; right:18px; width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#cfd6e2; font-size:15px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.rz-va-close:active{ transform:scale(0.94); }
+.rz-va-orb{ background:none; border:none; padding:0; border-radius:50%; cursor:pointer; filter:drop-shadow(0 0 60px rgba(60,150,230,0.35)); -webkit-tap-highlight-color:transparent; }
+.rz-va-orb:active{ transform:scale(0.985); }
+.rz-va-status{ display:flex; align-items:center; gap:8px; font-family:'Space Grotesk',ui-monospace,monospace; font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:#8ea0b8; }
+.rz-va-status.listening,.rz-va-status.speaking{ color:#6fd3ff; }
+.rz-va-dot{ width:8px; height:8px; border-radius:50%; background:currentColor; animation:rz-va-pulse 1.3s ease-in-out infinite; }
+@keyframes rz-va-pulse{ 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.6);} }
+.rz-va-caption{ max-width:38ch; min-height:3.2em; margin:0; font-size:clamp(17px,2.4vw,22px); line-height:1.42; color:#eef2f9; }
+.rz-va-working{ display:inline-block; color:#aeb9cc; font-style:italic; animation:rz-va-fade .5s ease; }
+@keyframes rz-va-fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+@media (prefers-reduced-motion: reduce){ .rz-va-working{ animation:none; } }
+.rz-va-error{ margin:0; color:#ff9a8a; font-size:14px; }
+.rz-va-hint{ background:none; border:none; color:#7f8da3; font-size:14px; min-height:22px; cursor:pointer; }
+.rz-va-type{ display:flex; gap:10px; width:min(92vw,440px); }
+.rz-va-input{ flex:1; min-width:0; background:rgba(255,255,255,0.06); border:1px solid rgba(140,190,255,0.28); color:#fff; border-radius:14px; padding:14px 16px; font-size:16px; outline:none; }
+.rz-va-input::placeholder{ color:#8494a8; }
+.rz-va-input:focus{ border-color:#6fd3ff; }
+.rz-va-send{ flex:none; background:linear-gradient(180deg,#8fe0ff,#4fbdf5); color:#04121c; font-weight:600; font-size:15px; border:none; border-radius:14px; padding:0 22px; cursor:pointer; }
+.rz-va-send:disabled{ opacity:0.4; cursor:default; }
+@media (prefers-reduced-motion:reduce){ .rz-va-dot{ animation:none; } }
+
+/* ===== Live ride tracking ===== */
+.k-track-hero{ display:flex; flex-direction:column; gap:5px; margin-bottom:clamp(12px,2.2vh,20px); }
+.k-track-title{ font-family:var(--display); font-weight:600; font-size:clamp(23px,1.2vw + 1.6vh,31px); letter-spacing:-0.02em; line-height:1.08; }
+.k-track-sub{ color:var(--mute); font-size:clamp(14px,0.5vw + 0.7vh,16px); line-height:1.45; }
+.k-track-canceled .k-track-title{ color:var(--danger); }
+.k-track-done .k-track-title{ color:var(--lock-deep); }
+.k-track-live{ align-self:flex-start; margin-top:6px; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--lock); background:var(--lock-bg); padding:4px 11px; border-radius:999px; }
+.k-track-live-dot{ width:7px; height:7px; border-radius:50%; background:var(--lock); animation:k-pulse 1.4s ease-in-out infinite; }
+@keyframes k-pulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.3; transform:scale(0.65); } }
+
+.k-track-driver{ display:flex; align-items:center; gap:12px; background:var(--paper); border:1.5px solid var(--line); border-radius:var(--k-radius-lg); padding:14px 16px; box-shadow:var(--shadow-card); }
+.k-track-driver .k-ride-driver-photo{ width:52px; height:52px; background:var(--smoke); }
+.k-track-driver-badge{ margin-left:auto; align-self:flex-start; font-size:11.5px; font-weight:600; color:var(--lock-deep); background:var(--lock-bg); padding:4px 9px; border-radius:999px; white-space:nowrap; }
+
+.k-track-steps{ list-style:none; margin:clamp(14px,2.4vh,22px) 0 0; padding:0; position:relative; }
+.k-track-steps::before{ content:''; position:absolute; left:12px; top:18px; bottom:18px; width:2px; background:var(--line); transform:translateX(-50%); }
+.k-track-step{ position:relative; display:flex; align-items:center; gap:14px; padding:8px 0; }
+.k-track-node{ position:relative; z-index:1; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:var(--smoke); border:2px solid var(--line); transition:background .3s, border-color .3s; }
+.k-track-node-dot{ width:7px; height:7px; border-radius:50%; background:var(--mute-dark); }
+.k-track-step-label{ font-size:15.5px; font-weight:500; color:var(--mute); transition:color .3s; }
+/* Both completed and current steps show the green check the moment their
+   action happens; the current (most recent) one is emphasised with a ring. */
+.k-track-step.done .k-track-node,
+.k-track-step.current .k-track-node{ background:var(--lock); border-color:var(--lock); }
+.k-track-step.done .k-track-step-label{ color:var(--ink); }
+.k-track-step.current .k-track-node{ box-shadow:0 0 0 4px rgba(15,123,84,0.18); }
+.k-track-step.current .k-track-step-label{ color:var(--ink); font-weight:650; }
+
+.k-track-ticket{ margin-top:clamp(14px,2.4vh,22px); background:var(--smoke); }
+.k-cancel-btn{ align-self:center; width:100%; max-width:460px; margin-top:clamp(14px,2.4vh,22px); border:1.5px solid #E7CAC5; color:var(--danger); background:var(--paper); border-radius:var(--k-radius); padding:clamp(10px,1.6vh,14px); font-size:16px; font-weight:600; min-height:48px; -webkit-tap-highlight-color:transparent; transition:background .12s ease; }
+.k-cancel-btn:active{ background:#FBF1EF; }
+.k-cancel-btn:disabled{ opacity:0.5; }
+
+/* Track screen keeps the confirm-style stacked actions tidy on wide kiosks */
+.k-confirm-actions .k-next-btn{ flex:0 1 auto; min-width:220px; }
+
+/* Confirmation-screen QR — the instant "take tracking with you" bridge, so a
+   rider on the shared tablet doesn't have to wait for the SMS. Scoped colours
+   for the deep-green confirm background. */
+.k-confirm-qr{ flex-shrink:0; margin-top:clamp(14px,2.4vh,26px); display:flex; align-items:center; gap:clamp(12px,1.6vw,20px); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius:var(--k-radius-lg); padding:clamp(12px,1.6vh,18px); max-width:460px; width:100%; text-align:left; }
+.k-confirm-qr .k-qr-box{ width:clamp(120px,16vh,150px); }
+.k-confirm-qr .k-qr-text h2{ color:var(--paper); }
+.k-confirm-qr .k-qr-text p{ color:#9AD8BC; }
+
+/* ===== In-app payments ===== */
+.k-stripe-mount{margin-top:18px; background:var(--paper, #fff); border-radius:12px;}
+.k-zelle-note{margin-top:14px; max-width:460px; width:100%; background:#DCF2E6; color:#07402C; border-radius:12px; padding:13px 16px; font-size:14.5px; line-height:1.55; text-align:left;}
+.k-zelle-note b{font-weight:650;}

@@ -2,13 +2,14 @@
 //   1. booking created  -> "your ride is scheduled" confirmation
 //   2. a driver accepts  -> "your driver is coming" + a LIVE TRACKING LINK
 //
-// The tracking text carries the deep link that opens live tracking on the
-// rider's OWN phone (they may have booked on a shared tablet). It uses the
-// booking's unguessable `track_token` and the new /track/<token> route.
+// The second message is the whole point of the tracking work: the rider books
+// on a shared back-seat tablet and walks away, so tracking has to reach them
+// on their OWN phone. This text carries the deep link that opens it there.
 //
-// Lazy-initialized like the Stripe client: the API must still boot and every
-// core flow (booking, claiming) must still work when Twilio isn't configured.
-// sendSms() NEVER throws — a texting outage must not fail a booking or a claim.
+// Lazy-initialized exactly like the Stripe client in routes/payments.js, and
+// for the same reason: the API must still boot and every core flow (booking,
+// claiming) must still work when Twilio isn't configured yet. sendSms() NEVER
+// throws — a texting outage must not be able to fail a booking or a claim.
 
 let twilioClient = null;
 let twilioResolved = false;
@@ -31,7 +32,8 @@ function isConfigured() {
   return !!client();
 }
 
-// US-centric E.164 normalization. Riders enter 10 digits; Twilio needs E.164.
+// US-centric E.164 normalization. Riders enter 10 digits on the kiosk keypad,
+// stored formatted like "(555) 010-1234"; Twilio requires E.164 (+15550101234).
 function toE164(phone) {
   if (!phone) return null;
   const raw = String(phone).trim();
@@ -39,19 +41,22 @@ function toE164(phone) {
   if (raw.startsWith('+') && digits.length >= 11) return '+' + digits;
   if (digits.length === 10) return '+1' + digits;
   if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
-  return null;
+  return null; // can't safely normalize — caller skips sending rather than guess
 }
 
 function baseUrl() {
-  return (process.env.PUBLIC_APP_URL || process.env.PUBLIC_BASE_URL || 'https://www.roverzoom.com').replace(/\/+$/, '');
+  return (process.env.PUBLIC_BASE_URL || 'https://roverzoom.com').replace(/\/+$/, '');
 }
 
-// The private live-tracking deep-link, keyed by the booking's unguessable
-// track_token (128-bit) on the /track/<token> route.
+// The tracking deep-link the rider opens on their own phone. Keyed by the
+// booking's UUID id (NOT the short reference) so the link is unguessable and
+// private — only whoever the rider shares it with can view the ride.
 function trackingUrl(token) {
-  return `${baseUrl()}/track/${encodeURIComponent(token)}`;
+  return `${baseUrl()}/?track=${encodeURIComponent(token)}`;
 }
 
+// Core send. Always resolves; the result object says what happened so callers
+// (and logs) can tell "texted" from "not configured" without a try/catch.
 async function sendSms(to, body) {
   const c = client();
   if (!c) {
@@ -82,6 +87,7 @@ function formatWhen(iso) {
   }
 }
 
+// --- The two rider-journey messages ----------------------------------------
 // 1. Sent right after a booking is created.
 async function sendBookingConfirmation(booking) {
   if (!booking?.rider_phone) return { sent: false, reason: 'no_phone' };
@@ -100,17 +106,9 @@ async function sendDriverAcceptedNotification(booking, driver) {
   const vehicle = driver && (driver.vehicle_color || driver.vehicle_make)
     ? ` (${[driver.vehicle_color, driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(' ')})`
     : '';
-  const link = booking.track_token ? ` Track them live: ${trackingUrl(booking.track_token)}` : '';
-  const body = `RoverZoom: ${first}${vehicle} accepted your ride!${link}`;
-  return sendSms(booking.rider_phone, body);
-}
-
-// 3. Sent when the driver marks "arrived" — the moment the rider most
-// wants a nudge, since they may have put the phone down after booking.
-async function sendArrivalNotification(booking) {
-  if (!booking?.rider_phone) return { sent: false, reason: 'no_phone' };
-  const link = booking.track_token ? ` ${trackingUrl(booking.track_token)}` : '';
-  const body = `RoverZoom: Your driver has arrived at the pickup. Head out when you're ready.${link}`;
+  const body =
+    `RoverZoom: ${first}${vehicle} accepted your ride! ` +
+    `Track them live: ${trackingUrl(booking.id)}`;
   return sendSms(booking.rider_phone, body);
 }
 
@@ -118,7 +116,6 @@ module.exports = {
   sendSms,
   sendBookingConfirmation,
   sendDriverAcceptedNotification,
-  sendArrivalNotification,
   trackingUrl,
   toE164,
   isConfigured,

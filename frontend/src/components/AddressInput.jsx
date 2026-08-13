@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
-import { api, newSessionToken } from '../lib/api';
+import { api } from '../lib/api';
 
 // Address input — the PIVOT of the app. If this fails, booking fails.
 //
@@ -11,10 +11,19 @@ import { api, newSessionToken } from '../lib/api';
 // 3. If geocoding fails entirely → user can still type a raw address and proceed.
 // 4. When user modifies a previously-picked address → clear the "selected" state
 //    so they know they need to pick again (or continue with typed text).
-// 5. Google Places suggestions arrive WITHOUT coordinates, so picking one
-//    now costs a second call to resolve them (api.resolvePlace). Both
-//    calls carry the same session token so Google bills the whole
-//    interaction once instead of once per keystroke — see lib/api.js.
+
+// The free geocoder often has no house-number data and returns just the street,
+// dropping the number the rider typed. If the typed text starts with a street
+// number the matched address doesn't contain, prepend it — so the DRIVER still
+// gets the exact house (coords stay street-level, but the address text is
+// complete). A no-op once Google, which has house-level data, is active.
+function mergeHouseNumber(typed, resolved) {
+  const num = (String(typed).match(/^\s*(\d+[a-z]?)\b/i) || [])[1];
+  if (num && resolved && !new RegExp(`(^|\\D)${num}(\\D|$)`).test(resolved)) {
+    return `${num} ${resolved}`;
+  }
+  return resolved;
+}
 
 export default function AddressInput({ label, iconName, placeholder, value, onSelect }) {
   const [query, setQuery] = useState(value?.address || '');
@@ -26,12 +35,23 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   const [confirmed, setConfirmed] = useState(!!(value?.lat));
   const debounce = useRef(null);
   const justPicked = useRef(false);
+  // Remembers the exact query text if this instance mounted with an
+  // already-confirmed value (has coords) — e.g. a remount triggered by an
+  // external pick (chip, GPS). The search effect below compares against
+  // this on every run rather than a one-shot boolean flag: React 18
+  // StrictMode double-invokes mount effects, so a flag that gets flipped
+  // off inside the guarded branch gets consumed by the throwaway first
+  // invocation, leaving the real second invocation to fall through and
+  // fire a redundant search anyway — whose eventual resolve clobbers the
+  // real lat/lng with a bare, coordinate-less address. A stable comparison
+  // has no such "consumed once" failure mode, and still searches normally
+  // the moment the user actually edits this pre-filled text.
+  const initialConfirmedQuery = useRef(value?.lat ? (value.address || '') : null);
   const wrapperRef = useRef(null);
-  // One token per address being entered. Regenerated after each pick,
-  // because a session ends the moment Place Details is called — reusing
-  // it past that point silently reverts to per-request billing.
-  const sessionRef = useRef(newSessionToken());
-  const [resolving, setResolving] = useState(false);
+  // Live mirror of `confirmed` so the blur-resolve below never acts on a stale
+  // closure value when a dropdown pick lands in the same tick.
+  const confirmedRef = useRef(confirmed);
+  useEffect(() => { confirmedRef.current = confirmed; }, [confirmed]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -54,6 +74,11 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
       return;
     }
 
+    // Mounted already-confirmed and text hasn't changed since — nothing to do.
+    if (initialConfirmedQuery.current !== null && query === initialConfirmedQuery.current) {
+      return;
+    }
+
     if (query.trim().length < 3) {
       setResults([]);
       setLoading(false);
@@ -63,7 +88,7 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
     setLoading(true);
     debounce.current = setTimeout(async () => {
       try {
-        const r = await api.geocode(query, sessionRef.current);
+        const r = await api.geocode(query);
         setResults(r);
         setOpen(r.length > 0);
       } catch {
@@ -81,41 +106,62 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
   }, [query]); // eslint-disable-line
 
   // User picks a result from the dropdown — this is the critical path.
-  const pick = async (r) => {
+  const pick = (r) => {
     justPicked.current = true;
-    setQuery(r.label + (r.sublabel ? ', ' + r.sublabel : ''));
+    const address = mergeHouseNumber(query, r.address);
+    // Named places (airport, hotel) read nicer as their label; a street address
+    // shows the full text so the preserved house number is visible.
+    const display = address !== r.address ? address : (r.label + (r.sublabel ? ', ' + r.sublabel : ''));
+    setQuery(display);
     setResults([]);
     setOpen(false);
     setConfirmed(true);
     setLoading(false);
+    // Store the full address WITH coordinates.
+    onSelect({ address, lat: r.lat, lng: r.lng });
+  };
 
-    // Fallback providers return coordinates inline; Google does not.
-    if (r.lat != null && r.lng != null) {
-      onSelect({ address: r.address, lat: r.lat, lng: r.lng });
-      sessionRef.current = newSessionToken();
-      return;
-    }
-
-    // Commit the address text immediately, before the coordinate lookup
-    // resolves. If the network is slow the rider can still continue —
-    // the booking just falls back to the straight-line fare rather than
-    // blocking on a request they cannot see.
-    onSelect({ address: r.address });
-    setResolving(true);
+  // When the user leaves the field having typed an address but NOT tapped a
+  // suggestion, resolve the text to coordinates automatically — otherwise a
+  // perfectly valid typed address is a dead end (no coords → no price → the
+  // Continue button never enables). Runs on a short delay so a dropdown pick
+  // (which sets confirmed) wins first; guarded by the live confirmedRef.
+  const resolveTypedAddress = async () => {
+    const q = query.trim();
+    if (confirmedRef.current || justPicked.current || q.length < 5) return;
+    if (debounce.current) clearTimeout(debounce.current);
+    setLoading(true);
+    const firstHit = async (p) => {
+      try { const r = await p; return (Array.isArray(r) && r.find((x) => x && Number.isFinite(x.lat) && Number.isFinite(x.lng))) || null; }
+      catch { return null; }
+    };
     try {
-      const resolved = await api.resolvePlace(
-        { placeId: r.placeId, address: r.address },
-        sessionRef.current
-      );
-      if (resolved?.lat != null) {
-        onSelect({ address: resolved.address || r.address, lat: resolved.lat, lng: resolved.lng });
+      // A typed address must NEVER be a dead end. Resolve to coordinates so it can
+      // be priced, trying in order: the precise (Google-when-active) lookup, the
+      // plain free lookup, then the same query with the house number stripped
+      // (streets/areas are far better covered than individual houses). Whatever
+      // hits, keep the rider's FULL typed text as the address (via
+      // mergeHouseNumber) so the driver sees the exact house even when only the
+      // street/area could be placed on the map.
+      let top = await firstHit(api.geocodePrecise(q));
+      if (!top) top = await firstHit(api.geocode(q));
+      if (!top) {
+        const noNum = q.replace(/^\s*\d+[a-z]?\s+/i, '').trim();
+        if (noNum && noNum !== q) top = await firstHit(api.geocode(noNum));
+      }
+      if (top) {
+        const address = mergeHouseNumber(q, top.address);
+        justPicked.current = true;
+        setQuery(address);
+        setResults([]);
+        setOpen(false);
+        setConfirmed(true);
+        onSelect({ address, lat: top.lat, lng: top.lng });
       }
     } catch {
-      // Non-fatal: keep the typed address, lose only the coordinates.
+      /* leave the typed text as-is; the dropdown is still available on refocus */
     } finally {
-      setResolving(false);
-      // The session is spent — start a fresh one for the next address.
-      sessionRef.current = newSessionToken();
+      setLoading(false);
     }
   };
 
@@ -142,16 +188,12 @@ export default function AddressInput({ label, iconName, placeholder, value, onSe
           onFocus={() => {
             if (results.length > 0 && !confirmed) setOpen(true);
           }}
+          onBlur={() => setTimeout(resolveTypedAddress, 160)}
         />
         {/* Selection indicator */}
         {confirmed && (
           <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)' }}>
             <Icon name="check" size={18} color="var(--positive)" stroke={2.5} />
-          </span>
-        )}
-        {resolving && (
-          <span style={{ position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--ink-4)' }}>
-            locating…
           </span>
         )}
         {loading && !confirmed && (

@@ -278,15 +278,21 @@ ALTER TABLE drivers ADD CONSTRAINT drivers_auth_user_id_fkey
 -- Creates the drivers row atomically with the auth.users row on signup, so
 -- there's never an auth account with no matching driver profile. Reads
 -- name/phone/vehicle_* from raw_user_meta_data (populated via
--- supabase.auth.signUp({ options: { data: {...} } })) — but NEVER status,
--- rating, rides_completed, or is_online from there: that field is entirely
+-- supabase.auth.signUp({ options: { data: {...} } })) — but NEVER rating,
+-- rides_completed, or is_online from there: that field is entirely
 -- client-controlled via the public signUp() API, so those columns must
 -- always take their DEFAULTs (explicit whitelist below), or anyone could
--- pass status:'active' at signup and self-activate their own account.
+-- pass arbitrary values at signup.
+--
+-- status is explicitly set to 'active' (not left at its pending_verification
+-- DEFAULT) — TEMPORARY stance: there's no admin dashboard yet to approve
+-- anyone, so gating signup on manual review would just block the stated
+-- goal of "sign up and see the calendar" with no way to unblock it. Revisit
+-- once an admin dashboard exists to actually do the approving.
 CREATE OR REPLACE FUNCTION handle_new_driver()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO drivers (auth_user_id, name, phone, email, vehicle_make, vehicle_model, vehicle_color, vehicle_plate)
+  INSERT INTO drivers (auth_user_id, name, phone, email, vehicle_make, vehicle_model, vehicle_color, vehicle_plate, status)
   VALUES (
     NEW.id,
     NEW.raw_user_meta_data->>'name',
@@ -295,9 +301,8 @@ BEGIN
     NEW.raw_user_meta_data->>'vehicle_make',
     NEW.raw_user_meta_data->>'vehicle_model',
     NEW.raw_user_meta_data->>'vehicle_color',
-    NEW.raw_user_meta_data->>'vehicle_plate'
-    -- status/rating/rides_completed/is_online intentionally omitted — they
-    -- take their column DEFAULTs (pending_verification / 5.00 / 0 / false).
+    NEW.raw_user_meta_data->>'vehicle_plate',
+    'active'
   );
   RETURN NEW;
 EXCEPTION
@@ -305,6 +310,12 @@ EXCEPTION
     RAISE EXCEPTION 'phone_or_email_already_registered';
   WHEN not_null_violation THEN
     RAISE EXCEPTION 'missing_required_driver_field';
+  WHEN OTHERS THEN
+    -- Catch-all so a failure NEVER again surfaces as an anonymous "database
+    -- error saving new user" with no way to tell what actually broke — the
+    -- real SQLSTATE/message is now always in the Postgres log next to this
+    -- trigger's own name, whatever the cause turns out to be.
+    RAISE EXCEPTION 'driver_creation_failed: % (%)', SQLERRM, SQLSTATE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -317,3 +328,48 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_driver();
+
+-- ============================================================
+-- Driver side (Phase: profile completion + real trip lifecycle)
+--
+-- Additive only — safe to run against a live database with existing driver/
+-- booking rows. Does NOT touch the DROP TABLE statements earlier in this
+-- file; those are for fresh installs only and must never be re-run here.
+-- ============================================================
+
+ALTER TABLE drivers
+  ADD COLUMN IF NOT EXISTS photo_url            TEXT,
+  ADD COLUMN IF NOT EXISTS license_photo_url     TEXT,
+  ADD COLUMN IF NOT EXISTS insurance_photo_url   TEXT,
+  -- Set (by the application) once all three of the above are non-null;
+  -- cleared if any is removed. This is the "profile complete" gate that
+  -- controls access to ride requests — see requireCompleteProfile.
+  ADD COLUMN IF NOT EXISTS profile_completed_at  TIMESTAMPTZ;
+
+-- complete_booking(): atomically finishes a trip — flips status, records the
+-- driver's earnings ledger entry, and increments rides_completed in one
+-- transaction, so a failure partway through never leaves the booking marked
+-- completed with no matching earnings row (or vice versa). The payout
+-- amount is computed by the caller (backend/services/payout.js is the one
+-- source of truth for the 60% cut) and passed in, rather than duplicating
+-- that constant here in SQL.
+CREATE OR REPLACE FUNCTION complete_booking(p_booking_id UUID, p_driver_id UUID, p_earnings_amount NUMERIC)
+RETURNS bookings AS $$
+DECLARE
+  v_booking bookings;
+BEGIN
+  UPDATE bookings SET status = 'completed', completed_at = now()
+    WHERE id = p_booking_id AND driver_id = p_driver_id AND status = 'in_progress'
+    RETURNING * INTO v_booking;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'booking_not_in_progress';
+  END IF;
+
+  INSERT INTO driver_earnings (driver_id, booking_id, amount, type)
+    VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare');
+
+  UPDATE drivers SET rides_completed = rides_completed + 1 WHERE id = p_driver_id;
+
+  RETURN v_booking;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

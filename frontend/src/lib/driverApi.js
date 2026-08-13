@@ -5,47 +5,59 @@ import { supabase } from './supabaseClient';
 // If there's no token yet, the header is simply omitted and the backend's
 // requireDriver middleware 401s naturally — "not authenticated" is handled
 // in one place (the backend), not duplicated here.
+function withAuth(options, token) {
+  return {
+    ...options,
+    headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  };
+}
+
+// localStorage can hold a session whose server-side record no longer exists
+// (revoked, or the auth user was deleted/recreated). That zombie session
+// still passes local checks, so the app renders — but every backend call
+// 401s, with no way out short of clearing storage by hand. On a 401: force
+// one token refresh and retry; if the session truly can't be revived, sign
+// out (locally — the server no longer knows this session anyway) so the app
+// lands back on Login instead of showing the same dead-session error on
+// every tab.
+async function signOutExpired() {
+  await supabase.auth.signOut({ scope: 'local' });
+  throw new Error('Your session expired. Please log in again.');
+}
+
 async function authedReq(path, options = {}) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  return req(path, {
-    ...options,
-    headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
+  try {
+    return await req(path, withAuth(options, token));
+  } catch (err) {
+    if (err.status !== 401) throw err;
+    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+    const newToken = refreshed?.session?.access_token;
+    if (refreshErr || !newToken) return signOutExpired();
+    try {
+      return await req(path, withAuth(options, newToken));
+    } catch (err2) {
+      if (err2.status === 401) return signOutExpired();
+      throw err2;
+    }
+  }
 }
 
 export const driverApi = {
-  // Creates the driver profile row if the signup trigger never did. Safe to
-  // call whenever a logged-in account has no profile — idempotent server-side.
-  ensureProfile: () => authedReq('/driver/ensure-profile', { method: 'POST' }),
-
   getSchedule: () => authedReq('/driver/schedule'),
   getAvailableTrips: () => authedReq('/driver/available-trips'),
   claimBooking: (bookingId) => authedReq(`/driver/bookings/${bookingId}/claim`, { method: 'POST' }),
-
-  // The trip this driver is currently on, if any. Called on app start so
-  // a driver whose phone died mid-ride lands back in the right screen
-  // instead of on the dashboard with a passenger in the car.
-  getActiveTrip: () => authedReq('/driver/active-trip'),
-
-  setStatus: (bookingId, status, reason) =>
-    authedReq(`/driver/bookings/${bookingId}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ status, reason }),
-    }),
-
-  // Batched GPS upload. See driver/useDriverLocation.js for why this
-  // takes an array rather than a single fix.
-  sendLocation: ({ bookingId, pings }) =>
-    authedReq('/driver/location', {
-      method: 'POST',
-      body: JSON.stringify({ bookingId, pings }),
-    }),
-
-  setOnline: (online) =>
-    authedReq('/driver/online', { method: 'POST', body: JSON.stringify({ online }) }),
-
-  // Payouts (Stripe Connect Express) + background check (Checkr).
+  releaseBooking: (bookingId) => authedReq(`/driver/bookings/${bookingId}/release`, { method: 'POST' }),
+  setBookingStatus: (bookingId, event) =>
+    authedReq(`/driver/bookings/${bookingId}/status`, { method: 'POST', body: JSON.stringify({ event }) }),
+  getEarnings: () => authedReq('/driver/earnings'),
+  getUploadUrl: (type) =>
+    authedReq('/driver/profile/upload-url', { method: 'POST', body: JSON.stringify({ type }) }),
+  saveDocument: (type, path) =>
+    authedReq('/driver/profile/documents', { method: 'POST', body: JSON.stringify({ type, path }) }),
+  rateRider: (bookingId, rating) =>
+    authedReq(`/driver/bookings/${bookingId}/rate-rider`, { method: 'POST', body: JSON.stringify({ rating }) }),
   getPayoutStatus: () => authedReq('/driver/payouts/status'),
   startPayoutOnboarding: () => authedReq('/driver/payouts/onboard', { method: 'POST' }),
   getScreeningStatus: () => authedReq('/driver/screening/status'),

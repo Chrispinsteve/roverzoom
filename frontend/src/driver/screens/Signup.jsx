@@ -99,7 +99,15 @@ export default function Signup({ onSwitchToLogin, onSignedUp }) {
       },
     });
     setSubmitting(false);
-    if (error) { setError(mapSignupError(error.message)); return; }
+    if (error) {
+      // Log the raw error during active debugging — the trigger's new
+      // catch-all handler (schema.sql) now embeds the real Postgres cause
+      // directly in this message, so check the browser console first before
+      // digging through Supabase logs.
+      console.error('signUp failed:', error.message, error);
+      setError(mapSignupError(error.message));
+      return;
+    }
     onSignedUp(form.email.trim());
   };
 

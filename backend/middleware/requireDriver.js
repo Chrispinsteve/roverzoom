@@ -15,7 +15,17 @@ async function requireDriver(req, res, next) {
 
   try {
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) return res.status(401).json({ error: 'Invalid or expired session.' });
+    if (error || !data?.user) {
+      // A fetch-level failure means WE couldn't reach the Auth API (bad
+      // SUPABASE_URL/key, network) — a server problem, not the driver's
+      // session. Answering 401 here would tell every client "log in again"
+      // for an outage no re-login can fix.
+      if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0 || (error.status || 0) >= 500)) {
+        console.error('requireDriver: auth service unreachable —', error.message);
+        return res.status(503).json({ error: 'Could not verify your session right now. Try again in a moment.' });
+      }
+      return res.status(401).json({ error: 'Invalid or expired session.', code: 'session_invalid' });
+    }
 
     const { data: driver, error: driverErr } = await supabase
       .from('drivers')
@@ -33,26 +43,6 @@ async function requireDriver(req, res, next) {
   }
 }
 
-// Like requireDriver, but does NOT require a driver row to exist — it only
-// proves who the caller is. Used by the self-healing profile endpoint, which
-// runs precisely when there is no driver row yet (a signup whose creation
-// trigger never fired). Attaches the verified auth user as req.authUser.
-async function requireUser(req, res, next) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Missing auth token.' });
-
-  try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) return res.status(401).json({ error: 'Invalid or expired session.' });
-    req.authUser = data.user;
-    next();
-  } catch (err) {
-    console.error('requireUser error', err.message);
-    res.status(500).json({ error: 'Could not verify session.' });
-  }
-}
-
 // A pending/suspended driver can still read their own profile/schedule
 // (requireDriver alone), but nothing that acts on their behalf — browsing
 // or claiming trips, going online, etc.
@@ -67,4 +57,18 @@ function requireActiveDriver(req, res, next) {
   next();
 }
 
-module.exports = { requireDriver, requireUser, requireActiveDriver };
+// Gates ride-request access on profile completion (photo + license +
+// insurance all uploaded) — the "open marketplace, but controlled" model:
+// there's no online/offline toggle, so this is the one real access control
+// on who can see/claim rides.
+function requireCompleteProfile(req, res, next) {
+  if (!req.driver.profile_completed_at) {
+    return res.status(403).json({
+      error: 'Complete your profile (photo, license, insurance) to see ride requests.',
+      code: 'profile_incomplete',
+    });
+  }
+  next();
+}
+
+module.exports = { requireDriver, requireActiveDriver, requireCompleteProfile };
