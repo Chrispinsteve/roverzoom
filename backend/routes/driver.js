@@ -1,6 +1,6 @@
 const express = require('express');
 const supabase = require('../db/supabase');
-const { requireDriver, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
+const { requireDriver, requireUser, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
 const { driverPayout } = require('../services/payout');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
@@ -21,6 +21,74 @@ const AVAILABLE_GRACE_HOURS = Number(process.env.AVAILABLE_GRACE_HOURS) || 6;
 function withPayout(booking) {
   return { ...booking, driver_payout: driverPayout(Number(booking.fare), booking.scheduled_at) };
 }
+
+// POST /api/driver/ensure-profile — self-heal a missing driver row.
+//
+// Normally the drivers row is created atomically with the auth account by the
+// on_auth_user_created trigger (schema.sql). If that trigger isn't installed on
+// a given database — or an account predates it — a driver can log in yet have
+// no profile row, and every driver endpoint then 403s "no driver profile".
+// This repairs exactly that dead-end.
+//
+// Runs under requireUser (proves identity, does NOT need a driver row) and, via
+// the service role, creates the missing row from the SAME whitelist the trigger
+// uses: name/phone/vehicle_* from the user's own signup metadata; email from the
+// real auth row; status/rating/etc. are never accepted from the client and take
+// their column DEFAULTs. Idempotent: an existing row is returned untouched.
+router.post('/ensure-profile', requireUser, async (req, res) => {
+  const user = req.authUser;
+  try {
+    const { data: existing, error: exErr } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+    if (exErr) throw exErr;
+    if (existing) return res.json({ driver: existing, created: false });
+
+    const meta = user.user_metadata || {};
+    const insert = {
+      auth_user_id: user.id,
+      name: meta.name || null,
+      phone: meta.phone || null,
+      email: user.email || null,
+      vehicle_make: meta.vehicle_make || null,
+      vehicle_model: meta.vehicle_model || null,
+      vehicle_color: meta.vehicle_color || null,
+      vehicle_plate: meta.vehicle_plate || null,
+      // status/rating/rides_completed/is_online omitted — they take DEFAULTs,
+      // exactly as the trigger guarantees. A client must never self-activate.
+    };
+
+    if (!insert.name || !insert.phone) {
+      return res.status(422).json({
+        error: 'Your account is missing details needed to build a driver profile. Please contact support.',
+        code: 'incomplete_signup',
+      });
+    }
+
+    const { data: created, error: insErr } = await supabase
+      .from('drivers')
+      .insert(insert)
+      .select()
+      .single();
+
+    if (insErr) {
+      if (insErr.code === '23505') {
+        return res.status(409).json({
+          error: 'A driver profile with these details already exists. Please contact support to reconnect it.',
+          code: 'profile_conflict',
+        });
+      }
+      throw insErr;
+    }
+
+    res.status(201).json({ driver: created, created: true });
+  } catch (err) {
+    console.error('ensure-profile error', err.message);
+    res.status(500).json({ error: 'Could not set up your driver profile.' });
+  }
+});
 
 // GET /api/driver/schedule — this driver's own upcoming + recent bookings.
 // requireDriver only: a pending/suspended driver can see their own (likely

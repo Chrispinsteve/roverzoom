@@ -45,6 +45,10 @@ async function authedReq(path, options = {}) {
 }
 
 export const driverApi = {
+  // Creates the driver profile row if the signup trigger never did. Safe to
+  // call whenever a logged-in account has no profile — idempotent server-side.
+  ensureProfile: () => authedReq('/driver/ensure-profile', { method: 'POST' }),
+
   getSchedule: () => authedReq('/driver/schedule'),
   getAvailableTrips: () => authedReq('/driver/available-trips'),
   claimBooking: (bookingId) => authedReq(`/driver/bookings/${bookingId}/claim`, { method: 'POST' }),
