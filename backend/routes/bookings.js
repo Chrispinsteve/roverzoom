@@ -8,12 +8,36 @@ const router = express.Router();
 
 // Once a driver is assigned, riders should be able to identify them — but
 // only this safe subset. Never phone/email/license/insurance/vehicle_plate.
-const DRIVER_PUBLIC_FIELDS = 'name, photo_url, rating, vehicle_make, vehicle_model, vehicle_color';
+const DRIVER_PUBLIC_FIELDS =
+  'name, photo_url, rating, vehicle_make, vehicle_model, vehicle_color, ' +
+  'current_lat, current_lng, current_heading, current_speed_mph, location_updated_at';
+
+// The trip is "live" (driver physically moving toward/with the rider) only in
+// these statuses. The rider is shown a moving car ONLY then.
+const TRACKING_ACTIVE_STATUSES = ['driver_en_route', 'arrived', 'in_progress'];
 
 function withDriverInfo(booking) {
   if (!booking) return booking;
   const { drivers, ...rest } = booking;
-  return { ...rest, driver: drivers || null };
+  if (!drivers) return { ...rest, driver: null };
+
+  // Strip the raw current_* columns off the driver object and re-expose them
+  // as `driver.location` ONLY while the trip is active — never before the
+  // driver is en route (that would leak a driver's position from claim time,
+  // possibly days ahead) and never once the ride has ended.
+  const { current_lat, current_lng, current_heading, current_speed_mph, location_updated_at, ...driverRest } = drivers;
+  const active = TRACKING_ACTIVE_STATUSES.includes(rest.status);
+  const location = active && current_lat != null && current_lng != null
+    ? {
+        lat: Number(current_lat),
+        lng: Number(current_lng),
+        heading: current_heading != null ? Number(current_heading) : null,
+        speedMph: current_speed_mph != null ? Number(current_speed_mph) : null,
+        updatedAt: location_updated_at,
+      }
+    : null;
+
+  return { ...rest, driver: { ...driverRest, location } };
 }
 
 // POST /api/bookings — create a confirmed booking

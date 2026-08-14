@@ -565,4 +565,113 @@ router.get('/screening/status', requireDriver, async (req, res) => {
   }
 });
 
+// ============================================================
+// Live tracking — GPS ingest + online toggle
+// ============================================================
+// Statuses during which a driver is physically moving on behalf of a trip.
+// Pings are attributed to a booking (and the rider is shown a moving car)
+// only while a booking is in one of these.
+const TRACKING_ACTIVE_STATUSES = ['driver_en_route', 'arrived', 'in_progress'];
+
+const MS_PER_SEC_TO_MPH = 2.236936;
+
+// Sanitize one GPS fix from the client. Returns a DB-shaped row or null if the
+// fix is unusable (bad coords). Never trusts client values blindly.
+function validPing(p) {
+  if (!p || typeof p !== 'object') return null;
+  const lat = Number(p.lat);
+  const lng = Number(p.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+
+  const recordedAt = p.recordedAt ? new Date(p.recordedAt) : new Date();
+  const accuracy = Number(p.accuracy);
+  return {
+    lat,
+    lng,
+    heading: Number.isFinite(Number(p.heading)) ? Number(p.heading) : null,
+    speed_mph: Number.isFinite(Number(p.speedMph)) ? Number(p.speedMph) : null,
+    accuracy_m: Number.isFinite(accuracy) ? accuracy : null,
+    recorded_at: (isNaN(recordedAt) ? new Date() : recordedAt).toISOString(),
+  };
+}
+
+// POST /api/driver/location  { bookingId?, pings: [{ lat, lng, heading?, speedMph?, accuracy?, recordedAt? }] }
+// Accepts a BATCH so the app can sample often but upload rarely (battery,
+// request volume, dead-zone tolerance). Stores the breadcrumb trail and mirrors
+// the newest fix onto drivers.current_* for fast "where is this driver" reads.
+router.post('/location', requireDriver, requireActiveDriver, async (req, res) => {
+  const { bookingId, pings } = req.body || {};
+  if (!Array.isArray(pings) || pings.length === 0) {
+    return res.status(400).json({ error: 'No location pings supplied.' });
+  }
+  if (pings.length > 200) {
+    return res.status(413).json({ error: 'Too many pings in one batch.' });
+  }
+
+  const clean = pings.map(validPing).filter(Boolean);
+  if (clean.length === 0) return res.json({ accepted: 0, rejected: pings.length });
+
+  try {
+    // Attribute pings to a trip only after confirming this driver owns it and
+    // it is live — a driver must not be able to write a GPS trail onto another
+    // driver's booking (that trail decides fare/no-show disputes).
+    let verifiedBookingId = null;
+    if (bookingId) {
+      const { data: booking, error: bErr } = await supabase
+        .from('bookings')
+        .select('id, driver_id, status')
+        .eq('id', bookingId)
+        .maybeSingle();
+      if (bErr) throw bErr;
+      if (booking && booking.driver_id === req.driver.id && TRACKING_ACTIVE_STATUSES.includes(booking.status)) {
+        verifiedBookingId = booking.id;
+      }
+    }
+
+    const rows = clean.map((p) => ({ ...p, driver_id: req.driver.id, booking_id: verifiedBookingId }));
+    const { error: insErr } = await supabase.from('driver_locations').insert(rows);
+    if (insErr) throw insErr;
+
+    // Newest by device clock, not array order (a reconnecting client may flush a
+    // backlog out of order; stamping an old fix as current drags the marker back).
+    const newest = clean.reduce((a, b) => (a.recorded_at > b.recorded_at ? a : b));
+    const { error: updErr } = await supabase
+      .from('drivers')
+      .update({
+        current_lat: newest.lat,
+        current_lng: newest.lng,
+        current_heading: newest.heading,
+        current_speed_mph: newest.speed_mph,
+        current_accuracy_m: newest.accuracy_m,
+        location_updated_at: newest.recorded_at,
+      })
+      .eq('id', req.driver.id);
+    if (updErr) throw updErr;
+
+    res.json({ accepted: clean.length, rejected: pings.length - clean.length });
+  } catch (err) {
+    console.error('location ingest error', err.message);
+    res.status(500).json({ error: 'Could not record location.' });
+  }
+});
+
+// POST /api/driver/online  { online: boolean }
+router.post('/online', requireDriver, requireActiveDriver, async (req, res) => {
+  const online = !!(req.body && req.body.online);
+  try {
+    const { data, error } = await supabase
+      .from('drivers')
+      .update({ is_online: online })
+      .eq('id', req.driver.id)
+      .select('id, is_online')
+      .maybeSingle();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('online toggle error', err.message);
+    res.status(500).json({ error: 'Could not update availability.' });
+  }
+});
+
 module.exports = router;

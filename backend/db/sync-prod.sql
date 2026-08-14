@@ -94,6 +94,38 @@ ALTER TABLE drivers
   ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ;
 
 -- ------------------------------------------------------------
+-- Live tracking: richer live position on drivers + append-only breadcrumb
+-- trail. drivers.current_lat/lng/location_updated_at already exist; these add
+-- heading/speed/accuracy so a marker reads as a moving vehicle.
+-- ------------------------------------------------------------
+ALTER TABLE drivers
+  ADD COLUMN IF NOT EXISTS current_heading    NUMERIC(5,2),
+  ADD COLUMN IF NOT EXISTS current_speed_mph  NUMERIC(5,1),
+  ADD COLUMN IF NOT EXISTS current_accuracy_m NUMERIC(7,1);
+
+CREATE TABLE IF NOT EXISTS driver_locations (
+  id           BIGSERIAL PRIMARY KEY,
+  driver_id    UUID NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+  booking_id   UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  lat          NUMERIC(9,6) NOT NULL,
+  lng          NUMERIC(9,6) NOT NULL,
+  heading      NUMERIC(5,2),
+  speed_mph    NUMERIC(5,1),
+  accuracy_m   NUMERIC(7,1),
+  recorded_at  TIMESTAMPTZ NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_driver_locations_booking
+  ON driver_locations(booking_id, recorded_at) WHERE booking_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_driver_locations_driver_time
+  ON driver_locations(driver_id, recorded_at DESC);
+
+ALTER TABLE driver_locations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS driver_locations_select_own ON driver_locations;
+CREATE POLICY driver_locations_select_own ON driver_locations FOR SELECT
+  USING (driver_id IN (SELECT id FROM drivers WHERE auth_user_id = auth.uid()));
+
+-- ------------------------------------------------------------
 -- Booking lifecycle columns + constraints
 -- THIS is what makes existing ride requests retrievable AND actionable:
 -- the driver_id, the per-stage timestamps, and the widened status CHECK so a
