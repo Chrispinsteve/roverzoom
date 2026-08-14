@@ -11,7 +11,7 @@ function etaLabel(booking) {
   return eta.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function OnTrip({ booking, onEndTrip }) {
+export default function OnTrip({ booking, onEndTrip, busy, error }) {
   return (
     <DriverShell rightSlot={
       <button className="drv-icon-btn" aria-label="Safety">
@@ -49,9 +49,15 @@ export default function OnTrip({ booking, onEndTrip }) {
 
         <div className="spacer" />
 
-        <button className="btn drv-danger-btn rise-3" onClick={onEndTrip} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        {error && <p className="error-text center" style={{ marginBottom: 10 }}>{error}</p>}
+        <button
+          className="btn drv-danger-btn rise-3"
+          onClick={onEndTrip}
+          disabled={busy}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+        >
           <Icon name="stop" size={16} color="var(--danger)" />
-          End Trip
+          {busy ? 'Ending…' : 'End Trip'}
         </button>
       </div>
     </DriverShell>

@@ -76,6 +76,10 @@ export default function DriverApp({ onExit }) {
   const [activeBooking, setActiveBooking] = useState(undefined); // undefined = not checked yet, null = none
   const [viewingBooking, setViewingBooking] = useState(null); // a claimed trip opened for details (has a Back button)
   const [justCompleted, setJustCompleted] = useState(null);
+  // Shared across lifecycle actions so any failed transition (arrived / start /
+  // complete) shows a reason instead of a dead button.
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const refreshActiveBooking = useCallback(async () => {
     try {
@@ -128,18 +132,38 @@ export default function DriverApp({ onExit }) {
   // Deliberate "hit the road now" for a chosen upcoming trip: mark it en route,
   // which promotes it to the active, full-screen trip.
   const startNavigation = async (booking) => {
-    const updated = await driverApi.setBookingStatus(booking.id, 'en_route');
-    setViewingBooking(null);
-    setActiveBooking(updated);
+    if (busy) return;
+    setBusy(true); setActionError('');
+    try {
+      const updated = await driverApi.setBookingStatus(booking.id, 'en_route');
+      setViewingBooking(null);
+      setActiveBooking(updated);
+    } catch (e) {
+      setActionError(e.message || 'Could not start the trip. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
+  // Every lifecycle transition (arrived / start / complete) goes through here.
+  // It MUST surface failures: a transition like "complete" hits a server-side
+  // RPC, and if that errors the button used to just do nothing, leaving the
+  // driver tapping a dead control with no idea why. Now it shows the reason.
   const advance = async (event) => {
-    const updated = await driverApi.setBookingStatus(activeBooking.id, event);
-    if (event === 'complete') {
-      setJustCompleted(updated);
-      setActiveBooking(null);
-    } else {
-      onBookingUpdate(updated);
+    if (busy) return;
+    setBusy(true); setActionError('');
+    try {
+      const updated = await driverApi.setBookingStatus(activeBooking.id, event);
+      if (event === 'complete') {
+        setJustCompleted(updated);
+        setActiveBooking(null);
+      } else {
+        onBookingUpdate(updated);
+      }
+    } catch (e) {
+      setActionError(e.message || 'Something went wrong. Please try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -157,13 +181,13 @@ export default function DriverApp({ onExit }) {
   if (activeBooking) {
     const stage = STAGE_BY_STATUS[activeBooking.status];
     if (stage === 'navigate') {
-      return <NavigateToPickup booking={activeBooking} onArrived={() => advance('arrived')} />;
+      return <NavigateToPickup booking={activeBooking} onArrived={() => advance('arrived')} busy={busy} error={actionError} />;
     }
     if (stage === 'pickup') {
-      return <PassengerPickup booking={activeBooking} onStartTrip={() => advance('start')} />;
+      return <PassengerPickup booking={activeBooking} onStartTrip={() => advance('start')} busy={busy} error={actionError} />;
     }
     if (stage === 'onTrip') {
-      return <OnTrip booking={activeBooking} onEndTrip={() => advance('complete')} />;
+      return <OnTrip booking={activeBooking} onEndTrip={() => advance('complete')} busy={busy} error={actionError} />;
     }
   }
 
