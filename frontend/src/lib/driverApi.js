@@ -49,6 +49,12 @@ export const driverApi = {
   // call whenever a logged-in account has no profile — idempotent server-side.
   ensureProfile: () => authedReq('/driver/ensure-profile', { method: 'POST' }),
 
+  // Live tracking: batched GPS upload during an active trip + online toggle.
+  sendLocation: ({ bookingId, pings }) =>
+    authedReq('/driver/location', { method: 'POST', body: JSON.stringify({ bookingId, pings }) }),
+  setOnline: (online) =>
+    authedReq('/driver/online', { method: 'POST', body: JSON.stringify({ online }) }),
+
   getSchedule: () => authedReq('/driver/schedule'),
   getAvailableTrips: () => authedReq('/driver/available-trips'),
   claimBooking: (bookingId) => authedReq(`/driver/bookings/${bookingId}/claim`, { method: 'POST' }),

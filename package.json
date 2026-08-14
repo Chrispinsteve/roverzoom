@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "@stripe/stripe-js": "^4.10.0",
     "@supabase/supabase-js": "^2.110.2",
     "qrcode": "^1.5.4",

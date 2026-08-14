@@ -1,5 +1,6 @@
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
+import LiveMap from '../../components/LiveMap';
 import PassengerRow from '../components/PassengerRow';
 import InstructionBanner from '../components/InstructionBanner';
 import { mapsUrl } from '../lib/maps';
@@ -11,7 +12,7 @@ function etaLabel(booking) {
   return eta.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function OnTrip({ booking, onEndTrip, busy, error }) {
+export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error }) {
   return (
     <DriverShell rightSlot={
       <button className="drv-icon-btn" aria-label="Safety">
@@ -19,6 +20,17 @@ export default function OnTrip({ booking, onEndTrip, busy, error }) {
       </button>
     }>
       <div className="body">
+        <div className="rise" style={{ marginBottom: 14 }}>
+          <LiveMap
+            height={240}
+            pickup={{ lat: booking.pickup_lat, lng: booking.pickup_lng }}
+            dropoff={{ lat: booking.dropoff_lat, lng: booking.dropoff_lng, address: booking.dropoff_address, label: 'Dropoff' }}
+            vehicle={driverPosition}
+            follow
+            theme="dark"
+          />
+        </div>
+
         <div className="rise">
           <InstructionBanner icon="flag" title="Head to dropoff" lines={[shortAddress(booking.dropoff_address)]} />
         </div>

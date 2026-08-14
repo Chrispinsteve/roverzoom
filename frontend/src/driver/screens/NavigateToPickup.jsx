@@ -1,11 +1,12 @@
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
+import LiveMap from '../../components/LiveMap';
 import PassengerRow from '../components/PassengerRow';
 import InstructionBanner from '../components/InstructionBanner';
 import { mapsUrl } from '../lib/maps';
 import { shortAddress } from '../lib/address';
 
-export default function NavigateToPickup({ booking, onArrived }) {
+export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
   return (
     <DriverShell rightSlot={
       <button className="drv-icon-btn" aria-label="Safety">
@@ -13,6 +14,16 @@ export default function NavigateToPickup({ booking, onArrived }) {
       </button>
     }>
       <div className="body">
+        <div className="rise" style={{ marginBottom: 14 }}>
+          <LiveMap
+            height={240}
+            pickup={{ lat: booking.pickup_lat, lng: booking.pickup_lng, address: booking.pickup_address, label: 'Pickup' }}
+            vehicle={driverPosition}
+            follow
+            theme="dark"
+          />
+        </div>
+
         <div className="rise">
           <InstructionBanner
             icon="arrowUp"
@@ -37,9 +48,10 @@ export default function NavigateToPickup({ booking, onArrived }) {
 
         <div className="spacer" />
 
-        <button className="btn rise-3" onClick={onArrived} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        {error && <p className="error-text center" style={{ marginBottom: 10 }}>{error}</p>}
+        <button className="btn rise-3" onClick={onArrived} disabled={busy} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <Icon name="check" size={18} color="var(--accent-ink)" stroke={2.5} />
-          Arrived at Pickup
+          {busy ? 'Saving…' : 'Arrived at Pickup'}
         </button>
       </div>
     </DriverShell>

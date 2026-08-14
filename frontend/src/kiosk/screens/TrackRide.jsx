@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import FlowShell from '../components/FlowShell';
 import Icon from '../../components/Icon';
+import LiveMap from '../../components/LiveMap';
+import { GoogleMapsProvider } from '../../lib/GoogleMapsProvider';
 import { api } from '../../lib/api';
 import { TRACK_STEPS, completedCount, statusHeadline, isTerminal, isCancelable } from '../lib/rideStatus';
 
@@ -73,7 +75,10 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
     </div>
   );
 
+  const driverLoc = driver && driver.location ? driver.location : null;
+
   return (
+    <GoogleMapsProvider>
     <FlowShell title="Your ride" step={0} totalSteps={0} onBack={onBack} footer={footer}>
       <div className={`k-track-hero k-track-${head.tone}`}>
         <span className="k-track-title">{head.title}</span>
@@ -82,6 +87,19 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
           <span className="k-track-live"><span className="k-track-live-dot" />Live</span>
         )}
       </div>
+
+      {booking && booking.pickup_lat != null && !canceled && (
+        <div style={{ borderRadius: 16, overflow: 'hidden', margin: '2px 0 6px' }}>
+          <LiveMap
+            height={260}
+            pickup={{ lat: booking.pickup_lat, lng: booking.pickup_lng, address: booking.pickup_address, label: 'Pickup' }}
+            dropoff={{ lat: booking.dropoff_lat, lng: booking.dropoff_lng, address: booking.dropoff_address, label: 'Dropoff' }}
+            vehicle={driverLoc}
+            follow
+            theme="light"
+          />
+        </div>
+      )}
 
       {error && <span className="k-price-wait" role="status">{error}</span>}
 
@@ -154,5 +172,6 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
         </button>
       )}
     </FlowShell>
+    </GoogleMapsProvider>
   );
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import DriverShell from './DriverShell';
 import { useDriverAuth } from './useDriverAuth';
+import { useDriverLocation, useWakeLock } from './useDriverLocation';
+import { GoogleMapsProvider } from '../lib/GoogleMapsProvider';
 import { supabase } from '../lib/supabaseClient';
 import { driverApi } from '../lib/driverApi';
 import Login from './screens/Login';
@@ -80,6 +82,18 @@ export default function DriverApp({ onExit }) {
   // complete) shows a reason instead of a dead button.
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+
+  // Capture and upload GPS while a trip is actually underway (en route ->
+  // arrived -> in progress). This is what makes the rider's live map move.
+  // Not before: claiming/scheduling a ride must not stream the driver's
+  // location. useDriverLocation batches uploads and no-ops when `active` is
+  // false, so it's safe to call unconditionally here (before any early return).
+  const trackingActive = !!activeBooking && ACTIVE_STATUSES.includes(activeBooking.status);
+  const { position: driverPosition } = useDriverLocation({
+    bookingId: activeBooking?.id || null,
+    active: trackingActive,
+  });
+  useWakeLock(trackingActive);
 
   const refreshActiveBooking = useCallback(async () => {
     try {
@@ -180,15 +194,15 @@ export default function DriverApp({ onExit }) {
   // --- Active (started) trip: full-screen focus mode, no tab bar -----------
   if (activeBooking) {
     const stage = STAGE_BY_STATUS[activeBooking.status];
+    let screen = null;
     if (stage === 'navigate') {
-      return <NavigateToPickup booking={activeBooking} onArrived={() => advance('arrived')} busy={busy} error={actionError} />;
+      screen = <NavigateToPickup booking={activeBooking} driverPosition={driverPosition} onArrived={() => advance('arrived')} busy={busy} error={actionError} />;
+    } else if (stage === 'pickup') {
+      screen = <PassengerPickup booking={activeBooking} driverPosition={driverPosition} onStartTrip={() => advance('start')} busy={busy} error={actionError} />;
+    } else if (stage === 'onTrip') {
+      screen = <OnTrip booking={activeBooking} driverPosition={driverPosition} onEndTrip={() => advance('complete')} busy={busy} error={actionError} />;
     }
-    if (stage === 'pickup') {
-      return <PassengerPickup booking={activeBooking} onStartTrip={() => advance('start')} busy={busy} error={actionError} />;
-    }
-    if (stage === 'onTrip') {
-      return <OnTrip booking={activeBooking} onEndTrip={() => advance('complete')} busy={busy} error={actionError} />;
-    }
+    if (screen) return <GoogleMapsProvider>{screen}</GoogleMapsProvider>;
   }
 
   // --- Viewing a claimed (not-yet-started) trip's details — has a Back button.
