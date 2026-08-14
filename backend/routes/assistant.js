@@ -1,8 +1,16 @@
 const express = require('express');
-const { runAssistant } = require('../services/assistant');
+const { runAssistant, isConfigured } = require('../services/assistant');
 const { synthesizeSpeech } = require('../services/tts');
 
 const router = express.Router();
+
+// GET /api/assistant/status — is the AI switched on? A quick way to tell
+// "ANTHROPIC_API_KEY missing on this deploy" (configured:false) apart from
+// "key present but the call failed" (configured:true but chats still error →
+// credits/billing). Never exposes the key itself.
+router.get('/status', (req, res) => {
+  res.json({ configured: isConfigured() });
+});
 
 // POST /api/assistant/speak — { text } -> audio/mpeg of the reply in a warm
 // neural voice. 503 when no TTS key is set, so the frontend falls back to the
