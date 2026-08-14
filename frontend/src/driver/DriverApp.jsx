@@ -214,6 +214,12 @@ export default function DriverApp({ onExit }) {
         booking={viewingBooking}
         onBack={() => setViewingBooking(null)}
         onStartNavigation={() => startNavigation(viewingBooking)}
+        onUnclaim={async () => {
+          await driverApi.releaseBooking(viewingBooking.id);
+          setViewingBooking(null);
+          await refreshActiveBooking();
+          setTab('schedule');
+        }}
       />
     );
   }

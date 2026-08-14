@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import PassengerRow from '../components/PassengerRow';
@@ -9,8 +10,23 @@ import { shortAddress } from '../lib/address';
 // link and the driver's real payout. Reached by tapping an Upcoming trip, so it
 // has a Back button; "Start Navigation" (only for a not-yet-started trip) is the
 // deliberate action that actually begins the drive.
-export default function RideDetails({ booking, onBack, onStartNavigation }) {
+export default function RideDetails({ booking, onBack, onStartNavigation, onUnclaim }) {
   const startable = booking.status === 'driver_assigned';
+  const [releasing, setReleasing] = useState(false);
+  const [error, setError] = useState('');
+
+  const doUnclaim = async () => {
+    if (releasing) return;
+    if (!window.confirm('Unclaim this ride? It goes back to the open list for another driver to take.')) return;
+    setReleasing(true);
+    setError('');
+    try {
+      await onUnclaim();
+    } catch (e) {
+      setError(e.message || 'Could not unclaim this ride.');
+      setReleasing(false);
+    }
+  };
   return (
     <DriverShell onBack={onBack}>
       <div className="body">
@@ -75,6 +91,17 @@ export default function RideDetails({ booking, onBack, onStartNavigation }) {
             Start Navigation
           </button>
         )}
+        {startable && onUnclaim && (
+          <button
+            className="btn btn-ghost rise-3"
+            onClick={doUnclaim}
+            disabled={releasing}
+            style={{ marginTop: 10 }}
+          >
+            {releasing ? 'Unclaiming…' : 'Unclaim ride'}
+          </button>
+        )}
+        {error && <p className="error-text center" style={{ marginTop: 10 }}>{error}</p>}
       </div>
     </DriverShell>
   );

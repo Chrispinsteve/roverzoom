@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../db/supabase');
 const { requireDriver, requireUser, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
 const { driverPayout } = require('../services/payout');
+const { haversineMiles } = require('../services/fare');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
 const { stripe } = require('../services/stripe');
@@ -20,6 +21,70 @@ const AVAILABLE_GRACE_HOURS = Number(process.env.AVAILABLE_GRACE_HOURS) || 6;
 
 function withPayout(booking) {
   return { ...booking, driver_payout: driverPayout(Number(booking.fare), booking.scheduled_at) };
+}
+
+// ============================================================
+// Schedule feasibility — can this driver actually do this ride?
+// ============================================================
+// A driver can only be in one place at a time, and needs time to drive from
+// one ride's drop-off to the next ride's pickup. These checks run at claim
+// time against every ride the driver has already committed to.
+const DEADHEAD_MPH = Number(process.env.DEADHEAD_MPH) || 30;   // avg speed between rides
+const ROAD_FACTOR = 1.3;                                        // straight-line -> road distance
+const HANDOFF_BUFFER_MIN = Number(process.env.HANDOFF_BUFFER_MIN) || 10; // parking/wait slack
+const DEFAULT_GAP_MIN = Number(process.env.DEFAULT_GAP_MIN) || 20;       // required gap when coords unknown
+
+// A driver's live commitments — claimed or in-progress, not finished/canceled.
+const COMMITTED_STATUSES = ['driver_assigned', 'driver_en_route', 'arrived', 'in_progress'];
+
+function tripWindow(b) {
+  const start = new Date(b.scheduled_at).getTime();
+  const end = start + (Number(b.duration_minutes) || 30) * 60000;
+  return { start, end };
+}
+
+// Estimated minutes to drive from one point to another (deadhead), or null if
+// either point has no coordinates. Includes a fixed handoff buffer.
+function deadheadMinutes(aLat, aLng, bLat, bLng) {
+  if ([aLat, aLng, bLat, bLng].some((v) => v == null)) return null;
+  const miles = haversineMiles(Number(aLat), Number(aLng), Number(bLat), Number(bLng)) * ROAD_FACTOR;
+  return (miles / DEADHEAD_MPH) * 60 + HANDOFF_BUFFER_MIN;
+}
+
+function fmtClock(ms) {
+  return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// Returns null if `candidate` fits alongside `existing`, else a rider-facing
+// reason string explaining the conflict.
+function conflictReason(candidate, existing) {
+  const N = tripWindow(candidate);
+  const E = tripWindow(existing);
+
+  // 1) Direct time overlap — including identical pickup times — is impossible.
+  if (N.start < E.end && E.start < N.end) {
+    return `This overlaps a trip you've already claimed (${fmtClock(E.start)}–${fmtClock(E.end)}). You can't be on two rides at once.`;
+  }
+
+  // 2) Not enough time to travel between consecutive rides.
+  if (E.end <= N.start) {
+    // existing ends first — must get from its drop-off to this pickup.
+    const need = deadheadMinutes(existing.dropoff_lat, existing.dropoff_lng, candidate.pickup_lat, candidate.pickup_lng);
+    const gap = (N.start - E.end) / 60000;
+    const required = need == null ? DEFAULT_GAP_MIN : need;
+    if (gap < required) {
+      return `Too tight after your ${fmtClock(E.start)} trip — you'd need about ${Math.ceil(required)} min to reach this pickup but only have ${Math.floor(gap)} min.`;
+    }
+  } else if (N.end <= E.start) {
+    // this ride ends first — must get from its drop-off to the existing pickup.
+    const need = deadheadMinutes(candidate.dropoff_lat, candidate.dropoff_lng, existing.pickup_lat, existing.pickup_lng);
+    const gap = (E.start - N.end) / 60000;
+    const required = need == null ? DEFAULT_GAP_MIN : need;
+    if (gap < required) {
+      return `Too tight before your ${fmtClock(E.start)} trip — you'd need about ${Math.ceil(required)} min to get there afterward but only have ${Math.floor(gap)} min.`;
+    }
+  }
+  return null;
 }
 
 // POST /api/driver/ensure-profile — self-heal a missing driver row.
@@ -154,6 +219,31 @@ router.post('/bookings/:bookingId/claim', requireDriver, requireActiveDriver, re
   const { bookingId } = req.params;
 
   try {
+    // Load the target ride's schedule + geometry so we can check it fits.
+    const { data: target, error: tErr } = await supabase
+      .from('bookings')
+      .select('id, driver_id, status, scheduled_at, duration_minutes, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
+      .eq('id', bookingId)
+      .maybeSingle();
+    if (tErr) throw tErr;
+    if (!target) return res.status(404).json({ error: 'Trip not found.' });
+    if (target.driver_id) return res.status(409).json({ error: 'This trip was already claimed by another driver.' });
+
+    // Every ride this driver is already committed to.
+    const { data: committed, error: cErr } = await supabase
+      .from('bookings')
+      .select('id, scheduled_at, duration_minutes, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng')
+      .eq('driver_id', req.driver.id)
+      .in('status', COMMITTED_STATUSES);
+    if (cErr) throw cErr;
+
+    // Reject if the new ride collides in time with, or can't be reached in
+    // time from/to, any existing commitment.
+    for (const existing of committed || []) {
+      const reason = conflictReason(target, existing);
+      if (reason) return res.status(409).json({ error: reason, code: 'schedule_conflict' });
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .update({ driver_id: req.driver.id, status: 'driver_assigned', accepted_at: new Date().toISOString() })
@@ -255,13 +345,17 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
 // pattern as claim: the WHERE clause enforces ownership + status, so a
 // stale double-tap or a race with en_route fails safely with 409.
 const RELEASE_CUTOFF_HOURS = Number(process.env.RELEASE_CUTOFF_HOURS) || 2;
+// Grace period right after claiming: a mistaken claim can ALWAYS be undone for
+// this long, even inside the cutoff window. "I tapped it by accident" should
+// never require calling support.
+const RELEASE_GRACE_MIN = Number(process.env.RELEASE_GRACE_MIN) || 10;
 
 router.post('/bookings/:bookingId/release', requireDriver, requireActiveDriver, async (req, res) => {
   const { bookingId } = req.params;
   try {
     const { data: booking, error: fetchErr } = await supabase
       .from('bookings')
-      .select('id, driver_id, status, scheduled_at')
+      .select('id, driver_id, status, scheduled_at, accepted_at')
       .eq('id', bookingId)
       .maybeSingle();
     if (fetchErr) throw fetchErr;
@@ -271,8 +365,10 @@ router.post('/bookings/:bookingId/release', requireDriver, requireActiveDriver, 
     if (booking.status !== 'driver_assigned') {
       return res.status(409).json({ error: 'A trip can only be released before you start driving to it.' });
     }
+    const justClaimed = booking.accepted_at &&
+      (Date.now() - new Date(booking.accepted_at).getTime()) < RELEASE_GRACE_MIN * 60000;
     const hoursOut = (new Date(booking.scheduled_at) - Date.now()) / 36e5;
-    if (hoursOut < RELEASE_CUTOFF_HOURS) {
+    if (!justClaimed && hoursOut < RELEASE_CUTOFF_HOURS) {
       return res.status(409).json({
         error: `Pickup is less than ${RELEASE_CUTOFF_HOURS}h away — the rider is counting on you. Contact support if you truly can't make it.`,
       });
