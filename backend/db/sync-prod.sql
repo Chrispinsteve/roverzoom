@@ -133,6 +133,20 @@ CREATE INDEX IF NOT EXISTS idx_bookings_status_scheduled_at ON bookings(status, 
 CREATE INDEX IF NOT EXISTS idx_bookings_driver_id ON bookings(driver_id);
 
 -- ------------------------------------------------------------
+-- Card payments (Stripe): intent tracking + zelle method.
+-- A MISSING stripe_payment_intent_id is what makes /payments/create-intent
+-- fail (500) even when the Stripe keys ARE set — the query selects this
+-- column, so its absence breaks card payment before Stripe is ever called.
+-- ------------------------------------------------------------
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_bookings_stripe_intent
+  ON bookings(stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL;
+
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_payment_method_check;
+ALTER TABLE bookings ADD CONSTRAINT bookings_payment_method_check
+  CHECK (payment_method IN ('card','cash','zelle'));
+
+-- ------------------------------------------------------------
 -- Dispatch / earnings / payout tables (created only if missing — existing
 -- rows preserved; NO drop)
 -- ------------------------------------------------------------
