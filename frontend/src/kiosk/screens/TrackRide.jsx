@@ -89,9 +89,9 @@ export default function TrackRide({ reference, initialBooking, onBack, onNewRide
       </div>
 
       {booking && booking.pickup_lat != null && !canceled && (
-        <div style={{ borderRadius: 16, overflow: 'hidden', margin: '2px 0 6px' }}>
+        <div className="k-track-map">
           <LiveMap
-            height={260}
+            height={250}
             pickup={{ lat: booking.pickup_lat, lng: booking.pickup_lng, address: booking.pickup_address, label: 'Pickup' }}
             dropoff={{ lat: booking.dropoff_lat, lng: booking.dropoff_lng, address: booking.dropoff_address, label: 'Dropoff' }}
             vehicle={driverLoc}
