@@ -51,15 +51,17 @@ export async function enablePush() {
     throw e;
   }
 
-  const reg = await navigator.serviceWorker.register('/sw.js');
-  await navigator.serviceWorker.ready;
-
+  // Ask for permission FIRST, right on the user's tap — iOS is strict about the
+  // prompt happening within the gesture, so do it before any slower awaits.
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
     const e = new Error('Notifications are blocked. Enable them in your browser settings to get ride alerts.');
     e.code = 'denied';
     throw e;
   }
+
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
 
   const { configured, key } = await driverApi.getPushKey();
   if (!configured || !key) {
