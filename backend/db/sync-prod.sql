@@ -230,6 +230,11 @@ CREATE INDEX IF NOT EXISTS idx_driver_earnings_driver_id ON driver_earnings(driv
 -- the driver already collected the fare in hand, so it must never be paid out
 -- again. 'cash' earnings are settled at the ride; 'card' earnings are payable.
 ALTER TABLE driver_earnings ADD COLUMN IF NOT EXISTS payment_method TEXT;
+-- Card fares transfer to the driver's Stripe Connect account on ride
+-- completion; these track that transfer so a fare is never paid twice and the
+-- cash-out/pending balance reflects only what's still owed.
+ALTER TABLE driver_earnings ADD COLUMN IF NOT EXISTS paid_out_at        TIMESTAMPTZ;
+ALTER TABLE driver_earnings ADD COLUMN IF NOT EXISTS stripe_transfer_id TEXT;
 
 CREATE TABLE IF NOT EXISTS driver_payouts (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),

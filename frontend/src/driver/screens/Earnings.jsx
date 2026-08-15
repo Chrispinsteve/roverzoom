@@ -57,19 +57,21 @@ export default function Earnings({ activeTab, onChangeTab }) {
           <>
             <div className="drv-card rise-1" style={{ marginTop: 8 }}>
               <div className="drv-card-top">
-                <span className="drv-card-label">Available to cash out</span>
+                <span className="drv-card-label">Pending payout</span>
                 <span className="drv-card-icon"><Icon name="wallet" size={17} color="var(--ink-3)" /></span>
               </div>
-              <div className="drv-card-value">${(data.cashOutBalance ?? 0).toFixed(2)}</div>
+              <div className="drv-card-value">${(data.pendingPayout ?? 0).toFixed(2)}</div>
               <div className="drv-card-sub" style={{ lineHeight: 1.5 }}>
-                Your card fares, minus the platform commission owed on your cash rides — cash is paid to you directly by the rider.
-                {data.cashCommissionOwed > 0 && ` $${data.cashCommissionOwed.toFixed(2)} cash commission deducted.`}
+                Card fares transfer to your bank automatically after each ride (platform commission kept, cash rides paid to you directly).
+                {(data.pendingPayout ?? 0) > 0 && ' This is waiting because your payout setup isn’t finished — set it up in Profile.'}
+                {data.cashCommissionOwed > 0 && ` Includes $${data.cashCommissionOwed.toFixed(2)} cash commission owed.`}
               </div>
             </div>
 
             <div className="stat-strip rise-1">
               <div className="stat"><div className="k">Today</div><div className="v">${data.todayTotal.toFixed(2)}</div></div>
               <div className="stat"><div className="k">This Week</div><div className="v">${data.weekTotal.toFixed(2)}</div></div>
+              <div className="stat"><div className="k">Paid Out</div><div className="v">${(data.paidOutTotal ?? 0).toFixed(2)}</div></div>
             </div>
 
             <WeekChart recent={data.recent} />
@@ -85,7 +87,7 @@ export default function Earnings({ activeTab, onChangeTab }) {
               const label = isCommission
                 ? 'Platform commission — cash ride'
                 : e.type === 'fare'
-                  ? (isCash ? 'Cash ride — collected' : 'Card ride — payout')
+                  ? (isCash ? 'Cash ride — collected' : (e.paid_out_at ? 'Card ride — paid out' : 'Card ride — pending payout'))
                   : e.type === 'bonus' ? 'Bonus' : e.type;
               const color = amt < 0 ? 'var(--danger)' : isCash ? 'var(--ink-3)' : 'var(--positive)';
               return (

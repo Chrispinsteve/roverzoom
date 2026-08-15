@@ -292,7 +292,7 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
     try {
       const { data: booking, error: fetchErr } = await supabase
         .from('bookings')
-        .select('fare, scheduled_at, status, driver_id')
+        .select('fare, scheduled_at, status, driver_id, payment_method')
         .eq('id', bookingId)
         .maybeSingle();
       if (fetchErr) throw fetchErr;
@@ -310,7 +310,17 @@ router.post('/bookings/:bookingId/status', requireDriver, requireActiveDriver, a
         p_earnings_amount: amount,
       });
       if (error) throw error;
-      return res.json(withPayout({ ...data, scheduled_at: data.scheduled_at || booking.scheduled_at }));
+
+      // Card ride: transfer the driver's share to their Connect account now,
+      // keeping the platform commission automatically. Awaited (so it actually
+      // runs on serverless) but its own failures never fail the completion —
+      // an untransferred share simply stays owed in the ledger.
+      let payout = { status: 'not_card' };
+      if (booking.payment_method === 'card') {
+        payout = await disburseCardShare(req.driver, bookingId, amount);
+      }
+
+      return res.json(withPayout({ ...data, scheduled_at: data.scheduled_at || booking.scheduled_at, payout }));
     } catch (err) {
       console.error('complete booking error', err.message);
       return res.status(500).json({ error: 'Could not complete trip.' });
@@ -404,7 +414,7 @@ router.get('/earnings', requireDriver, async (req, res) => {
     // swap for a SQL aggregate if a driver ever accrues tens of thousands.
     const { data: all, error } = await supabase
       .from('driver_earnings')
-      .select('id, amount, type, payment_method, created_at, booking_id')
+      .select('id, amount, type, payment_method, created_at, booking_id, paid_out_at')
       .eq('driver_id', req.driver.id)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -418,16 +428,22 @@ router.get('/earnings', requireDriver, async (req, res) => {
     const todayTotal = rows.filter((e) => isFare(e) && e.created_at >= startOfToday).reduce((s, e) => s + num(e), 0);
     const weekTotal = rows.filter((e) => isFare(e) && e.created_at >= startOfWeek).reduce((s, e) => s + num(e), 0);
 
-    // Cash-out balance = card fares (platform holds the money) MINUS the
-    // commission owed on cash rides (negative adjustments). Cash fares
-    // themselves are excluded — already collected in hand.
-    let cashOutBalance = 0;
+    // Card fares transfer to the driver's bank automatically on completion.
+    //   paidOutTotal   = card fares already transferred
+    //   pendingPayout  = card fares NOT yet transferred (e.g. onboarding not
+    //                    finished), MINUS the commission owed on cash rides
+    // Cash fares are excluded from both — the driver already holds that money.
+    let pendingPayout = 0;
+    let paidOutTotal = 0;
     let cashCommissionOwed = 0;
     for (const e of rows) {
       if (isFare(e)) {
-        if (e.payment_method === 'card') cashOutBalance += num(e);
+        if (e.payment_method === 'card') {
+          if (e.paid_out_at) paidOutTotal += num(e);
+          else pendingPayout += num(e);
+        }
       } else {
-        cashOutBalance += num(e); // adjustments (cash commission is negative)
+        pendingPayout += num(e); // cash commission (negative) reduces what's owed
         if (num(e) < 0 && e.payment_method === 'cash') cashCommissionOwed += -num(e);
       }
     }
@@ -444,9 +460,11 @@ router.get('/earnings', requireDriver, async (req, res) => {
     res.json({
       todayTotal: Math.round(todayTotal * 100) / 100,
       weekTotal: Math.round(weekTotal * 100) / 100,
-      // What the driver can actually cash out: card fares minus cash commission.
-      cashOutBalance: Math.round(cashOutBalance * 100) / 100,
-      // Platform commission still owed from cash rides (deducted above).
+      // Card fares transferred to the driver's bank automatically.
+      paidOutTotal: Math.round(paidOutTotal * 100) / 100,
+      // Card fares not yet transferred, minus cash commission owed.
+      pendingPayout: Math.round(pendingPayout * 100) / 100,
+      // Platform commission still owed from cash rides (nets into pending).
       cashCommissionOwed: Math.round(cashCommissionOwed * 100) / 100,
       recent: earnings,
       payouts: payouts || [],
@@ -573,6 +591,54 @@ async function setConnectAccountId(driver, accountId) {
 
 function payoutBaseUrl() {
   return (process.env.PUBLIC_BASE_URL || 'https://roverzoom.com').replace(/\/+$/, '');
+}
+
+// Transfer a completed CARD ride's driver share to their Stripe Connect account,
+// keeping the platform commission automatically (the rider already paid the full
+// fare into the platform balance at checkout). Best-effort and idempotent:
+//   * no Stripe / no connected account / payouts not enabled -> HOLD: the share
+//     stays owed in the ledger (paid_out_at NULL) and can be settled once the
+//     driver finishes onboarding.
+//   * idempotencyKey per booking means a retry NEVER double-pays.
+//   * on any Stripe error (e.g. insufficient available balance) it leaves the
+//     fare owed rather than marking it paid, so nothing is silently lost.
+// Never throws — the ride completion must not fail because a transfer did.
+async function disburseCardShare(driver, bookingId, shareAmount) {
+  try {
+    const s = stripe();
+    if (!s) return { status: 'no_stripe' };
+    if (!(Number(shareAmount) > 0)) return { status: 'zero' };
+
+    const accountId = await getConnectAccountId(driver).catch(() => null);
+    if (!accountId) return { status: 'no_account' };
+
+    const acct = await s.accounts.retrieve(accountId);
+    if (!acct.payouts_enabled) return { status: 'onboarding_incomplete' };
+
+    const transfer = await s.transfers.create({
+      amount: Math.round(Number(shareAmount) * 100),
+      currency: 'usd',
+      destination: accountId,
+      transfer_group: bookingId,
+      metadata: { booking_id: bookingId, driver_id: driver.id },
+    }, { idempotencyKey: `transfer_${bookingId}` });
+
+    // Mark the card fare as paid out so it drops off the pending balance and is
+    // never transferred again.
+    await supabase
+      .from('driver_earnings')
+      .update({ paid_out_at: new Date().toISOString(), stripe_transfer_id: transfer.id })
+      .eq('booking_id', bookingId)
+      .eq('driver_id', driver.id)
+      .eq('type', 'fare')
+      .eq('payment_method', 'card');
+
+    return { status: 'transferred', transferId: transfer.id };
+  } catch (err) {
+    // Leave it OWED (paid_out_at stays NULL) so it can be retried later.
+    console.error('card disburse failed for booking', bookingId, '—', err.message);
+    return { status: 'failed', error: err.message };
+  }
 }
 
 // POST /api/driver/payouts/onboard — start or resume Connect Express onboarding.

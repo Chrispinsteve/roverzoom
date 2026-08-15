@@ -170,6 +170,10 @@ CREATE TABLE driver_earnings (
   -- Cash fares are collected in hand at the ride; card fares are payable via
   -- cash-out. Recorded so cash-out never pays a cash ride again.
   payment_method TEXT,
+  -- Set when a card fare has been transferred to the driver's Stripe Connect
+  -- account. NULL = still owed (not yet transferred, e.g. onboarding pending).
+  paid_out_at        TIMESTAMPTZ,
+  stripe_transfer_id TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
