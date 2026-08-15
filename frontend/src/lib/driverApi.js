@@ -55,6 +55,13 @@ export const driverApi = {
   setOnline: (online) =>
     authedReq('/driver/online', { method: 'POST', body: JSON.stringify({ online }) }),
 
+  // Web Push: VAPID key + subscribe/unsubscribe for ride-request alerts.
+  getPushKey: () => authedReq('/driver/push/key'),
+  subscribePush: (subscription) =>
+    authedReq('/driver/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription }) }),
+  unsubscribePush: (endpoint) =>
+    authedReq('/driver/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+
   getSchedule: () => authedReq('/driver/schedule'),
   getAvailableTrips: () => authedReq('/driver/available-trips'),
   claimBooking: (bookingId) => authedReq(`/driver/bookings/${bookingId}/claim`, { method: 'POST' }),

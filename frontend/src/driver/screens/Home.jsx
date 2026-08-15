@@ -3,8 +3,67 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import Avatar from '../components/Avatar';
 import { driverApi } from '../../lib/driverApi';
+import { pushStatus, enablePush, disablePush } from '../../lib/push';
 import { mapsUrl } from '../lib/maps';
 import { shortAddress } from '../lib/address';
+
+// Ride-request alerts (Web Push). Push where the device allows it, and the
+// server texts drivers who don't have it on — so this is an upgrade ("get
+// pinged even when the app is closed"), never the only way to hear about a ride.
+function NotificationToggle() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => { pushStatus().then(setState).catch(() => setState({ supported: false })); }, []);
+
+  const turnOn = async () => {
+    setBusy(true); setMsg('');
+    try {
+      await enablePush();
+      setState((s) => ({ ...(s || {}), supported: true, enabled: true }));
+      setMsg('Alerts on — you’ll be pinged the moment a ride is requested.');
+    } catch (e) { setMsg(e.message || 'Could not turn on alerts.'); }
+    finally { setBusy(false); }
+  };
+
+  const turnOff = async () => {
+    setBusy(true); setMsg('');
+    try { await disablePush(); setState((s) => ({ ...(s || {}), enabled: false })); }
+    finally { setBusy(false); }
+  };
+
+  if (!state) return null;
+
+  return (
+    <div className="drv-card rise" style={{ marginTop: 4 }}>
+      <div className="drv-card-top">
+        <span className="drv-card-label">Ride request alerts</span>
+        <span className="drv-card-icon"><Icon name="car" size={17} color="var(--ink-3)" /></span>
+      </div>
+      {state.enabled ? (
+        <>
+          <div className="drv-card-value" style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="check" size={16} color="var(--positive)" stroke={3} /> On
+          </div>
+          <button className="btn btn-ghost" onClick={turnOff} disabled={busy} style={{ width: '100%', marginTop: 10 }}>
+            {busy ? '…' : 'Turn off'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="drv-card-sub" style={{ marginBottom: 10 }}>
+            Get pinged the moment a new ride is requested — even when the app is closed.
+          </p>
+          <button className="btn btn-ghost" onClick={turnOn} disabled={busy} style={{ width: '100%' }}>
+            {busy ? 'Enabling…' : 'Turn on alerts'}
+          </button>
+        </>
+      )}
+      {msg && <p className="drv-card-sub" style={{ marginTop: 8, lineHeight: 1.5 }}>{msg}</p>}
+    </div>
+  );
+}
 
 const UPCOMING = ['driver_assigned', 'driver_en_route', 'arrived', 'in_progress'];
 
@@ -174,6 +233,8 @@ export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, o
         />
         <StatCard icon="shieldCheck" label="Driver Score" value={`${driver.rating} ★`} sub={`${driver.rides_completed} rides completed`} />
         <StatCard icon="wallet" label="This Week" value={earnings ? `$${earnings.weekTotal.toFixed(2)}` : '—'} />
+
+        {profileComplete && <NotificationToggle />}
 
         <div className="spacer" />
 

@@ -3,6 +3,7 @@ const supabase = require('../db/supabase');
 const { estimate } = require('../services/fare');
 const { makeReference } = require('../services/reference');
 const { sendBookingConfirmation } = require('../services/sms');
+const { notifyDriversOfNewRequest } = require('../services/driverNotify');
 
 const router = express.Router();
 
@@ -107,6 +108,11 @@ router.post('/', async (req, res) => {
     } catch (smsErr) {
       console.error('booking confirmation sms failed (non-fatal)', smsErr.message);
     }
+
+    // Fan out to drivers (push where enabled, SMS fallback otherwise).
+    // Fire-and-forget: notifications must never affect the booking response.
+    notifyDriversOfNewRequest(data).catch((e) =>
+      console.warn('[bookings] driver notify failed (non-fatal):', e.message));
 
     res.status(201).json(data);
   } catch (err) {

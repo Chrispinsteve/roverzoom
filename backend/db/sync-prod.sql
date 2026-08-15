@@ -126,6 +126,22 @@ CREATE POLICY driver_locations_select_own ON driver_locations FOR SELECT
   USING (driver_id IN (SELECT id FROM drivers WHERE auth_user_id = auth.uid()));
 
 -- ------------------------------------------------------------
+-- Web Push subscriptions — one row per device a driver enabled ride-request
+-- notifications on. endpoint is unique so re-subscribing the same device
+-- upserts rather than duplicating.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id          BIGSERIAL PRIMARY KEY,
+  driver_id   UUID NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+  endpoint    TEXT NOT NULL UNIQUE,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_driver ON push_subscriptions(driver_id);
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- ------------------------------------------------------------
 -- Booking lifecycle columns + constraints
 -- THIS is what makes existing ride requests retrievable AND actionable:
 -- the driver_id, the per-stage timestamps, and the widened status CHECK so a

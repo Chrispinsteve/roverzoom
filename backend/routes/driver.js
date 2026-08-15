@@ -3,6 +3,7 @@ const supabase = require('../db/supabase');
 const { requireDriver, requireUser, requireActiveDriver, requireCompleteProfile } = require('../middleware/requireDriver');
 const { driverPayout } = require('../services/payout');
 const { haversineMiles } = require('../services/fare');
+const push = require('../services/push');
 const { briefAddress } = require('../services/address');
 const { sendDriverAcceptedNotification } = require('../services/sms');
 const { stripe } = require('../services/stripe');
@@ -658,6 +659,60 @@ router.get('/screening/status', requireDriver, async (req, res) => {
   } catch (err) {
     console.error('screening status error', err.message);
     res.status(500).json({ error: 'Could not fetch screening status.' });
+  }
+});
+
+// ============================================================
+// Ride-request notifications (Web Push)
+// ============================================================
+
+// GET /api/driver/push/key — VAPID public key + whether push is configured.
+// The browser needs the key to create a subscription. Public by design.
+router.get('/push/key', requireDriver, (req, res) => {
+  res.json({ configured: push.isConfigured(), key: push.publicKey() });
+});
+
+// POST /api/driver/push/subscribe — { subscription: { endpoint, keys:{p256dh,auth} } }
+router.post('/push/subscribe', requireDriver, async (req, res) => {
+  const sub = req.body && req.body.subscription;
+  const endpoint = sub && sub.endpoint;
+  const p256dh = sub && sub.keys && sub.keys.p256dh;
+  const auth = sub && sub.keys && sub.keys.auth;
+  if (!endpoint || !p256dh || !auth) {
+    return res.status(400).json({ error: 'Invalid push subscription.' });
+  }
+  try {
+    // Upsert on endpoint: re-subscribing the same device (or a device that
+    // moved to another driver account) updates rather than duplicates.
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .upsert(
+        { driver_id: req.driver.id, endpoint, p256dh, auth },
+        { onConflict: 'endpoint' }
+      );
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('push subscribe error', err.message);
+    res.status(500).json({ error: 'Could not enable notifications.' });
+  }
+});
+
+// POST /api/driver/push/unsubscribe — { endpoint }
+router.post('/push/unsubscribe', requireDriver, async (req, res) => {
+  const endpoint = req.body && req.body.endpoint;
+  if (!endpoint) return res.status(400).json({ error: 'endpoint is required.' });
+  try {
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('endpoint', endpoint)
+      .eq('driver_id', req.driver.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('push unsubscribe error', err.message);
+    res.status(500).json({ error: 'Could not disable notifications.' });
   }
 });
 

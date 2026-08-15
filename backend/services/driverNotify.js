@@ -1,0 +1,87 @@
+// Fan out a "new ride request" to drivers who can claim it. Push-first: a
+// driver who enabled notifications gets a free Web Push; a driver without a
+// push subscription gets an SMS instead (covers uninstalled iPhones, which
+// Apple does not allow to receive web push). SMS is throttled per driver so a
+// burst of bookings can't spam anyone.
+//
+// Entirely best-effort — this is called fire-and-forget from booking creation
+// and must never affect whether the booking itself succeeds.
+
+const supabase = require('../db/supabase');
+const push = require('./push');
+const { sendSms } = require('./sms');
+const { briefAddress } = require('./address');
+
+const SMS_THROTTLE_MS = Number(process.env.NOTIFY_SMS_THROTTLE_MS) || 3 * 60 * 1000;
+// Per-driver last-SMS timestamps. In-memory and per serverless instance, so
+// this is a soft cap, not a hard guarantee — good enough to stop obvious spam.
+const lastSmsAt = new Map();
+
+function appUrl() {
+  const base = (process.env.PUBLIC_APP_URL || process.env.PUBLIC_BASE_URL || 'https://www.roverzoom.com').replace(/\/+$/, '');
+  return `${base}/?driver=1`;
+}
+
+async function notifyDriversOfNewRequest(booking) {
+  if (!booking) return;
+  try {
+    // Eligible = active drivers (the pool that can claim in the open marketplace).
+    const { data: drivers, error } = await supabase
+      .from('drivers')
+      .select('id, phone')
+      .eq('status', 'active');
+    if (error || !drivers || drivers.length === 0) return;
+
+    const ids = drivers.map((d) => d.id);
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('id, driver_id, endpoint, p256dh, auth')
+      .in('driver_id', ids);
+
+    const byDriver = new Map();
+    for (const s of subs || []) {
+      if (!byDriver.has(s.driver_id)) byDriver.set(s.driver_id, []);
+      byDriver.get(s.driver_id).push(s);
+    }
+
+    const area = briefAddress(booking.pickup_address) || 'a nearby location';
+    const fare = booking.fare != null ? `$${Number(booking.fare).toFixed(2)}` : '';
+    const payload = {
+      title: 'New ride request',
+      body: `${area}${fare ? ' · ' + fare : ''} — tap to view`,
+      url: appUrl(),
+      tag: 'ride-request',
+    };
+
+    const now = Date.now();
+    for (const d of drivers) {
+      const driverSubs = byDriver.get(d.id) || [];
+
+      if (driverSubs.length > 0) {
+        for (const s of driverSubs) {
+          const sub = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
+          const r = await push.sendPush(sub, payload);
+          // Prune dead subscriptions so we stop trying them.
+          if (r.expired) {
+            await supabase.from('push_subscriptions').delete().eq('id', s.id).then(() => {}, () => {});
+          }
+        }
+        continue;
+      }
+
+      // No push subscription — SMS fallback, throttled per driver.
+      if (d.phone) {
+        const last = lastSmsAt.get(d.id) || 0;
+        if (now - last >= SMS_THROTTLE_MS) {
+          lastSmsAt.set(d.id, now);
+          sendSms(d.phone, `RoverZoom: New ride request (${area}). Open to claim: ${appUrl()}`)
+            .catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.error('notifyDriversOfNewRequest failed (non-fatal):', err.message);
+  }
+}
+
+module.exports = { notifyDriversOfNewRequest };
