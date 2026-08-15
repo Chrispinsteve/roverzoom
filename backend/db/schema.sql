@@ -167,6 +167,9 @@ CREATE TABLE driver_earnings (
   booking_id  UUID REFERENCES bookings(id),
   amount      NUMERIC(8,2) NOT NULL,
   type        TEXT NOT NULL CHECK (type IN ('fare','tip','bonus','adjustment')),
+  -- Cash fares are collected in hand at the ride; card fares are payable via
+  -- cash-out. Recorded so cash-out never pays a cash ride again.
+  payment_method TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -365,8 +368,8 @@ BEGIN
     RAISE EXCEPTION 'booking_not_in_progress';
   END IF;
 
-  INSERT INTO driver_earnings (driver_id, booking_id, amount, type)
-    VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare');
+  INSERT INTO driver_earnings (driver_id, booking_id, amount, type, payment_method)
+    VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare', v_booking.payment_method);
 
   UPDATE drivers SET rides_completed = rides_completed + 1 WHERE id = p_driver_id;
 

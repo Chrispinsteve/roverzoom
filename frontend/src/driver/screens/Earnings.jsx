@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import DriverShell from '../DriverShell';
+import Icon from '../../components/Icon';
 import { driverApi } from '../../lib/driverApi';
 
 function dateLabel(iso) {
@@ -54,6 +55,18 @@ export default function Earnings({ activeTab, onChangeTab }) {
 
         {data && (
           <>
+            <div className="drv-card rise-1" style={{ marginTop: 8 }}>
+              <div className="drv-card-top">
+                <span className="drv-card-label">Available to cash out</span>
+                <span className="drv-card-icon"><Icon name="wallet" size={17} color="var(--ink-3)" /></span>
+              </div>
+              <div className="drv-card-value">${(data.cashOutBalance ?? 0).toFixed(2)}</div>
+              <div className="drv-card-sub" style={{ lineHeight: 1.5 }}>
+                Card fares only — cash rides are paid to you directly by the rider, so they’re already yours.
+                {data.cashInHandWeek > 0 && ` You collected $${data.cashInHandWeek.toFixed(2)} in cash this week.`}
+              </div>
+            </div>
+
             <div className="stat-strip rise-1">
               <div className="stat"><div className="k">Today</div><div className="v">${data.todayTotal.toFixed(2)}</div></div>
               <div className="stat"><div className="k">This Week</div><div className="v">${data.weekTotal.toFixed(2)}</div></div>
@@ -65,15 +78,23 @@ export default function Earnings({ activeTab, onChangeTab }) {
             {data.recent.length === 0 && (
               <p className="muted center" style={{ marginTop: 12 }}>No earnings yet — completed trips will show up here.</p>
             )}
-            {data.recent.map((e) => (
-              <div key={e.id} className="drv-trip-row" style={{ cursor: 'default' }}>
-                <div className="drv-trip-body">
-                  <div className="drv-trip-time">{dateLabel(e.created_at)}</div>
-                  <div className="drv-trip-route">{e.type === 'fare' ? 'Ride payout' : e.type === 'bonus' ? 'Bonus' : e.type}</div>
+            {data.recent.map((e) => {
+              const isCash = e.type === 'fare' && e.payment_method === 'cash';
+              const label = e.type === 'fare'
+                ? (isCash ? 'Cash ride — collected' : 'Card ride — payout')
+                : e.type === 'bonus' ? 'Bonus' : e.type;
+              return (
+                <div key={e.id} className="drv-trip-row" style={{ cursor: 'default' }}>
+                  <div className="drv-trip-body">
+                    <div className="drv-trip-time">{dateLabel(e.created_at)}</div>
+                    <div className="drv-trip-route">{label}</div>
+                  </div>
+                  <span className="drv-trip-status" style={{ color: isCash ? 'var(--ink-3)' : 'var(--positive)' }}>
+                    {isCash ? '' : '+'}${Number(e.amount).toFixed(2)}
+                  </span>
                 </div>
-                <span className="drv-trip-status" style={{ color: 'var(--positive)' }}>+${Number(e.amount).toFixed(2)}</span>
-              </div>
-            ))}
+              );
+            })}
 
             {data.payouts.length > 0 && (
               <>

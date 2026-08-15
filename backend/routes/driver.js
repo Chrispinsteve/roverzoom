@@ -414,6 +414,23 @@ router.get('/earnings', requireDriver, async (req, res) => {
       .filter((e) => e.created_at >= startOfWeek)
       .reduce((sum, e) => sum + Number(e.amount), 0);
 
+    // Cash-out balance = CARD earnings only. Cash fares are collected in hand
+    // from the rider at the ride, so they must never be paid out again — only
+    // card fares (which the platform holds) are payable. All-time card fares,
+    // since no disbursement subtracts from this yet.
+    const { data: cardRows, error: cardErr } = await supabase
+      .from('driver_earnings')
+      .select('amount')
+      .eq('driver_id', req.driver.id)
+      .eq('payment_method', 'card');
+    if (cardErr) throw cardErr;
+    const cashOutBalance = (cardRows || []).reduce((s, e) => s + Number(e.amount), 0);
+
+    // Cash the driver already pocketed this week — informational, NOT payable.
+    const cashInHandWeek = (earnings || [])
+      .filter((e) => e.payment_method === 'cash' && e.created_at >= startOfWeek)
+      .reduce((s, e) => s + Number(e.amount), 0);
+
     const { data: payouts, error: payoutsErr } = await supabase
       .from('driver_payouts')
       .select('*')
@@ -425,6 +442,10 @@ router.get('/earnings', requireDriver, async (req, res) => {
     res.json({
       todayTotal: Math.round(todayTotal * 100) / 100,
       weekTotal: Math.round(weekTotal * 100) / 100,
+      // What the driver can actually cash out (card fares only).
+      cashOutBalance: Math.round(cashOutBalance * 100) / 100,
+      // What they already collected in cash this week (already in their pocket).
+      cashInHandWeek: Math.round(cashInHandWeek * 100) / 100,
       recent: earnings || [],
       payouts: payouts || [],
     });

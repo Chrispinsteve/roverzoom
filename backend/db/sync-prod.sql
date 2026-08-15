@@ -226,6 +226,10 @@ CREATE TABLE IF NOT EXISTS driver_earnings (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_driver_earnings_driver_id ON driver_earnings(driver_id, created_at);
+-- How the fare was paid, so cash-out pays CARD earnings only: on a cash ride
+-- the driver already collected the fare in hand, so it must never be paid out
+-- again. 'cash' earnings are settled at the ride; 'card' earnings are payable.
+ALTER TABLE driver_earnings ADD COLUMN IF NOT EXISTS payment_method TEXT;
 
 CREATE TABLE IF NOT EXISTS driver_payouts (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -346,8 +350,11 @@ BEGIN
     RAISE EXCEPTION 'booking_not_in_progress';
   END IF;
 
-  INSERT INTO driver_earnings (driver_id, booking_id, amount, type)
-    VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare');
+  -- Tag the earning with how the ride was paid. Cash fares are money the
+  -- driver already has in hand, so cash-out must exclude them (see the
+  -- earnings endpoint's cashOutBalance).
+  INSERT INTO driver_earnings (driver_id, booking_id, amount, type, payment_method)
+    VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare', v_booking.payment_method);
 
   UPDATE drivers SET rides_completed = rides_completed + 1 WHERE id = p_driver_id;
 
