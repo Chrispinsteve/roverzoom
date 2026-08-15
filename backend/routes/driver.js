@@ -399,37 +399,39 @@ router.get('/earnings', requireDriver, async (req, res) => {
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: earnings, error } = await supabase
+    // All ledger rows for accurate balances (no limit — the cash-out balance
+    // must net every card fare and every cash commission). Fine at this scale;
+    // swap for a SQL aggregate if a driver ever accrues tens of thousands.
+    const { data: all, error } = await supabase
       .from('driver_earnings')
-      .select('*')
+      .select('id, amount, type, payment_method, created_at, booking_id')
       .eq('driver_id', req.driver.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
+      .order('created_at', { ascending: false });
     if (error) throw error;
+    const rows = all || [];
+    const num = (e) => Number(e.amount);
+    const isFare = (e) => e.type === 'fare';
 
-    const todayTotal = (earnings || [])
-      .filter((e) => e.created_at >= startOfToday)
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-    const weekTotal = (earnings || [])
-      .filter((e) => e.created_at >= startOfWeek)
-      .reduce((sum, e) => sum + Number(e.amount), 0);
+    // Income = the driver's share on every ride (card + cash). Excludes the
+    // commission adjustments so displayed earnings reflect what they actually
+    // made, not the platform's clawback.
+    const todayTotal = rows.filter((e) => isFare(e) && e.created_at >= startOfToday).reduce((s, e) => s + num(e), 0);
+    const weekTotal = rows.filter((e) => isFare(e) && e.created_at >= startOfWeek).reduce((s, e) => s + num(e), 0);
 
-    // Cash-out balance = CARD earnings only. Cash fares are collected in hand
-    // from the rider at the ride, so they must never be paid out again — only
-    // card fares (which the platform holds) are payable. All-time card fares,
-    // since no disbursement subtracts from this yet.
-    const { data: cardRows, error: cardErr } = await supabase
-      .from('driver_earnings')
-      .select('amount')
-      .eq('driver_id', req.driver.id)
-      .eq('payment_method', 'card');
-    if (cardErr) throw cardErr;
-    const cashOutBalance = (cardRows || []).reduce((s, e) => s + Number(e.amount), 0);
-
-    // Cash the driver already pocketed this week — informational, NOT payable.
-    const cashInHandWeek = (earnings || [])
-      .filter((e) => e.payment_method === 'cash' && e.created_at >= startOfWeek)
-      .reduce((s, e) => s + Number(e.amount), 0);
+    // Cash-out balance = card fares (platform holds the money) MINUS the
+    // commission owed on cash rides (negative adjustments). Cash fares
+    // themselves are excluded — already collected in hand.
+    let cashOutBalance = 0;
+    let cashCommissionOwed = 0;
+    for (const e of rows) {
+      if (isFare(e)) {
+        if (e.payment_method === 'card') cashOutBalance += num(e);
+      } else {
+        cashOutBalance += num(e); // adjustments (cash commission is negative)
+        if (num(e) < 0 && e.payment_method === 'cash') cashCommissionOwed += -num(e);
+      }
+    }
+    const earnings = rows.slice(0, 50);
 
     const { data: payouts, error: payoutsErr } = await supabase
       .from('driver_payouts')
@@ -442,11 +444,11 @@ router.get('/earnings', requireDriver, async (req, res) => {
     res.json({
       todayTotal: Math.round(todayTotal * 100) / 100,
       weekTotal: Math.round(weekTotal * 100) / 100,
-      // What the driver can actually cash out (card fares only).
+      // What the driver can actually cash out: card fares minus cash commission.
       cashOutBalance: Math.round(cashOutBalance * 100) / 100,
-      // What they already collected in cash this week (already in their pocket).
-      cashInHandWeek: Math.round(cashInHandWeek * 100) / 100,
-      recent: earnings || [],
+      // Platform commission still owed from cash rides (deducted above).
+      cashCommissionOwed: Math.round(cashCommissionOwed * 100) / 100,
+      recent: earnings,
       payouts: payouts || [],
     });
   } catch (err) {

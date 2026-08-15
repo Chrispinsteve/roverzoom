@@ -356,6 +356,15 @@ BEGIN
   INSERT INTO driver_earnings (driver_id, booking_id, amount, type, payment_method)
     VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare', v_booking.payment_method);
 
+  -- Cash ride: the driver collected the WHOLE fare from the rider, so they hold
+  -- the platform's commission (fare - driver share). Record it as a negative
+  -- adjustment that reduces their card cash-out — the platform recovers its cut
+  -- from the driver's card earnings (standard rideshare cash handling).
+  IF v_booking.payment_method = 'cash' THEN
+    INSERT INTO driver_earnings (driver_id, booking_id, amount, type, payment_method)
+      VALUES (p_driver_id, p_booking_id, -GREATEST(v_booking.fare - p_earnings_amount, 0), 'adjustment', 'cash');
+  END IF;
+
   UPDATE drivers SET rides_completed = rides_completed + 1 WHERE id = p_driver_id;
 
   RETURN v_booking;

@@ -62,8 +62,8 @@ export default function Earnings({ activeTab, onChangeTab }) {
               </div>
               <div className="drv-card-value">${(data.cashOutBalance ?? 0).toFixed(2)}</div>
               <div className="drv-card-sub" style={{ lineHeight: 1.5 }}>
-                Card fares only — cash rides are paid to you directly by the rider, so they’re already yours.
-                {data.cashInHandWeek > 0 && ` You collected $${data.cashInHandWeek.toFixed(2)} in cash this week.`}
+                Your card fares, minus the platform commission owed on your cash rides — cash is paid to you directly by the rider.
+                {data.cashCommissionOwed > 0 && ` $${data.cashCommissionOwed.toFixed(2)} cash commission deducted.`}
               </div>
             </div>
 
@@ -79,18 +79,23 @@ export default function Earnings({ activeTab, onChangeTab }) {
               <p className="muted center" style={{ marginTop: 12 }}>No earnings yet — completed trips will show up here.</p>
             )}
             {data.recent.map((e) => {
+              const amt = Number(e.amount);
+              const isCommission = e.type === 'adjustment';
               const isCash = e.type === 'fare' && e.payment_method === 'cash';
-              const label = e.type === 'fare'
-                ? (isCash ? 'Cash ride — collected' : 'Card ride — payout')
-                : e.type === 'bonus' ? 'Bonus' : e.type;
+              const label = isCommission
+                ? 'Platform commission — cash ride'
+                : e.type === 'fare'
+                  ? (isCash ? 'Cash ride — collected' : 'Card ride — payout')
+                  : e.type === 'bonus' ? 'Bonus' : e.type;
+              const color = amt < 0 ? 'var(--danger)' : isCash ? 'var(--ink-3)' : 'var(--positive)';
               return (
                 <div key={e.id} className="drv-trip-row" style={{ cursor: 'default' }}>
                   <div className="drv-trip-body">
                     <div className="drv-trip-time">{dateLabel(e.created_at)}</div>
                     <div className="drv-trip-route">{label}</div>
                   </div>
-                  <span className="drv-trip-status" style={{ color: isCash ? 'var(--ink-3)' : 'var(--positive)' }}>
-                    {isCash ? '' : '+'}${Number(e.amount).toFixed(2)}
+                  <span className="drv-trip-status" style={{ color }}>
+                    {amt < 0 ? `-$${Math.abs(amt).toFixed(2)}` : `${isCash ? '' : '+'}$${amt.toFixed(2)}`}
                   </span>
                 </div>
               );

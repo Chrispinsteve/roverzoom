@@ -371,6 +371,14 @@ BEGIN
   INSERT INTO driver_earnings (driver_id, booking_id, amount, type, payment_method)
     VALUES (p_driver_id, p_booking_id, p_earnings_amount, 'fare', v_booking.payment_method);
 
+  -- Cash ride: driver collected the whole fare, so they owe the platform its
+  -- commission (fare - driver share). Recorded as a negative adjustment that
+  -- reduces their card cash-out.
+  IF v_booking.payment_method = 'cash' THEN
+    INSERT INTO driver_earnings (driver_id, booking_id, amount, type, payment_method)
+      VALUES (p_driver_id, p_booking_id, -GREATEST(v_booking.fare - p_earnings_amount, 0), 'adjustment', 'cash');
+  END IF;
+
   UPDATE drivers SET rides_completed = rides_completed + 1 WHERE id = p_driver_id;
 
   RETURN v_booking;
