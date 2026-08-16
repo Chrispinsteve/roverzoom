@@ -7,14 +7,18 @@ let webpush = null;
 
 function ensure() {
   if (ready) return webpush;
-  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return null;
+  // Trim: env values pasted into a dashboard often carry a trailing newline or
+  // space, which silently corrupts the key and makes the browser reject it with
+  // "push service error".
+  const pub = (process.env.VAPID_PUBLIC_KEY || '').trim();
+  const priv = (process.env.VAPID_PRIVATE_KEY || '').trim();
+  if (!pub || !priv) return null;
   try {
     webpush = require('web-push');
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:support@roverzoom.com',
-      VAPID_PUBLIC_KEY,
-      VAPID_PRIVATE_KEY
+      (process.env.VAPID_SUBJECT || 'mailto:support@roverzoom.com').trim(),
+      pub,
+      priv
     );
     ready = true;
   } catch (err) {
@@ -29,8 +33,10 @@ function isConfigured() {
 }
 
 // The public key the browser needs to create a subscription. Safe to expose.
+// Trimmed so a stray newline in the env var can't corrupt the applicationServerKey.
 function publicKey() {
-  return process.env.VAPID_PUBLIC_KEY || null;
+  const k = (process.env.VAPID_PUBLIC_KEY || '').trim();
+  return k || null;
 }
 
 // Sends one notification. Returns { sent } or { sent:false, expired } — an

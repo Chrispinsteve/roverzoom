@@ -70,13 +70,35 @@ export async function enablePush() {
     throw e;
   }
 
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
+  const appServerKey = urlBase64ToUint8Array(String(key).trim());
+  // A valid VAPID applicationServerKey is a 65-byte EC point. If it isn't, the
+  // key stored on the server is malformed (usually a truncated/whitespaced env
+  // value) — fail with a message that points at the real problem.
+  if (appServerKey.length !== 65) {
+    const e = new Error('The server’s notification key looks malformed — check VAPID_PUBLIC_KEY in the deployment.');
+    e.code = 'bad_key';
+    throw e;
+  }
+
+  // Clear any existing subscription first. A subscription created with a
+  // different key (e.g. a previous setup attempt) makes a fresh subscribe fail
+  // with "Registration failed - push service error"; unsubscribing avoids that.
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) await existing.unsubscribe().catch(() => {});
+
+  let sub;
+  try {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key),
+      applicationServerKey: appServerKey,
     });
+  } catch (err) {
+    const e = new Error('Your browser couldn’t register for notifications. If this keeps happening, the server notification key may be wrong.');
+    e.code = 'subscribe_failed';
+    e.cause = err;
+    throw e;
   }
+
   await driverApi.subscribePush(sub.toJSON());
   return true;
 }
