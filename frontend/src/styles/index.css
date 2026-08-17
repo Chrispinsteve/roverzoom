@@ -834,6 +834,35 @@ input, textarea { font-family: inherit; }
 .drv-trip-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .drv-trip-actions .btn { margin-top: 0; }
 
+/* ---- Navigation screens (NavMap dominates, compact bottom card) --------- */
+.drv-nav-body { padding: 0; gap: 0; overflow: hidden; }
+.drv-nav-map { flex: 1 1 auto; min-height: 220px; position: relative; }
+.drv-nav-card {
+  flex-shrink: 0;
+  background: var(--card);
+  border-top: 1px solid var(--line-2);
+  border-radius: 20px 20px 0 0;
+  margin-top: -20px;            /* bottom-sheet overlap on the map */
+  position: relative;
+  z-index: 3;
+  padding: 18px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.30);
+}
+.drv-nav-stats { display: flex; gap: 28px; margin-bottom: 14px; }
+.drv-nav-stat-k { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+.drv-nav-stat-v { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.drv-nav-dest { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.drv-nav-dest-icon { width: 30px; height: 30px; border-radius: 50%; background: var(--canvas-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.drv-nav-dest-addr { flex: 1; min-width: 0; font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drv-nav-openmaps { font-size: 12.5px; color: var(--ink-3); text-decoration: underline; white-space: nowrap; flex-shrink: 0; }
+.drv-nav-card .btn { margin-top: 0; }
+
+/* Pulse ring under the live vehicle marker (NavMap + LiveMap). */
+@keyframes rz-map-pulse {
+  0%   { transform: scale(0.55); opacity: 0.85; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
 /* Schedule screen: My Schedule / Available Trips tabs + agenda rows */
 .drv-tabs {
   display: flex; gap: 4px; margin-bottom: 12px;
