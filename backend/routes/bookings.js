@@ -3,7 +3,7 @@ const supabase = require('../db/supabase');
 const { estimate } = require('../services/fare');
 const { makeReference } = require('../services/reference');
 const { sendBookingConfirmation } = require('../services/sms');
-const { notifyDriversOfNewRequest } = require('../services/driverNotify');
+const { notifyDriversOfNewRequest, notifyDriverOfCancellation } = require('../services/driverNotify');
 
 const router = express.Router();
 
@@ -200,6 +200,12 @@ router.post('/:ref/cancel', async (req, res) => {
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(409).json({ error: 'This ride can no longer be canceled.' });
+
+    // If a driver had already claimed it, tell them (push/SMS). Best-effort;
+    // the in-app popup handles the "while they're looking" case separately.
+    notifyDriverOfCancellation(data).catch((e) =>
+      console.warn('[bookings] cancel notify failed (non-fatal):', e.message));
+
     res.json(withDriverInfo(data));
   } catch (err) {
     console.error('cancel booking error', err.message);

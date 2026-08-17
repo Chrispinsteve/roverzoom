@@ -412,9 +412,13 @@ router.get('/earnings', requireDriver, async (req, res) => {
     // All ledger rows for accurate balances (no limit — the cash-out balance
     // must net every card fare and every cash commission). Fine at this scale;
     // swap for a SQL aggregate if a driver ever accrues tens of thousands.
+    // select('*') on purpose: it stays resilient if payment_method / paid_out_at
+    // haven't been added to this database yet (sync-prod.sql) — the rows just
+    // lack those fields and the math below treats them as untagged, rather than
+    // the whole endpoint 500ing with "column does not exist".
     const { data: all, error } = await supabase
       .from('driver_earnings')
-      .select('id, amount, type, payment_method, created_at, booking_id, paid_out_at')
+      .select('*')
       .eq('driver_id', req.driver.id)
       .order('created_at', { ascending: false });
     if (error) throw error;

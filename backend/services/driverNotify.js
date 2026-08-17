@@ -84,4 +84,44 @@ async function notifyDriversOfNewRequest(booking) {
   }
 }
 
-module.exports = { notifyDriversOfNewRequest };
+// Tell the ASSIGNED driver their claimed ride was canceled by the rider. Push
+// where they have it, SMS otherwise. Best-effort — never affects the cancel.
+async function notifyDriverOfCancellation(booking) {
+  if (!booking || !booking.driver_id) return; // nobody was assigned yet
+  try {
+    const { data: driver } = await supabase
+      .from('drivers')
+      .select('id, phone')
+      .eq('id', booking.driver_id)
+      .maybeSingle();
+    if (!driver) return;
+
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('id, endpoint, p256dh, auth')
+      .eq('driver_id', driver.id);
+
+    const area = briefAddress(booking.pickup_address) || 'your pickup';
+    const payload = {
+      title: 'Ride canceled',
+      body: `The rider canceled the ${area} ride. It’s off your schedule.`,
+      url: appUrl(),
+      tag: `cancel-${booking.id}`,
+    };
+
+    if (subs && subs.length > 0) {
+      for (const s of subs) {
+        const sub = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
+        const r = await push.sendPush(sub, payload);
+        if (r.expired) await supabase.from('push_subscriptions').delete().eq('id', s.id).then(() => {}, () => {});
+      }
+    } else if (driver.phone) {
+      sendSms(driver.phone, `RoverZoom: The rider canceled the ${area} ride you had. It’s been removed from your schedule.`)
+        .catch(() => {});
+    }
+  } catch (err) {
+    console.error('notifyDriverOfCancellation failed (non-fatal):', err.message);
+  }
+}
+
+module.exports = { notifyDriversOfNewRequest, notifyDriverOfCancellation };

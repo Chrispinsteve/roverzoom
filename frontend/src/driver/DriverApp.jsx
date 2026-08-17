@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import DriverShell from './DriverShell';
+import { shortAddress } from './lib/address';
 import { useDriverAuth } from './useDriverAuth';
 import { useDriverLocation, useWakeLock } from './useDriverLocation';
 import { GoogleMapsProvider } from '../lib/GoogleMapsProvider';
@@ -56,6 +57,44 @@ function NoDriverProfile({ onLogout }) {
   );
 }
 
+// Shown over whatever screen the driver is on the moment a rider cancels a
+// ride they'd claimed. A blocking little modal so it can't be missed.
+function CancelPopup({ booking, onDismiss }) {
+  const where = booking?.pickup_address ? ` (${shortAddress(booking.pickup_address)})` : '';
+  return (
+    <div
+      onClick={onDismiss}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000, padding: 24,
+        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div
+        className="rise"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 340, width: '100%', textAlign: 'center', padding: '24px 22px',
+          background: 'var(--card)', border: '1px solid var(--line-2)',
+          borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-pop)',
+        }}
+      >
+        <div style={{
+          width: 52, height: 52, borderRadius: '50%', margin: '0 auto 14px',
+          background: 'rgba(239,68,68,0.12)', color: 'var(--danger)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 24, fontWeight: 700,
+        }}>✕</div>
+        <h2 style={{ fontSize: 19, fontWeight: 700, color: 'var(--ink)', margin: '0 0 6px' }}>Ride canceled</h2>
+        <p style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.5, margin: '0 0 18px' }}>
+          The rider canceled this ride{where}. It’s been removed from your schedule.
+        </p>
+        <button className="btn" onClick={onDismiss} style={{ marginTop: 0 }}>Got it</button>
+      </div>
+    </div>
+  );
+}
+
 export default function DriverApp({ onExit }) {
   const { loading, session, driver: authDriver } = useDriverAuth();
   const [authStage, setAuthStage] = useState('login'); // 'login' | 'signup' | 'checkEmail'
@@ -82,6 +121,10 @@ export default function DriverApp({ onExit }) {
   // complete) shows a reason instead of a dead button.
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  // A ride the rider just canceled — drives the blocking popup. seenCanceledRef
+  // remembers cancellations already accounted for so we only pop up for NEW ones.
+  const [canceledNotice, setCanceledNotice] = useState(null);
+  const seenCanceledRef = useRef(null);
 
   // Capture and upload GPS while a trip is actually underway (en route ->
   // arrived -> in progress). This is what makes the rider's live map move.
@@ -108,6 +151,43 @@ export default function DriverApp({ onExit }) {
   useEffect(() => {
     if (driver && driver.status === 'active') refreshActiveBooking();
   }, [driver, refreshActiveBooking]);
+
+  // Watch for the rider canceling a ride this driver had claimed/started. Polls
+  // the driver's own schedule; the first pass just records existing
+  // cancellations, so we only pop up for ones that happen while they're using
+  // the app. Also boots them out of an active/viewed trip that got canceled.
+  useEffect(() => {
+    if (!driver || driver.status !== 'active') return undefined;
+    let stopped = false;
+
+    const check = async () => {
+      try {
+        const schedule = await driverApi.getSchedule();
+        if (stopped) return;
+        const canceled = (schedule || []).filter((b) => b.status === 'canceled');
+        const ids = new Set(canceled.map((b) => b.id));
+
+        if (seenCanceledRef.current === null) {
+          seenCanceledRef.current = ids; // first pass: baseline, no popup
+          return;
+        }
+        const fresh = canceled.filter((b) => !seenCanceledRef.current.has(b.id));
+        seenCanceledRef.current = ids;
+        if (fresh.length > 0) {
+          const b = fresh[0];
+          setActiveBooking((prev) => (prev && prev.id === b.id ? null : prev));
+          setViewingBooking((prev) => (prev && prev.id === b.id ? null : prev));
+          setCanceledNotice(b);
+        }
+      } catch { /* transient — try again next tick */ }
+    };
+
+    check();
+    const t = setInterval(check, 15000);
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { stopped = true; clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [driver]);
 
   const logout = () => supabase.auth.signOut();
 
@@ -181,18 +261,19 @@ export default function DriverApp({ onExit }) {
     }
   };
 
-  // --- Trip Complete is shown once, then falls back to the tab shell -------
+  const tabProps = { activeTab: tab, onChangeTab: setTab };
+  let content = null;
+
   if (justCompleted) {
-    return (
+    // Trip Complete is shown once, then falls back to the tab shell.
+    content = (
       <TripComplete
         booking={justCompleted}
         onBackToDashboard={() => { setJustCompleted(null); setTab('home'); }}
       />
     );
-  }
-
-  // --- Active (started) trip: full-screen focus mode, no tab bar -----------
-  if (activeBooking) {
+  } else if (activeBooking && STAGE_BY_STATUS[activeBooking.status]) {
+    // Active (started) trip: full-screen focus mode, no tab bar.
     const stage = STAGE_BY_STATUS[activeBooking.status];
     let screen = null;
     if (stage === 'navigate') {
@@ -202,14 +283,11 @@ export default function DriverApp({ onExit }) {
     } else if (stage === 'onTrip') {
       screen = <OnTrip booking={activeBooking} driverPosition={driverPosition} onEndTrip={() => advance('complete')} busy={busy} error={actionError} />;
     }
-    if (screen) return <GoogleMapsProvider>{screen}</GoogleMapsProvider>;
-  }
-
-  // --- Viewing a claimed (not-yet-started) trip's details — has a Back button.
-  // Opening details is NOT claiming or starting: the driver can browse a
-  // scheduled trip and return; only "Start Navigation" begins the drive.
-  if (viewingBooking) {
-    return (
+    content = <GoogleMapsProvider>{screen}</GoogleMapsProvider>;
+  } else if (viewingBooking) {
+    // Viewing a claimed (not-yet-started) trip — has a Back button. Opening
+    // details is NOT claiming or starting; only "Start Navigation" begins it.
+    content = (
       <RideDetails
         booking={viewingBooking}
         onBack={() => setViewingBooking(null)}
@@ -222,47 +300,24 @@ export default function DriverApp({ onExit }) {
         }}
       />
     );
+  } else if (tab === 'home') {
+    content = <Home driver={driver} onExit={onExit} onLogout={logout} onOpenTab={setTab} {...tabProps} />;
+  } else if (tab === 'requests') {
+    content = <Requests driver={driver} onClaimed={goToSchedule} {...tabProps} />;
+  } else if (tab === 'schedule') {
+    content = <Schedule driver={driver} onOpenTrip={setViewingBooking} {...tabProps} />;
+  } else if (tab === 'earnings') {
+    content = <Earnings {...tabProps} />;
+  } else if (tab === 'profile') {
+    content = <Profile driver={driver} onDriverUpdate={setDriverOverride} onLogout={logout} {...tabProps} />;
   }
 
-  // --- Idle: tab shell --------------------------------------------------------
-  const tabProps = { activeTab: tab, onChangeTab: setTab };
-
-  if (tab === 'home') {
-    return (
-      <Home
-        driver={driver}
-        onExit={onExit}
-        onLogout={logout}
-        onOpenTab={setTab}
-        {...tabProps}
-      />
-    );
-  }
-  if (tab === 'requests') {
-    return (
-      <Requests
-        driver={driver}
-        onClaimed={goToSchedule}
-        {...tabProps}
-      />
-    );
-  }
-  if (tab === 'schedule') {
-    return <Schedule driver={driver} onOpenTrip={setViewingBooking} {...tabProps} />;
-  }
-  if (tab === 'earnings') {
-    return <Earnings {...tabProps} />;
-  }
-  if (tab === 'profile') {
-    return (
-      <Profile
-        driver={driver}
-        onDriverUpdate={setDriverOverride}
-        onLogout={logout}
-        {...tabProps}
-      />
-    );
-  }
-
-  return null;
+  return (
+    <>
+      {content}
+      {canceledNotice && (
+        <CancelPopup booking={canceledNotice} onDismiss={() => setCanceledNotice(null)} />
+      )}
+    </>
+  );
 }
