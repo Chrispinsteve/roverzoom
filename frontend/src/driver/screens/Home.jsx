@@ -189,14 +189,26 @@ export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, o
   const [earnings, setEarnings] = useState(null);
   const [nextRide, setNextRide] = useState(null);
 
+  // Refresh on an interval and whenever the driver returns to the app, so a
+  // ride the rider cancels drops off "Next Ride" on its own instead of lingering
+  // until the driver navigates away and back.
   useEffect(() => {
-    driverApi.getEarnings().then(setEarnings).catch(() => setEarnings(null));
-    driverApi.getSchedule().then((schedule) => {
-      const upcoming = (schedule || [])
-        .filter((b) => UPCOMING.includes(b.status) && new Date(b.scheduled_at) > new Date(Date.now() - 60 * 60000))
-        .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
-      setNextRide(upcoming[0] || null);
-    }).catch(() => setNextRide(null));
+    let stopped = false;
+    const load = () => {
+      driverApi.getEarnings().then((d) => { if (!stopped) setEarnings(d); }).catch(() => {});
+      driverApi.getSchedule().then((schedule) => {
+        if (stopped) return;
+        const upcoming = (schedule || [])
+          .filter((b) => UPCOMING.includes(b.status) && new Date(b.scheduled_at) > new Date(Date.now() - 60 * 60000))
+          .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+        setNextRide(upcoming[0] || null);
+      }).catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 15000);
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { stopped = true; clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const profileComplete = !!driver.profile_completed_at;
