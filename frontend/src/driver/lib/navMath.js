@@ -114,3 +114,103 @@ export function followCamera(driver, destination, viewportH, aheadFraction = 0.2
   const aheadM = metersPerPixel(driver.lat, zoom) * viewportH * aheadFraction;
   return { center: offsetPoint(driver, brng, aheadM), zoom };
 }
+
+// Camera centre a fixed distance ahead of the driver along `headingDeg`, so the
+// vehicle sits in the lower third with the road ahead visible. Zoom is computed
+// separately (from remaining route distance).
+export function lookAheadCenter(pos, headingDeg, viewportH, zoom, aheadFraction = 0.26) {
+  const aheadM = metersPerPixel(pos.lat, zoom) * viewportH * aheadFraction;
+  return offsetPoint(pos, (headingDeg == null || Number.isNaN(headingDeg)) ? 0 : headingDeg, aheadM);
+}
+
+// --- Route projection: "where along the route is the driver, and how far off" -
+// Cumulative distance (m) to each vertex of a polyline.
+export function cumulativeDistances(path) {
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) cum[i] = cum[i - 1] + distanceMeters(path[i - 1], path[i]);
+  return cum;
+}
+
+// Project p onto segment a→b (local equirectangular). Returns { t, lateral } —
+// t is clamped 0..1 along the segment, lateral is the perpendicular distance (m).
+function projectOnSegment(p, a, b) {
+  const lat0 = toRad(a.lat);
+  const x = (lng) => (lng - a.lng) * Math.cos(lat0) * 111320;
+  const y = (lat) => (lat - a.lat) * 110540;
+  const px = x(p.lng), py = y(p.lat), bx = x(b.lng), by = y(b.lat);
+  const len2 = bx * bx + by * by;
+  let t = len2 > 0 ? (px * bx + py * by) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const dx = px - bx * t, dy = py - by * t;
+  return { t, lateral: Math.sqrt(dx * dx + dy * dy) };
+}
+
+// Project the driver onto the whole route. Returns the nearest segment, the
+// distance travelled ALONG the route to that point, and the perpendicular
+// deviation. This is what makes step progress + deviation robust: a driver who
+// turns off the route projects back near where they left it (deviation grows),
+// rather than jumping ahead just because a coordinate was crossed.
+export function projectToRoute(p, path, cum) {
+  if (!path || path.length < 2) return { index: 0, t: 0, lateral: Infinity, distanceAlong: 0 };
+  let best = { index: 0, t: 0, lateral: Infinity, distanceAlong: 0 };
+  for (let i = 0; i < path.length - 1; i++) {
+    const s = projectOnSegment(p, path[i], path[i + 1]);
+    if (s.lateral < best.lateral) {
+      best = { index: i, t: s.t, lateral: s.lateral, distanceAlong: cum[i] + s.t * (cum[i + 1] - cum[i]) };
+    }
+  }
+  return best;
+}
+
+// --- Reroute decision: needs SUSTAINED deviation, not a single spike --------
+// offStreak = consecutive position updates seen off-route (beyond threshold).
+// Only reroute once the streak is sustained AND the cooldown has elapsed.
+export function evaluateReroute({ offStreak, lastRerouteAt, now, sustainedTicks = 3, cooldownMs = 8000 }) {
+  if ((offStreak || 0) < sustainedTicks) return false;
+  return now - (lastRerouteAt || 0) >= cooldownMs;
+}
+
+// --- Heading: stable at low speed, never spins when stopped -----------------
+// Hold the previous heading when the driver has barely moved (GPS heading is
+// unreliable at rest); otherwise use the GPS heading, or derive it from travel.
+export function nextHeading(prevHeading, prevPos, newPos, gpsHeading, moveThreshM = 6) {
+  if (prevPos && distanceMeters(prevPos, newPos) < moveThreshM) return prevHeading; // stopped/creeping → hold
+  if (gpsHeading != null && !Number.isNaN(Number(gpsHeading))) return Number(gpsHeading);
+  if (prevPos) return bearing(prevPos, newPos); // derive from movement
+  return prevHeading;
+}
+
+// --- Maneuver text: a trusted ACTION + a secondary road name ----------------
+const MANEUVER_ACTION = {
+  'turn-left': 'Turn left', 'turn-right': 'Turn right',
+  'turn-slight-left': 'Slight left', 'turn-slight-right': 'Slight right',
+  'turn-sharp-left': 'Sharp left', 'turn-sharp-right': 'Sharp right',
+  'uturn-left': 'Make a U-turn', 'uturn-right': 'Make a U-turn',
+  'roundabout-left': 'At the roundabout', 'roundabout-right': 'At the roundabout',
+  'fork-left': 'Keep left', 'fork-right': 'Keep right',
+  'keep-left': 'Keep left', 'keep-right': 'Keep right',
+  'ramp-left': 'Take the ramp', 'ramp-right': 'Take the ramp', 'ramp': 'Take the ramp',
+  'merge': 'Merge', 'straight': 'Continue straight',
+  'ferry': 'Take the ferry', 'ferry-train': 'Take the ferry',
+};
+export function actionForManeuver(m) { return MANEUVER_ACTION[m] || 'Continue straight'; }
+
+export function roadFromInstruction(instruction) {
+  if (!instruction) return '';
+  const m = instruction.match(/\b(?:onto|toward|towards|on)\s+(.+)$/i);
+  let road = m ? m[1] : '';
+  road = road.replace(/\s+(?:toward|towards|for|and then|then).*$/i, '').replace(/\s*\(.*$/, '').trim();
+  return road;
+}
+
+// { action, road } — action is from Google's maneuver field (trusted); road is
+// best-effort from the instruction text. Never a live distance.
+export function parseManeuver(step) {
+  if (!step) return { action: '', road: '', maneuver: null, instruction: '' };
+  return {
+    action: step.maneuver ? actionForManeuver(step.maneuver) : 'Continue straight',
+    road: roadFromInstruction(step.instruction || ''),
+    maneuver: step.maneuver || null,
+    instruction: step.instruction || '',
+  };
+}

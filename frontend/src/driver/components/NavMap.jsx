@@ -2,21 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, OverlayViewF, OverlayView, PolylineF } from '@react-google-maps/api';
 import { useGoogleMaps } from '../../lib/GoogleMapsProvider';
 import { useAnimatedPosition, usePrefersReducedMotion } from '../../lib/useAnimatedPosition';
-import {
-  distanceToPath, advanceStepIndex, shouldReroute, shouldRepan, followCamera,
-} from '../lib/navMath';
+import { NavController, RequestGuard } from '../lib/navController';
+import { parseManeuver } from '../lib/navMath';
 
 // ============================================================
-// NavMap — the driver's navigation surface
+// NavMap — thin React/Google shell over the tested NavController
 // ============================================================
-// The ROUTE is the subject: a real road-following Google Directions line in
-// RoverZoom mint on a light, de-cluttered basemap; the vehicle marker is
-// driver-centred with the road ahead; guidance is Google's own step text.
-//
-// Deliberately NOT faking native Navigation SDK behaviour (road-snapping,
-// voice, hard reroute, live "in 437 ft"). Camera/route/step decisions all
-// live in ../lib/navMath.js so they can be unit-tested against simulated
-// movement. "Open in Maps" stays as the real-nav fallback.
+// All navigation decisions (progress, current step, deviation/reroute, camera
+// mode, heading) live in ../lib/navController.js and are unit-tested against a
+// simulated GPS stream. This file only: fetches routes from Google (with a
+// race guard so a stale response can't overwrite a newer route), feeds GPS in,
+// applies the camera imperatively, and renders the mint route + markers +
+// maneuver banner. No faked native-nav behaviour.
 // ============================================================
 
 const MINT = '#3EE0A0';
@@ -60,8 +57,8 @@ function stripHtml(s) {
 
 function maneuverGlyph(m) {
   switch (m) {
-    case 'turn-left': case 'ramp-left': case 'fork-left': case 'roundabout-left': return '↰';
-    case 'turn-right': case 'ramp-right': case 'fork-right': case 'roundabout-right': return '↱';
+    case 'turn-left': case 'ramp-left': case 'fork-left': case 'keep-left': case 'roundabout-left': return '↰';
+    case 'turn-right': case 'ramp-right': case 'fork-right': case 'keep-right': case 'roundabout-right': return '↱';
     case 'turn-slight-left': return '↖';
     case 'turn-slight-right': return '↗';
     case 'turn-sharp-left': return '⬅';
@@ -72,8 +69,27 @@ function maneuverGlyph(m) {
   }
 }
 
-// Fixed screen-space size (OverlayView) so it never becomes microscopic at any
-// zoom. Rotates to heading; heading is smoothed by useAnimatedPosition.
+function fmtRemaining(rem) {
+  const mi = rem.distM / 1609.34;
+  const distanceText = mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
+  const etaText = `${Math.max(1, Math.round(rem.sec / 60))} min`;
+  return { etaText, distanceText };
+}
+
+// Turn Directions' route into the controller's shape: a detailed path with each
+// vertex tagged by its step, plus parsed { action, road } maneuvers.
+function parseDirections(route) {
+  const leg = route.legs?.[0];
+  const path = [];
+  const steps = [];
+  (leg?.steps || []).forEach((s, si) => {
+    steps.push(parseManeuver({ maneuver: s.maneuver || null, instruction: stripHtml(s.instructions) }));
+    const pts = s.path || [];
+    pts.forEach((pt) => path.push({ lat: pt.lat(), lng: pt.lng(), step: si }));
+  });
+  return { path, steps, totalDistM: leg?.distance?.value || 0, totalDurSec: leg?.duration?.value || 0 };
+}
+
 function VehicleMarker({ position, intervalMs }) {
   const reduced = usePrefersReducedMotion();
   const animated = useAnimatedPosition(position, { durationMs: intervalMs, enabled: !reduced });
@@ -82,12 +98,7 @@ function VehicleMarker({ position, intervalMs }) {
     <OverlayViewF position={{ lat: animated.lat, lng: animated.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
       <div style={{ transform: 'translate(-50%,-50%)', width: 44, height: 44, position: 'relative' }}>
         <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(62,224,160,0.18)', animation: 'rz-map-pulse 3s ease-out infinite' }} />
-        <span style={{
-          position: 'absolute', inset: 9, borderRadius: '50%', background: '#0e1512',
-          border: `2.5px solid ${MINT}`, boxShadow: '0 3px 10px rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transform: `rotate(${animated.heading || 0}deg)`,
-        }}>
+        <span style={{ position: 'absolute', inset: 9, borderRadius: '50%', background: '#0e1512', border: `2.5px solid ${MINT}`, boxShadow: '0 3px 10px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `rotate(${animated.heading || 0}deg)` }}>
           <svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3l7 16-7-4-7 4z" fill={MINT} stroke={MINT} strokeWidth="1.5" strokeLinejoin="round" /></svg>
         </span>
       </div>
@@ -109,16 +120,16 @@ function DestMarker({ position, label }) {
 export default function NavMap({ driver, destination, destinationLabel = 'PICKUP', onRouteInfo, updateIntervalMs = 5000 }) {
   const { isLoaded, hasApiKey, loadError } = useGoogleMaps();
   const mapRef = useRef(null);
-  const [ready, setReady] = useState(false);
-
-  const [routePath, setRoutePath] = useState(null);
-  const [steps, setSteps] = useState([]);
-  const [stepIdx, setStepIdx] = useState(0);
-  const [mode, setMode] = useState('overview'); // 'overview' | 'follow' | 'free'
-
-  const fetchState = useRef({ inFlight: false, lastRerouteAt: 0 });
-  const lastCenterRef = useRef(null);
+  const ctrlRef = useRef(null);
+  if (!ctrlRef.current) ctrlRef.current = new NavController();
+  const guardRef = useRef(new RequestGuard());
   const programmatic = useRef(false);
+  const overviewTimer = useRef(null);
+
+  const [ready, setReady] = useState(false);
+  const [routePath, setRoutePath] = useState(null);
+  // Render snapshot mirrored from the controller.
+  const [view, setView] = useState({ mode: 'overview', step: null, next: null, heading: 0 });
 
   const hasDriver = driver && driver.lat != null;
   const destPt = useMemo(
@@ -126,121 +137,106 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     [destination?.lat, destination?.lng]
   );
 
-  const fetchRoute = useCallback((originPt) => {
-    if (!window.google?.maps || !destPt || !originPt || fetchState.current.inFlight) return;
-    fetchState.current.inFlight = true;
-    fetchState.current.lastRerouteAt = Date.now();
-    const svc = new window.google.maps.DirectionsService();
-    svc.route(
-      { origin: originPt, destination: destPt, travelMode: window.google.maps.TravelMode.DRIVING },
-      (res, status) => {
-        fetchState.current.inFlight = false;
-        if (status !== 'OK' || !res?.routes?.[0]) return;
-        const route = res.routes[0];
-        const leg = route.legs?.[0];
-        setRoutePath(route.overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() })));
-        const parsed = (leg?.steps || []).map((s) => ({
-          instruction: stripHtml(s.instructions),
-          maneuver: s.maneuver || null,
-          end: { lat: s.end_location.lat(), lng: s.end_location.lng() },
-        }));
-        setSteps(parsed);
-        setStepIdx(0);
-        onRouteInfo?.({ etaText: leg?.duration?.text || null, distanceText: leg?.distance?.text || null });
-      }
-    );
-  }, [destPt, onRouteInfo]);
+  const snapshot = useCallback(() => {
+    const c = ctrlRef.current;
+    setView({ mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading });
+    if (onRouteInfo) onRouteInfo(fmtRemaining(c.remaining()));
+  }, [onRouteInfo]);
 
-  // Initial route only. Subsequent recomputes happen on genuine deviation below.
-  useEffect(() => {
-    if (isLoaded && hasDriver && destPt && !routePath) {
-      fetchRoute({ lat: Number(driver.lat), lng: Number(driver.lng) });
-    }
-  }, [isLoaded, hasDriver, destPt, routePath, fetchRoute, driver]);
-
-  const onLoad = useCallback((m) => { mapRef.current = m; setReady(true); }, []);
-  const onUnmount = useCallback(() => { mapRef.current = null; setReady(false); }, []);
+  const applyCamera = useCallback((cam) => {
+    const map = mapRef.current;
+    if (!map || !cam) return;
+    programmatic.current = true;
+    if (map.getZoom() !== cam.zoom) map.setZoom(cam.zoom);
+    map.panTo(cam.center);
+    window.clearTimeout(applyCamera._t);
+    applyCamera._t = window.setTimeout(() => { programmatic.current = false; }, 420);
+  }, []);
 
   const fitToRoute = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !window.google) return;
+    const c = ctrlRef.current;
+    if (!map || !window.google || !c.path.length) return;
     const bounds = new window.google.maps.LatLngBounds();
-    if (routePath?.length) routePath.forEach((p) => bounds.extend(p));
-    else {
-      if (hasDriver) bounds.extend({ lat: Number(driver.lat), lng: Number(driver.lng) });
-      if (destPt) bounds.extend(destPt);
-    }
-    if (bounds.isEmpty()) return;
+    c.path.forEach((p) => bounds.extend(p));
     programmatic.current = true;
-    map.fitBounds(bounds, { top: 96, bottom: 150, left: 48, right: 48 });
-    setTimeout(() => { programmatic.current = false; }, 500);
-  }, [routePath, hasDriver, destPt, driver]);
-
-  // Pan the follow camera to a driver position (used by the driver effect and
-  // by explicit recenter).
-  const panFollow = useCallback((d) => {
-    const map = mapRef.current;
-    if (!map) return;
-    const div = map.getDiv();
-    const vh = (div && div.offsetHeight) || 320;
-    const { center, zoom } = followCamera(d, destPt, vh);
-    programmatic.current = true;
-    if (map.getZoom() !== zoom) map.setZoom(zoom);
-    map.panTo(center);
-    lastCenterRef.current = d;
-    setTimeout(() => { programmatic.current = false; }, 400);
-  }, [destPt]);
-
-  // Initial framing = route overview, then hand off to follow after a beat.
-  useEffect(() => {
-    if (ready && routePath && mode === 'overview') {
-      fitToRoute();
-      const t = setTimeout(() => setMode('follow'), 2500);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [ready, routePath, mode, fitToRoute]);
-
-  // Driver moved: advance the maneuver step, reroute only on real deviation,
-  // and follow the camera (throttled so GPS noise can't shake the map).
-  useEffect(() => {
-    if (!hasDriver) return;
-    const d = { lat: Number(driver.lat), lng: Number(driver.lng), heading: driver.heading };
-
-    if (steps.length) setStepIdx((i) => advanceStepIndex(i, steps, d));
-
-    if (routePath) {
-      const dev = distanceToPath(d, routePath);
-      if (shouldReroute({ noRoute: false, deviationM: dev, lastRerouteAt: fetchState.current.lastRerouteAt, now: Date.now() })) {
-        fetchRoute(d);
-      }
-    }
-
-    if (ready && mode === 'follow' && shouldRepan(lastCenterRef.current, d)) {
-      panFollow(d);
-    }
-  }, [driver?.lat, driver?.lng, driver?.heading, steps, routePath, ready, mode, fetchRoute, panFollow, hasDriver, driver]);
-
-  // User panned/zoomed → drop out of follow so we never fight them.
-  const onGesture = useCallback(() => {
-    if (!programmatic.current) setMode((m) => (m === 'follow' ? 'free' : m));
+    // Padding leaves room for the maneuver banner (top) and the bottom card so
+    // the route/destination are never hidden behind the UI overlays.
+    map.fitBounds(bounds, { top: 96, bottom: 176, left: 44, right: 44 });
+    window.clearTimeout(fitToRoute._t);
+    fitToRoute._t = window.setTimeout(() => { programmatic.current = false; }, 520);
   }, []);
 
-  // Explicit recenter → resume following immediately.
-  const recenter = useCallback(() => {
-    lastCenterRef.current = null;
-    setMode('follow');
-    if (hasDriver) panFollow({ lat: Number(driver.lat), lng: Number(driver.lng), heading: driver.heading });
-  }, [hasDriver, driver, panFollow]);
+  const fetchRoute = useCallback((origin, isReroute) => {
+    if (!window.google?.maps || !destPt || !origin) return;
+    const token = guardRef.current.begin();
+    const svc = new window.google.maps.DirectionsService();
+    svc.route(
+      { origin, destination: destPt, travelMode: window.google.maps.TravelMode.DRIVING },
+      (res, status) => {
+        // Race guard: ignore a response that a newer request has superseded.
+        if (!guardRef.current.isCurrent(token)) return;
+        if (status !== 'OK' || !res?.routes?.[0]) return;
+        const parsed = parseDirections(res.routes[0]);
+        if (parsed.path.length < 2) return;
+        ctrlRef.current.setRoute(parsed, { reroute: !!isReroute });
+        setRoutePath(parsed.path);
+        // First route → show overview, then hand to follow.
+        if (!isReroute) {
+          requestAnimationFrame(fitToRoute);
+          window.clearTimeout(overviewTimer.current);
+          overviewTimer.current = window.setTimeout(() => { ctrlRef.current.startFollowing(); snapshot(); }, 2500);
+        }
+        snapshot();
+      }
+    );
+  }, [destPt, fitToRoute, snapshot]);
 
-  const center = useMemo(() => {
+  const onLoad = useCallback((map) => {
+    mapRef.current = map;
+    const h = map.getDiv()?.offsetHeight;
+    if (h) ctrlRef.current.setViewport(h);
+    setReady(true);
+  }, []);
+  const onUnmount = useCallback(() => { mapRef.current = null; setReady(false); }, []);
+
+  // Initial route: once the map, driver and destination are all available.
+  useEffect(() => {
+    if (ready && isLoaded && hasDriver && destPt && ctrlRef.current.path.length === 0) {
+      fetchRoute({ lat: Number(driver.lat), lng: Number(driver.lng) }, false);
+    }
+  }, [ready, isLoaded, hasDriver, destPt, fetchRoute, driver]);
+
+  // Every GPS fix flows through the controller; we just apply its output.
+  useEffect(() => {
+    if (!ready || !hasDriver) return;
+    const c = ctrlRef.current;
+    if (c.viewportH < 100) { const h = mapRef.current?.getDiv()?.offsetHeight; if (h) c.setViewport(h); }
+    const res = c.onPosition({ lat: Number(driver.lat), lng: Number(driver.lng), heading: driver.heading, speedMph: driver.speedMph });
+    if (res.camera) applyCamera(res.camera);
+    if (res.needsReroute && res.rerouteOrigin) fetchRoute(res.rerouteOrigin, true);
+    snapshot();
+  }, [ready, hasDriver, driver?.lat, driver?.lng, driver?.heading, applyCamera, fetchRoute, snapshot, driver]);
+
+  useEffect(() => () => { window.clearTimeout(overviewTimer.current); }, []);
+
+  const onGesture = useCallback(() => {
+    if (programmatic.current) return;
+    ctrlRef.current.onUserGesture();
+    setView((v) => ({ ...v, mode: ctrlRef.current.mode }));
+  }, []);
+
+  const recenter = useCallback(() => {
+    const cam = ctrlRef.current.recenter();
+    if (cam) applyCamera(cam);
+    setView((v) => ({ ...v, mode: 'follow' }));
+  }, [applyCamera]);
+
+  const initialCenter = useMemo(() => {
     if (hasDriver) return { lat: Number(driver.lat), lng: Number(driver.lng) };
     if (destPt) return destPt;
     return { lat: 26.7153, lng: -80.0534 };
   }, [hasDriver, destPt, driver]);
-
-  const currentStep = steps[stepIdx] || null;
-  const nextStep = steps[stepIdx + 1] || null;
 
   if (loadError || !hasApiKey) {
     return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f5f2', color: '#5b615c', fontSize: 13, textAlign: 'center', padding: 20 }}>Map unavailable — use “Open in Maps” to navigate.</div>;
@@ -249,11 +245,13 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f5f2', color: '#93a5a0', fontSize: 13 }}>Loading map…</div>;
   }
 
+  const step = view.step;
+
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
-        center={center}
+        center={initialCenter}
         zoom={15}
         options={MAP_OPTIONS}
         onLoad={onLoad}
@@ -268,24 +266,22 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
           </>
         )}
         {destPt && <DestMarker position={destPt} label={destinationLabel} />}
-        {hasDriver && <VehicleMarker position={{ lat: Number(driver.lat), lng: Number(driver.lng), heading: driver.heading ?? 0 }} intervalMs={updateIntervalMs} />}
+        {hasDriver && <VehicleMarker position={{ lat: Number(driver.lat), lng: Number(driver.lng), heading: view.heading ?? driver.heading ?? 0 }} intervalMs={updateIntervalMs} />}
       </GoogleMap>
 
-      {/* Next-maneuver banner — Google's step text; no invented live distances. */}
-      {currentStep && (
+      {/* Maneuver banner — trusted ACTION (large) + road (secondary). */}
+      {step && (
         <div style={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 6, background: '#0e1512', color: '#fff', borderRadius: 16, boxShadow: '0 6px 20px rgba(0,0,0,0.28)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 26, lineHeight: 1, color: MINT, flexShrink: 0 }}>{maneuverGlyph(currentStep.maneuver)}</span>
+          <span style={{ fontSize: 28, lineHeight: 1, color: MINT, flexShrink: 0 }}>{maneuverGlyph(step.maneuver)}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{currentStep.instruction}</div>
-            {nextStep && (
-              <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>then {maneuverGlyph(nextStep.maneuver)} {nextStep.instruction}</div>
-            )}
+            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{step.action}</div>
+            {step.road && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.road}</div>}
+            {view.next && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>then {maneuverGlyph(view.next.maneuver)} {view.next.action}{view.next.road ? ` · ${view.next.road}` : ''}</div>}
           </div>
         </div>
       )}
 
-      {/* Re-centre — only when the driver has taken over the camera. */}
-      {mode === 'free' && (
+      {view.mode === 'free' && (
         <button type="button" onClick={recenter} aria-label="Re-centre" style={{ position: 'absolute', bottom: 14, right: 14, width: 44, height: 44, borderRadius: '50%', background: '#0e1512', border: `1.5px solid ${MINT}`, color: MINT, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.25)', zIndex: 6 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={MINT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="5" /></svg>
         </button>
