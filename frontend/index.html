@@ -2,6 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Google tag (gtag.js) — Google Ads (AW-18393777489). Conversions are
+         reported in-app on a completed booking; see src/lib/gtag.js. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18393777489"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'AW-18393777489');
+    </script>
     <!-- Kiosk stability: lock the zoom. Without maximum-scale/user-scalable,
          iOS Safari auto-zooms into any tapped control and never zooms back out,
          and a stray pinch stays stuck — so the tablet ends up zoomed and the

@@ -7,6 +7,7 @@ import Confirm from './screens/Confirm';
 import TrackRide from './screens/TrackRide';
 import MyRides from './screens/MyRides';
 import VoiceAssistant from './components/VoiceAssistant';
+import { reportBookingConversion } from '../lib/gtag';
 
 const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
@@ -109,7 +110,7 @@ export default function KioskApp({ onDriverMode }) {
       <PayStep
         booking={booking}
         onChange={patch}
-        onConfirmed={(result) => { setConfirmedBooking(result); setScreen('confirm'); }}
+        onConfirmed={(result) => { setConfirmedBooking(result); reportBookingConversion(result); setScreen('confirm'); }}
         onBack={() => setScreen('phone')}
       />
     );
