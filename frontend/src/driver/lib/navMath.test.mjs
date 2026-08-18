@@ -4,6 +4,7 @@ import assert from 'node:assert';
 import {
   distanceMeters, distanceToPath, advanceStepIndex,
   shouldReroute, shouldRepan, followCamera, zoomForDistance,
+  lookAheadCenter, metersPerPixel,
 } from './navMath.js';
 
 const P = (lat, lng = -80.1) => ({ lat, lng });
@@ -80,4 +81,40 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
   ok('follow camera centers ahead of the driver (road ahead visible)');
 }
 
-console.log(`\nnavMath: ${passed}/5 groups passed`);
+// --- F. lookAheadCenter: verify the aheadFraction ↔ vehicle position claim --
+{
+  const pos = { lat: 26.35, lng: -80.1 };
+  const viewportH = 600, zoom = 16;
+  const spanM = metersPerPixel(pos.lat, zoom) * viewportH; // metres spanned by the viewport height
+
+  // Heading NORTH (up on a north-up map): centre is placed north of the driver,
+  // so the driver appears low (behind centre).
+  const camN = lookAheadCenter(pos, 0, viewportH, zoom, 0.26);
+  assert.ok(camN.lat > pos.lat, 'north heading → centre ahead (north) → driver sits low');
+
+  // The offset magnitude equals aheadFraction × viewport span.
+  const offM = distanceMeters(pos, camN);
+  assert.ok(Math.abs(offM - 0.26 * spanM) < 3, `offset ≈ aheadFraction×span (${offM.toFixed(0)}m vs ${(0.26 * spanM).toFixed(0)}m)`);
+
+  // → driver ~24% from the bottom (0.5 − 0.26) i.e. lower third; and MORE route
+  // ahead (0.76) than behind (0.24).
+  const frac = offM / spanM; // ≈ 0.26
+  assert.ok(frac > 0.22 && frac < 0.30, `driver ~lower third heading north (frac ${frac.toFixed(2)})`);
+  assert.ok((0.5 + frac) > (0.5 - frac), 'more viewport ahead than behind');
+
+  // Documented monotonic effect: bigger aheadFraction → centre further ahead →
+  // driver lower; smaller → driver more centred.
+  const more = lookAheadCenter(pos, 0, viewportH, zoom, 0.40);
+  const less = lookAheadCenter(pos, 0, viewportH, zoom, 0.10);
+  assert.ok(more.lat > camN.lat, 'higher aheadFraction → driver lower');
+  assert.ok(less.lat < camN.lat, 'lower aheadFraction → driver more centred');
+
+  // Heading EAST on a north-up map: offset is eastward, NOT downward — so the
+  // "lower third" claim is heading-dependent (documented).
+  const camE = lookAheadCenter(pos, 90, viewportH, zoom, 0.26);
+  assert.ok(camE.lng > pos.lng, 'east heading → centre offset east');
+  assert.ok(Math.abs(camE.lat - pos.lat) < Math.abs(camN.lat - pos.lat), 'east heading is not "lower third" on a north-up map');
+  ok('lookAheadCenter: offset = aheadFraction×viewport ahead; more route ahead than behind; monotonic; lower-third holds for northerly heading (north-up map)');
+}
+
+console.log(`\nnavMath: ${passed}/6 groups passed`);

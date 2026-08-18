@@ -20,7 +20,7 @@ export const NAV_DEFAULTS = {
   cooldownMs: 8000,        // min gap between reroutes
   repanThreshM: 8,         // min driver movement before the camera re-pans
   headingMoveThreshM: 6,   // below this movement, hold heading (no spin)
-  aheadFraction: 0.26,     // how far ahead of the driver to centre (lower third)
+  aheadFraction: 0.26,     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
 };
 
 export class NavController {

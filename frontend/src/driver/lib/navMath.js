@@ -115,9 +115,14 @@ export function followCamera(driver, destination, viewportH, aheadFraction = 0.2
   return { center: offsetPoint(driver, brng, aheadM), zoom };
 }
 
-// Camera centre a fixed distance ahead of the driver along `headingDeg`, so the
-// vehicle sits in the lower third with the road ahead visible. Zoom is computed
-// separately (from remaining route distance).
+// Camera centre placed aheadFraction × (viewport height, in metres) ahead of the
+// driver along `headingDeg`. This ALWAYS puts more route ahead than behind
+// (ahead ≈ 0.5 + aheadFraction of the viewport, behind ≈ 0.5 − aheadFraction).
+// The map is NORTH-UP (only the marker rotates), so the vehicle sits in the
+// lower third specifically when the heading is northerly; for other headings the
+// driver is offset toward the heading direction, not necessarily downward. A
+// true "always lower-third" would require a heading-up (rotated) map — a Phase-2
+// change, intentionally not done here. Zoom is computed separately.
 export function lookAheadCenter(pos, headingDeg, viewportH, zoom, aheadFraction = 0.26) {
   const aheadM = metersPerPixel(pos.lat, zoom) * viewportH * aheadFraction;
   return offsetPoint(pos, (headingDeg == null || Number.isNaN(headingDeg)) ? 0 : headingDeg, aheadM);
