@@ -15,8 +15,10 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: data.tag || 'ride-request',
-    renotify: true,
-    requireInteraction: true, // stays until the driver acts on it
+    renotify: true,             // re-alert (sound/buzz) on each new push, not silently replace
+    requireInteraction: true,   // stays until the driver acts on it
+    silent: false,              // play the device's notification sound (iOS + Android)
+    vibrate: [220, 90, 220],    // buzz on Android (iOS ignores; uses its own haptic)
     data: { url: data.url || '/?driver=1' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
