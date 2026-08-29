@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Attract from './screens/Attract';
 import RouteStep from './screens/RouteStep';
 import PhoneStep from './screens/PhoneStep';
@@ -8,6 +8,7 @@ import TrackRide from './screens/TrackRide';
 import MyRides from './screens/MyRides';
 import VoiceAssistant from './components/VoiceAssistant';
 import { reportBookingConversion } from '../lib/gtag';
+import { track as trackEvent } from '../lib/track';
 
 const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
@@ -25,7 +26,25 @@ export default function KioskApp({ onDriverMode }) {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantBooking, setAssistantBooking] = useState(null);
 
-  const patch = (fields) => setBooking((b) => ({ ...b, ...fields }));
+  // Funnel steps fire at most once per visit. Without this, `patch` would
+  // re-report pickup_set on every keystroke that touches the address.
+  const firedSteps = useRef(new Set());
+  const once = (step, opts) => {
+    if (firedSteps.current.has(step)) return;
+    firedSteps.current.add(step);
+    trackEvent(step, opts);
+  };
+
+  useEffect(() => { once('visit'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Every booking field flows through here, so three of the funnel steps can
+  // be recorded in one place rather than scattered across the screens.
+  const patch = (fields) => {
+    setBooking((b) => ({ ...b, ...fields }));
+    if (fields.pickup) once('pickup_set');
+    if (fields.dropoff) once('dropoff_set');
+    if (fields.quote) once('quote_viewed', { value: fields.quote.fare });
+  };
 
   const reset = () => {
     setBooking(EMPTY_BOOKING);
@@ -66,6 +85,9 @@ export default function KioskApp({ onDriverMode }) {
     setAssistantOpen(false);
     const b = assistantBooking;
     setAssistantBooking(null);
+    // The assistant books without passing through PayStep, so the funnel would
+    // otherwise show these riders abandoning at the price step.
+    if (b) once('booked', { bookingRef: b.reference });
     if (b && b.booking_id) track(b.booking_id);
   };
   const assistantLayer = assistantOpen ? (
@@ -76,9 +98,9 @@ export default function KioskApp({ onDriverMode }) {
     return (
       <>
         <Attract
-          onBookHere={() => setScreen('route')}
+          onBookHere={() => { once('booking_started'); setScreen('route'); }}
           onMyRides={() => setScreen('rides')}
-          onTalk={() => setAssistantOpen(true)}
+          onTalk={() => { once('booking_started'); setAssistantOpen(true); }}
           onDriverMode={onDriverMode}
         />
         {assistantLayer}
@@ -100,7 +122,7 @@ export default function KioskApp({ onDriverMode }) {
       <PhoneStep
         booking={booking}
         onChange={patch}
-        onNext={() => setScreen('pay')}
+        onNext={() => { once('checkout_started'); setScreen('pay'); }}
         onBack={() => setScreen('route')}
       />
     );
@@ -110,7 +132,12 @@ export default function KioskApp({ onDriverMode }) {
       <PayStep
         booking={booking}
         onChange={patch}
-        onConfirmed={(result) => { setConfirmedBooking(result); reportBookingConversion(result); setScreen('confirm'); }}
+        onConfirmed={(result) => {
+          setConfirmedBooking(result);
+          reportBookingConversion(result);
+          once('booked', { bookingRef: result?.reference });
+          setScreen('confirm');
+        }}
         onBack={() => setScreen('phone')}
       />
     );
