@@ -178,6 +178,32 @@
 .k-price-cap{ font-size:15.5px; font-weight:600; color:var(--lock-deep); }
 .k-price-num{ font-family:var(--display); font-weight:600; font-size:clamp(25px,3.4vw,31px); color:var(--lock-deep); font-variant-numeric:tabular-nums; }
 .k-price-meta{ font-size:13px; color:var(--lock); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Market comparison — the quietest line on the screen.
+   It sits BELOW the locked slab, never inside it, so it cannot compete with
+   the price for attention. Deliberately restrained:
+     - the muted text colour, not the lock colour, so it reads as a footnote
+     - 12.5px, one step under .k-price-meta
+     - no background, no border, no badge, no accent
+     - centred under the slab so it belongs to it without crowding it
+     - a slow, late fade so the eye lands on the PRICE first and finds this
+       a beat afterwards, rather than both arriving at once */
+.k-price-compare{
+  display:block;
+  margin-top:8px;
+  text-align:center;
+  font-size:12.5px;
+  line-height:1.4;
+  color:var(--mute);
+  letter-spacing:0.005em;
+  font-variant-numeric:tabular-nums;
+  animation:k-compare-in .5s ease .28s both;
+}
+@keyframes k-compare-in{ from{ opacity:0; transform:translateY(-2px); } to{ opacity:1; transform:none; } }
+
+@media (prefers-reduced-motion:reduce){
+  .k-price-compare{ animation:none; }
+}
 /* Pinned outside the scrollable .k-flow-body — always visible, never needs
    scrolling to reach, regardless of how much content is above it. */
 .k-flow-footer{ flex-shrink:0; width:100%; max-width:620px; margin:0 auto; padding:0 clamp(16px,3vw,28px) clamp(10px,1.6vh,16px); }

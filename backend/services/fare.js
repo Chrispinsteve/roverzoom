@@ -4,6 +4,7 @@
 // (see ./routing); the haversine below is only the fallback.
 
 const { roadRoute } = require('./routing');
+const { compare } = require('./market');
 
 const HOURLY_RATE = Number(process.env.HOURLY_RATE) || 50;
 const ROAD_FACTOR = 1.3;
@@ -92,14 +93,19 @@ async function estimate(pickup, dropoff, whenIso) {
   const baseFare = Math.max(MIN_FARE, cappedMiles * (HOURLY_RATE / AVG_SPEED_MPH));
   const fare = Math.round(baseFare * multiplier * 100) / 100;
 
+  const roundedMiles = Math.round(cappedMiles * 10) / 10;
+
   return {
-    distanceMiles: Math.round(cappedMiles * 10) / 10,
+    distanceMiles: roundedMiles,
     durationMinutes,
     durationLabel: formatDuration(durationMinutes),
     fare,
     discountPct: Math.round((1 - multiplier) * 100),
     tooFar,
     rawDistanceMiles: tooFar ? Math.round(distanceMiles * 10) / 10 : undefined,
+    // What the same trip typically costs elsewhere. null whenever there is
+    // nothing honest to claim — see services/market.js.
+    market: compare(fare, roundedMiles, durationMinutes),
   };
 }
 

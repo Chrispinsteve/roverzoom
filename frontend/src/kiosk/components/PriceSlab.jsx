@@ -29,17 +29,39 @@ export default function PriceSlab({ pickup, dropoff, when, quote, onQuote }) {
   }, [ready, pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, when]);
 
   if (ready && quote) {
+    const market = quote.market;
     return (
-      <div className="k-price-slab locked">
-        <div className="k-price-live">
-          <Icon name="lock" size={22} color="var(--lock-deep)" />
-          <div className="k-price-words">
-            <span className="k-price-cap">Price locked{quote.discountPct ? ` · ${quote.discountPct}% off` : ''}</span>
-            <span className="k-price-meta">{quote.durationLabel} drive · {quote.distanceMiles} mi</span>
+      <>
+        <div className="k-price-slab locked">
+          <div className="k-price-live">
+            <Icon name="lock" size={22} color="var(--lock-deep)" />
+            <div className="k-price-words">
+              <span className="k-price-cap">Price locked{quote.discountPct ? ` · ${quote.discountPct}% off` : ''}</span>
+              <span className="k-price-meta">{quote.durationLabel} drive · {quote.distanceMiles} mi</span>
+            </div>
+            <span className="k-price-num">${quote.fare.toFixed(2)}</span>
           </div>
-          <span className="k-price-num">${quote.fare.toFixed(2)}</span>
         </div>
-      </div>
+
+        {/* Sits OUTSIDE the locked slab and below it, in the quietest type on
+            the screen. A footnote to the price, never a competitor for it —
+            no colour, no badge, no exclamation.
+
+            "Compare at" is the ordinary retail convention for a reference
+            price on a comparable purchase, and it names nobody. Deliberately
+            NOT struck through: a strikethrough would imply this was once OUR
+            price, which it never was.
+
+            Rendered only when the server had something honest to say; see
+            backend/services/market.js. */}
+        {market && (
+          <span className="k-price-compare">
+            {market.single
+              ? `Compare at about $${market.low} for the same trip`
+              : `Compare at $${market.low}–$${market.high} for the same trip`}
+          </span>
+        )}
+      </>
     );
   }
 
