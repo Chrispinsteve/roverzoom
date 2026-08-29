@@ -235,6 +235,22 @@
 .k-route-card .input:focus{ box-shadow:none; }
 
 .k-price-wait{ font-size:14px; color:var(--mute); text-align:center; padding:4px 0; }
+
+/* Age attestation, shown directly above the button that creates a booking.
+   Quiet on purpose: a legal condition shouted at someone reads as a warning
+   ABOUT the service rather than a condition OF it. Small, muted, centred,
+   and it wraps rather than truncating — the whole sentence has to be
+   readable for the attestation to mean anything. */
+.k-terms-note{
+  display:block;
+  max-width:34em;
+  margin:0 auto 10px;
+  text-align:center;
+  font-size:12.5px;
+  line-height:1.45;
+  color:var(--mute);
+}
+@media (max-width:480px){ .k-terms-note{ font-size:12px; margin-bottom:8px; } }
 .k-price-live{ display:flex; align-items:center; gap:12px; }
 .k-lock-ic{ width:22px; height:22px; color:var(--lock-deep); flex-shrink:0; }
 .k-price-words{ display:flex; flex-direction:column; flex:1; min-width:0; }

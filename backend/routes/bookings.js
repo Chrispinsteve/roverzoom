@@ -1,5 +1,6 @@
 const express = require('express');
 const supabase = require('../db/supabase');
+const { insertBooking } = require('../db/insertBooking');
 const { estimate } = require('../services/fare');
 const { makeReference } = require('../services/reference');
 const { sendBookingConfirmation } = require('../services/sms');
@@ -45,7 +46,7 @@ function withDriverInfo(booking) {
 router.post('/', async (req, res) => {
   const {
     pickup, dropoff, scheduledAt, paymentMethod,
-    rider, source = 'form',
+    rider, source = 'form', termsVersion,
   } = req.body || {};
 
   if (!pickup?.address || !dropoff?.address || !scheduledAt || !paymentMethod) {
@@ -74,9 +75,7 @@ router.post('/', async (req, res) => {
       reference = makeReference();
     }
 
-    const { data, error } = await supabase
-      .from('bookings')
-      .insert({
+    const { data, error } = await insertBooking({
         reference,
         pickup_address: pickup.address,
         pickup_lat: pickup.lat ?? null,
@@ -93,9 +92,15 @@ router.post('/', async (req, res) => {
         rider_phone: rider.phone,
         rider_email: rider.email ?? null,
         source,
-      })
-      .select()
-      .single();
+        // Age attestation. The rider confirmed they are 18+ (or the
+        // parent/guardian of the rider) on the screen that created this
+        // booking. The TIMESTAMP is taken here, on the server: a client clock
+        // must not be what decides when consent happened. The VERSION comes
+        // from the client because only the client knows which wording was
+        // actually on screen.
+        terms_version: typeof termsVersion === 'string' ? termsVersion.slice(0, 64) : null,
+        terms_accepted_at: termsVersion ? new Date().toISOString() : null,
+    });
 
     if (error) throw error;
 

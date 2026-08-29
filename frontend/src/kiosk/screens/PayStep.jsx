@@ -4,6 +4,7 @@ import FlowShell from '../components/FlowShell';
 import PaymentCards from '../components/PaymentCards';
 import { api } from '../../lib/api';
 import { combineDayTime } from '../lib/datetime';
+import { AGE_ATTESTATION, TERMS_VERSION } from '../lib/terms';
 
 // Two-phase step. Phase "choose": pick card / Zelle / cash. Cash and Zelle
 // book immediately (money moves outside the app — driver's hand, bank app).
@@ -35,6 +36,10 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
       scheduledAt,
       paymentMethod: booking.payment,
       rider: { name: booking.name, phone: booking.phone },
+      // Recorded, not just displayed. The version pins which wording was on
+      // screen; the server re-stamps the timestamp so a client clock cannot
+      // decide when consent happened.
+      termsVersion: TERMS_VERSION,
     });
     setPendingBooking(result);
     return result;
@@ -134,6 +139,12 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
       footer={(
         <div className="k-footer-bar">
           <div className="k-footer-inner">
+            {/* Sits immediately above the button that creates the booking, so
+                it is the last thing read before committing — and it is on the
+                screen for BOTH paths, since card and cash both commit here.
+                Quiet by design: a legal term shouted at someone reads as a
+                warning about the service rather than a condition of it. */}
+            <span className="k-terms-note">{AGE_ATTESTATION}</span>
             <button className="k-next-btn" disabled={!booking.payment || submitting || !config} onClick={submit}>
               {submitting
                 ? 'Confirming\u2026'
