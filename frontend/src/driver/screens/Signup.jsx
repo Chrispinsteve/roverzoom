@@ -87,7 +87,12 @@ export default function Signup({ onSwitchToLogin, onSignedUp }) {
       email: form.email.trim(),
       password: form.password,
       options: {
-        emailRedirectTo: window.location.origin,
+        // MUST carry ?driver — App.jsx only opens driver mode when it is
+        // present, so without it a driver who confirms their email lands on
+        // the RIDER booking kiosk with no idea whether it worked.
+        // ?confirmed=1 is ours: Supabase appends its token to the hash, so a
+        // query parameter survives and lets us acknowledge the confirmation.
+        emailRedirectTo: `${window.location.origin}/?driver=1&confirmed=1`,
         data: {
           name: form.name.trim(),
           phone: form.phone.trim(),

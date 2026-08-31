@@ -2,7 +2,7 @@ import { useState } from 'react';
 import DriverShell from '../DriverShell';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function Login({ onSwitchToSignup }) {
+export default function Login({ onSwitchToSignup, notice }) {
   const [mode, setMode] = useState('login'); // 'login' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,6 +77,11 @@ export default function Login({ onSwitchToSignup }) {
     <DriverShell>
       <div className="body">
         <h1 className="title">Driver Log In</h1>
+
+        {/* Explains why they are looking at a login form after clicking a
+            confirmation link. Without it the email appears to have done
+            nothing at all. */}
+        {notice && <p className="drv-notice">{notice.text}</p>}
         <p className="subtitle">Log in to go online and manage your trips.</p>
 
         <div className="field">

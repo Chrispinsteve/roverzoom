@@ -7,6 +7,7 @@ import { GoogleMapsProvider } from '../lib/GoogleMapsProvider';
 import { supabase } from '../lib/supabaseClient';
 import { driverApi } from '../lib/driverApi';
 import Login from './screens/Login';
+import { AUTH_LANDING, clearAuthLanding } from './lib/authLanding';
 import Signup from './screens/Signup';
 import CheckEmail from './screens/CheckEmail';
 import PendingVerification from './screens/PendingVerification';
@@ -96,6 +97,7 @@ function CancelPopup({ booking, onDismiss }) {
 }
 
 export default function DriverApp({ onExit }) {
+  const [justConfirmed, setJustConfirmed] = useState(AUTH_LANDING.status === 'confirmed');
   const { loading, session, driver: authDriver } = useDriverAuth();
   const [authStage, setAuthStage] = useState('login'); // 'login' | 'signup' | 'checkEmail'
   const [signedUpEmail, setSignedUpEmail] = useState('');
@@ -193,7 +195,46 @@ export default function DriverApp({ onExit }) {
 
   if (loading) return <AuthLoading />;
 
+  // A driver who has just confirmed their email arrives already signed in
+  // (Supabase consumes the token on load). Saying so explicitly turns a
+  // silent redirect into a completed step.
+  if (session && justConfirmed) {
+    return (
+      <DriverShell>
+        <div className="body">
+          <div style={{ textAlign: 'center', marginTop: 40 }}>
+            <div className="drv-check-pop"><Icon name="check" size={26} color="#fff" /></div>
+            <h1 className="title" style={{ fontSize: 24 }}>Email confirmed</h1>
+            <p className="subtitle">
+              You&rsquo;re signed in. Next, add your photo, licence and insurance —
+              you&rsquo;ll need all three before you can see ride requests.
+            </p>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 24 }}
+            onClick={() => { clearAuthLanding(); setJustConfirmed(false); }}
+          >
+            Continue
+          </button>
+        </div>
+      </DriverShell>
+    );
+  }
+
+
   if (!session) {
+    // A failed confirmation (expired or already-used link) leaves no session,
+    // so the driver would otherwise land on a bare login form with nothing
+    // explaining why the email they just clicked did nothing.
+    if (AUTH_LANDING.status === 'error' && authStage !== 'signup') {
+      return (
+        <Login
+          onSwitchToSignup={() => setAuthStage('signup')}
+          notice={{ tone: 'warn', text: AUTH_LANDING.message }}
+        />
+      );
+    }
     if (authStage === 'signup') {
       return (
         <Signup

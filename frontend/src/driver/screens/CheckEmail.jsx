@@ -13,7 +13,11 @@ export default function CheckEmail({ email, onSwitchToLogin }) {
           <p className="subtitle">
             We sent a confirmation link to{' '}
             {email ? <strong style={{ color: 'var(--ink)' }}>{email}</strong> : 'your email'}.
-            Click it to activate your account, then log in.
+            Open it on this device and you&rsquo;ll be signed in automatically — no need to
+            log in again.
+          </p>
+          <p className="subtitle" style={{ marginTop: 10 }}>
+            Nothing after a minute or two? Check your spam folder.
           </p>
         </div>
         <button className="btn" onClick={onSwitchToLogin} style={{ marginTop: 24 }}>
