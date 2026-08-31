@@ -22,7 +22,26 @@ app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/checkr/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
-app.get('/api/health', (req, res) => res.json({ ok: true, service: 'roverzoom-api' }));
+// Reports which optional integrations are wired, so a deployment can be
+// checked without shell access. Booleans only — never a key, a number, or
+// anything that would help someone probe the account.
+app.get('/api/health', (req, res) => {
+  const { isConfigured: smsConfigured } = require('./services/sms');
+  res.json({
+    ok: true,
+    service: 'roverzoom-api',
+    integrations: {
+      // sendSms() fails silently by design so a texting outage cannot fail a
+      // booking. That makes a misconfiguration invisible in production unless
+      // it is reported somewhere — here.
+      sms: smsConfigured(),
+      cards: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY),
+      maps: !!process.env.GOOGLE_MAPS_API_KEY,
+      assistant: !!process.env.ANTHROPIC_API_KEY,
+      screening: !!process.env.CHECKR_API_KEY,
+    },
+  });
+});
 app.use('/api', quoteRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/driver', driverRoutes);
