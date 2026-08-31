@@ -1,0 +1,15 @@
+# RoverZoom — https://www.roverzoom.com
+
+User-agent: *
+Allow: /
+
+# The rider tracking link. Each one is a private, unguessable booking id, and
+# they are texted to individuals — they are not pages and must never be indexed.
+Disallow: /?track=
+Disallow: /*?track=
+
+# Driver mode is an authenticated application, not content.
+Disallow: /?driver=
+Disallow: /*?driver=
+
+Sitemap: https://www.roverzoom.com/sitemap.xml

@@ -46,6 +46,112 @@
     <meta property="og:description" content="Scheduled rides across Palm Beach County, Florida. Your price is locked at booking. A service of Bibior, Inc." />
     <meta property="og:url" content="https://www.roverzoom.com/" />
     <meta property="og:type" content="website" />
+
+    <!-- Structured data. Tells Google this is a local transport service, where
+         it operates, and what it offers — none of which is derivable from a
+         JavaScript-rendered page. Deliberately contains no aggregateRating:
+         inventing review data is a manual-action penalty, not a shortcut. -->
+    <script type="application/ld+json">
+{
+          "@context": "https://schema.org",
+          "@type": "LocalBusiness",
+          "additionalType": "https://schema.org/TaxiService",
+          "@id": "https://www.roverzoom.com/#business",
+          "name": "RoverZoom",
+          "legalName": "Bibior, Inc.",
+          "url": "https://www.roverzoom.com",
+          "description": "Scheduled ride bookings across South Florida. Book in advance, your price is locked at booking, and a driver is assigned before your pickup time.",
+          "telephone": "+1-561-513-3513",
+          "email": "support@roverzoom.com",
+          "priceRange": "$$",
+          "logo": "https://www.roverzoom.com/logo-wordmark.png",
+          "image": "https://www.roverzoom.com/logo-email.png",
+          "areaServed": [
+                {
+                      "@type": "State",
+                      "name": "Florida"
+                },
+                {
+                      "@type": "AdministrativeArea",
+                      "name": "Palm Beach County"
+                },
+                {
+                      "@type": "City",
+                      "name": "West Palm Beach"
+                },
+                {
+                      "@type": "City",
+                      "name": "Boca Raton"
+                },
+                {
+                      "@type": "City",
+                      "name": "Delray Beach"
+                },
+                {
+                      "@type": "City",
+                      "name": "Boynton Beach"
+                },
+                {
+                      "@type": "City",
+                      "name": "Wellington"
+                },
+                {
+                      "@type": "City",
+                      "name": "Jupiter"
+                },
+                {
+                      "@type": "City",
+                      "name": "Palm Beach Gardens"
+                },
+                {
+                      "@type": "City",
+                      "name": "Lake Worth"
+                }
+          ],
+          "serviceArea": {
+                "@type": "GeoCircle",
+                "geoMidpoint": {
+                      "@type": "GeoCoordinates",
+                      "latitude": 26.7153,
+                      "longitude": -80.0534
+                },
+                "geoRadius": "120000"
+          },
+          "hasOfferCatalog": {
+                "@type": "OfferCatalog",
+                "name": "Scheduled rides",
+                "itemListElement": [
+                      {
+                            "@type": "Offer",
+                            "itemOffered": {
+                                  "@type": "Service",
+                                  "name": "Airport rides",
+                                  "description": "Pre-booked rides to and from Palm Beach International, Fort Lauderdale and Miami airports."
+                            }
+                      },
+                      {
+                            "@type": "Offer",
+                            "itemOffered": {
+                                  "@type": "Service",
+                                  "name": "Medical appointment rides",
+                                  "description": "Scheduled transport to and from medical appointments, procedures and treatments."
+                            }
+                      },
+                      {
+                            "@type": "Offer",
+                            "itemOffered": {
+                                  "@type": "Service",
+                                  "name": "Work commute",
+                                  "description": "A driver booked in advance for a recurring commute."
+                            }
+                      }
+                ]
+          },
+          "sameAs": [
+                "https://bibior.com"
+          ]
+    }
+    </script>
     <!-- Tell search engines the real home is roverzoom.com, not the raw
          *.vercel.app deployment URL, so that's what gets indexed/surfaced. -->
     <link rel="canonical" href="https://www.roverzoom.com/" />

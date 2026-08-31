@@ -5,7 +5,6 @@
 -- cash is an accepted payment method, so nothing in the system could tell an
 -- adult from a 13-year-old. This records the rider's confirmation that they
 -- are 18+ (or the parent/guardian of the rider) at the moment they book.
---
 -- Displaying the term is not the point — RECORDING it is. An attestation with
 -- no record of who accepted what, and when, is not evidence of anything.
 -- terms_version pins WHICH wording was shown, so the text can be revised later
