@@ -174,6 +174,33 @@
 .k-hint-inline{ font-weight:400; font-size:12px; color:var(--mute); margin-left:6px; letter-spacing:0; }
 .k-hint{ display:block; font-size:12px; line-height:1.4; color:var(--mute); margin-top:6px; }
 .k-hint-bad{ color:var(--danger, #C0392B); }
+
+/* SMS consent under the keypad. Small and quiet — it is a disclosure, not a
+   warning — but full contrast on the links so they are obviously reachable,
+   and it wraps rather than truncating: consent language that cannot be read
+   in full is not consent. */
+.k-consent{
+  margin:14px 0 0;
+  font-size:11.5px;
+  line-height:1.5;
+  color:var(--mute);
+  max-width:46em;
+}
+.k-consent a{ color:var(--ink); text-decoration:underline; text-underline-offset:2px; }
+
+/* Entity attribution on the attract screen. The entrance is the brand moment,
+   so this sits right at the bottom in the faintest legible tone — present for
+   anyone who looks, invisible to anyone who doesn't. */
+.k-attract-legal{
+  display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+  gap:8px; margin-top:clamp(14px,2.4vh,26px);
+  font-size:11.5px; letter-spacing:0.01em;
+  color:rgba(255,255,255,0.42);
+}
+.k-attract-legal a{ color:rgba(255,255,255,0.62); text-decoration:none; }
+.k-attract-legal a:hover{ color:rgba(255,255,255,0.9); text-decoration:underline; }
+.k-legal-sep{ opacity:0.5; }
+@media (max-width:480px){ .k-attract-legal{ font-size:11px; gap:6px; } }
 .k-chips{ display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; margin-top:6px; padding-bottom:2px; scrollbar-width:none; }
 .k-chips::-webkit-scrollbar{ display:none; }
 .k-chip{ border:1.5px solid var(--line); border-radius:999px; padding:8px 14px; font-size:14px; min-height:38px; background:var(--paper); transition:all .12s; white-space:nowrap; flex-shrink:0; -webkit-tap-highlight-color:transparent; }

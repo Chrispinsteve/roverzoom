@@ -141,6 +141,18 @@ export default function Attract({ onBookHere, onMyRides, onTalk, onDriverMode })
               Book my ride <Icon name="arrowRight" size={22} color="var(--ink)" />
             </button>
           </div>
+
+          {/* The operating entity, stated plainly. Riders rarely read it, but
+              it has to be visible: the messaging and payment registrations are
+              held by Bibior, Inc., and a reviewer needs to be able to see from
+              this site that RoverZoom is the same business. */}
+          <footer className="k-attract-legal">
+            <span>RoverZoom is a service of Bibior,&nbsp;Inc.</span>
+            <span className="k-legal-sep" aria-hidden="true">·</span>
+            <a href="/privacy">Privacy</a>
+            <span className="k-legal-sep" aria-hidden="true">·</span>
+            <a href="/terms">Terms</a>
+          </footer>
         </div>
       </section>
     </div>

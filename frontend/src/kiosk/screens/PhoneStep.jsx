@@ -23,8 +23,7 @@ export default function PhoneStep({ booking, onChange, onNext, onBack }) {
   return (
     <FlowShell title="Your details" step={2} totalSteps={3} onBack={onBack} footer={footer}>
       <span className="k-q">Who's riding?</span>
-      {/* No SMS provider is wired up yet — doesn't claim a text will be sent. */}
-      <span className="k-q-sub">We'll use this number to identify your ride</span>
+      <span className="k-q-sub">We'll text your confirmation and tracking link here</span>
 
       <div className="field" style={{ marginTop: 16 }}>
         <label className="label">Name</label>
@@ -38,6 +37,18 @@ export default function PhoneStep({ booking, onChange, onNext, onBack }) {
 
       <span className="k-field-label">Phone number</span>
       <PhoneKeypad digits={digits} onChange={(d) => onChange({ phoneDigits: d, phone: fmtPhone(d) })} />
+
+      {/* SMS consent, at the point the number is collected — which is where
+          carriers and A2P reviewers require it to be, and where it is actually
+          useful to the rider. States what we send, how often, that rates apply,
+          and how to stop. */}
+      <p className="k-consent">
+        By booking, you agree to receive text messages about your ride — a confirmation, and a
+        live tracking link when a driver accepts. About two messages per booking. Message and
+        data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
+        <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy&nbsp;Policy</a> and{' '}
+        <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>.
+      </p>
 
       <div className="field" style={{ marginTop: 16 }}>
         <label className="label">Email <span className="k-hint-inline">optional</span></label>

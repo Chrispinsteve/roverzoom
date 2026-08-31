@@ -2,15 +2,24 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install && npm install --prefix backend",
+  "cleanUrls": true,
   "redirects": [
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "roverzooma.vercel.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "roverzooma.vercel.app"
+        }
+      ],
       "destination": "https://www.roverzoom.com/$1",
       "permanent": true
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
   ]
 }
