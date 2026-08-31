@@ -65,7 +65,7 @@ const TOOLS = [
   {
     name: 'create_booking',
     description:
-      "Book a scheduled ride. Only call this once you have the pickup, destination, date/time, the rider's name, and their phone number, AND the rider has confirmed the price out loud, AND you have asked the age question and they answered yes. The fare is locked at booking.",
+      "Book a scheduled ride. Only call this once you have the pickup, destination, date/time, the rider's name, and their phone number, AND the rider has confirmed the price out loud, AND you have asked the combined age and text-consent question. The fare is locked at booking.",
     input_schema: {
       type: 'object',
       properties: {
@@ -76,6 +76,12 @@ const TOOLS = [
         age_confirmed: {
           type: 'boolean',
           description: "True only if you asked the rider whether they are 18 or over (or the parent or legal guardian of the rider) and they said yes. Never assume it.",
+        },
+        // Recorded separately from age: a rider may be an adult and still not
+        // want texts. Declining the texts is not a reason to refuse the ride.
+        sms_consent: {
+          type: 'boolean',
+          description: "True only if the rider agreed out loud to receive their confirmation and tracking link by text. If they said no, book the ride but pass false — do not assume consent from silence.",
         },
         pickup_address: { type: 'string' },
         dropoff_address: { type: 'string' },
@@ -177,7 +183,15 @@ async function toolCreateBooking(input) {
   });
   if (error) return { error: 'Booking could not be saved: ' + error.message };
 
-  try { await sendBookingConfirmation(data); } catch { /* best-effort */ }
+  // Honour a spoken refusal. Asking for consent and then texting anyway would
+  // be worse than never asking: it turns a truthful opt-in record into a false
+  // one. Silence is not consent — only an explicit false blocks the send, and
+  // the model is instructed to pass false rather than omit it when they say no.
+  if (input.sms_consent !== false) {
+    try { await sendBookingConfirmation(data); } catch { /* best-effort */ }
+  } else {
+    console.log(`[assistant] booking ${data.reference}: rider declined SMS, confirmation not sent`);
+  }
 
   return {
     reference: data.reference,
@@ -240,7 +254,7 @@ How to behave:
 - A booking needs: pickup, destination, date and time, the rider's name, and their phone number. Ask only for what's still missing, one item at a time. Keep it conversational.
 - Riders often name a place instead of an address — a business, hotel, store, mall, airport, or landmark ("Publix", "the Marriott", "Fort Lauderdale airport"). When they do, use find_place. Pass "near" (the pickup area) when you know a specific one; if the rider is at their current location shown above, you can OMIT "near" and it searches around them. This pins the branch closest to them, not a same-name store in another city. If you have no location at all, ask where they are first. Matches come back nearest-first with how many miles away each is; take the closest, or if two are similarly close, name them and ask which. Then always quote and book with the full resolved address — never a bare name, and never invent one.
 - Use get_quote to price a ride. Always tell the rider the locked price and get a clear yes before booking.
-- Before booking, you MUST ask once: "And just to confirm, are you eighteen or over, or booking for someone you're the parent or guardian of?" Wait for a clear yes. If they say no, or dodge it, do not book — say you can only book rides for adults, or for a parent or guardian booking on a child's behalf, and offer to help another way. Pass age_confirmed true to create_booking only when they actually said yes.
+- Before booking, you MUST ask once, as a single question: "Last thing — are you eighteen or over, or booking for someone you're the parent or guardian of? And is it okay to text you your confirmation and tracking link?" Wait for a clear yes. Both matter: a voice booking sends the same two texts a web booking does, so consent has to be given here too. If they decline the age part, or dodge it, do not book — say you can only book rides for adults, or for a parent or guardian booking on a child's behalf. If they only decline the texts, you may still book: say you'll skip the texts and they can find their ride using their confirmation code. Pass age_confirmed true to create_booking only when they actually said yes to the age question.
 - Call create_booking only after you have everything and they've confirmed. Default payment to cash unless they say otherwise.
 - After booking, read back the confirmation code clearly (say the characters) and tell them a driver will be assigned soon and they'll get a tracking text.
 - Use get_booking_status if they ask about an existing ride by its code.
