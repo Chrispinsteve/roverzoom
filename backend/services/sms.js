@@ -92,10 +92,14 @@ function formatWhen(iso) {
 async function sendBookingConfirmation(booking) {
   if (!booking?.rider_phone) return { sent: false, reason: 'no_phone' };
   const when = formatWhen(booking.scheduled_at);
+  // Carries the opt-out because this is the FIRST message a rider ever
+  // receives from us. Wording kept tight so it still fits one 160-character
+  // segment with "Reply STOP" appended — the same message across two segments
+  // would double the cost of every booking for 22 characters.
   const body =
     `RoverZoom: Your ride is booked${when ? ` for ${when}` : ''}. ` +
     `Confirmation ${booking.reference}. ` +
-    `We'll text a live tracking link the moment a driver accepts.`;
+    `We'll text a tracking link when a driver accepts. Reply STOP to opt out.`;
   return sendSms(booking.rider_phone, body);
 }
 

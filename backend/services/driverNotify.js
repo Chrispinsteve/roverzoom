@@ -74,7 +74,7 @@ async function notifyDriversOfNewRequest(booking) {
         const last = lastSmsAt.get(d.id) || 0;
         if (now - last >= SMS_THROTTLE_MS) {
           lastSmsAt.set(d.id, now);
-          sendSms(d.phone, `RoverZoom: New ride request (${area}). Open to claim: ${appUrl()}`)
+          sendSms(d.phone, `RoverZoom: New ride request (${area}). Open to claim: ${appUrl()} Reply STOP to opt out.`)
             .catch(() => {});
         }
       }
