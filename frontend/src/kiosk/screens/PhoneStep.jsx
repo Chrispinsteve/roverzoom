@@ -4,7 +4,13 @@ import { fmtPhone } from '../lib/phone';
 
 export default function PhoneStep({ booking, onChange, onNext, onBack }) {
   const digits = booking.phoneDigits || '';
-  const canContinue = booking.name?.trim().length > 1 && digits.length === 10;
+  // Email stays OPTIONAL. It is what lets Stripe Link recognise a returning
+  // rider and fill in their saved card, and it is what a receipt is sent to —
+  // but making it mandatory would add a required field to a flow whose whole
+  // promise is that no account is needed.
+  const email = booking.email || '';
+  const emailValid = email === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canContinue = booking.name?.trim().length > 1 && digits.length === 10 && emailValid;
 
   const footer = (
     <div className="k-footer-bar">
@@ -32,6 +38,24 @@ export default function PhoneStep({ booking, onChange, onNext, onBack }) {
 
       <span className="k-field-label">Phone number</span>
       <PhoneKeypad digits={digits} onChange={(d) => onChange({ phoneDigits: d, phone: fmtPhone(d) })} />
+
+      <div className="field" style={{ marginTop: 16 }}>
+        <label className="label">Email <span className="k-hint-inline">optional</span></label>
+        <input
+          className="input"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => onChange({ email: e.target.value })}
+        />
+        <span className={emailValid ? 'k-hint' : 'k-hint k-hint-bad'}>
+          {emailValid
+            ? 'For your receipt — and so a saved card fills itself in next time.'
+            : "That doesn't look like an email address."}
+        </span>
+      </div>
     </FlowShell>
   );
 }

@@ -35,7 +35,7 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
       dropoff: booking.dropoff,
       scheduledAt,
       paymentMethod: booking.payment,
-      rider: { name: booking.name, phone: booking.phone },
+      rider: { name: booking.name, phone: booking.phone, email: (booking.email || '').trim() || undefined },
       // Recorded, not just displayed. The version pins which wording was on
       // screen; the server re-stamps the timestamp so a client clock cannot
       // decide when consent happened.
@@ -77,7 +77,21 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
   // Mount the element once the card phase's container exists in the DOM.
   useEffect(() => {
     if (phase !== 'card' || !elementsRef.current || !mountRef.current) return;
-    const el = elementsRef.current.create('payment', { layout: 'tabs' });
+    // Prefilling billing details is what makes Link useful: given an email it
+    // already knows, Link offers the rider's saved card instead of an empty
+    // card form. Nothing is saved by US — Stripe authenticates the rider with
+    // its own one-time code, so a saved card is never reachable by typing
+    // somebody else's details into this booking flow.
+    const el = elementsRef.current.create('payment', {
+      layout: 'tabs',
+      defaultValues: {
+        billingDetails: {
+          name: booking.name || undefined,
+          email: (booking.email || '').trim() || undefined,
+          phone: booking.phone || undefined,
+        },
+      },
+    });
     el.mount(mountRef.current);
     return () => el.destroy();
   }, [phase]);

@@ -14,7 +14,7 @@ const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
   dayIso: null, dayLabel: null, timeLabel: null,
   quote: null,
-  name: '', phoneDigits: '', phone: '',
+  name: '', phoneDigits: '', phone: '', email: '',
   payment: null,
 };
 
