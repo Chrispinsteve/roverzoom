@@ -1,6 +1,7 @@
 // Map styling invariants. Run: node frontend/src/driver/lib/mapStyle.test.mjs
 import assert from 'node:assert';
 import { NAV_STYLES, DETAIL_STYLES, DETAIL_ZOOM, stylesFor, stylesForZoom, mapOptionsFor } from './mapStyle.js';
+import { NavController } from './navController.js';
 let n = 0;
 const ok = (name) => { n++; console.log('  ✓', name); };
 
@@ -19,11 +20,42 @@ const blanketLabelsOff = (a) => a.some((r) => r.elementType === 'labels' && !r.f
 // The camera forces 17.6 on approach and 18.4 on arrival. Both must reveal the
 // numbers, or driving up to a pickup would not show the one label that matters.
 {
-  for (const z of [17.6, 18.4]) {
-    assert.strictEqual(stylesForZoom(z), DETAIL_STYLES, `arrival zoom ${z} must show house numbers`);
+  // Read the zooms OUT OF THE CAMERA rather than hardcoding them. They were
+  // written in as 17.6 and 18.4, and when the camera moved to 18.0 and 19 this
+  // test kept asserting the old pair — passing on numbers the app no longer
+  // uses, which is worse than not testing it. Derived, it cannot drift again.
+  const camZoom = (phase) => {
+    const c = new NavController();
+    const path = [];
+    for (let i = 0; i < 40; i++) path.push({ lat: 26.30 + i * 0.0002, lng: -80.1, step: 0 });
+    c.setRoute({ path, steps: [{ action: 'x', road: 'A', maneuver: 'straight', distM: 880, durSec: 90 }],
+      totalDistM: 880, totalDurSec: 90 });
+    c.startFollowing();
+    // Place the driver where that phase applies, then read what the camera picks.
+    const idx = phase === 'arriving' ? 38 : 33;
+    c.onPosition({ lat: path[idx].lat, lng: path[idx].lng, speedMph: 35 });
+    const cam = c.cameraFor(c.lastPos);
+    assert.equal(cam.phase, phase, `expected phase ${phase}, got ${cam.phase}`);
+    return cam.zoom;
+  };
+  // Two different things have to line up, and only one of them is ours:
+  //
+  //   the STYLE must enable the labels        — ours, driven by phase or zoom
+  //   the TILES must actually carry them      — Google's, and only from ~19
+  //
+  // So approach enables the labels early (harmless: nothing to draw yet), and
+  // the arriving camera is what has to clear the zoom where Google renders
+  // them. Asserting the second is the one that catches a real regression.
+  for (const phase of ['approach', 'arriving']) {
+    assert.strictEqual(stylesFor({ zoom: camZoom(phase), phase }), DETAIL_STYLES,
+      `the ${phase} phase must enable house-number labels`);
   }
-  assert.ok(DETAIL_ZOOM < 17.6, 'the threshold sits below the approach zoom');
-  ok('both camera arrival zooms reveal the numbers');
+  const arriving = camZoom('arriving');
+  assert.ok(arriving >= DETAIL_ZOOM,
+    `the arriving camera (${arriving}) must reach the zoom where labels render (${DETAIL_ZOOM})`);
+  assert.ok(arriving >= 19,
+    `Google draws house numbers from ~19; arriving camera is ${arriving}`);
+  ok('the arriving camera reaches the zoom where numbers actually render');
 
   // Approaching is a statement about the TASK, not the scale. The opening
   // overview sits below any sensible zoom threshold, and a driver looking at
