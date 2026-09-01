@@ -33,6 +33,23 @@ function isGoogleEnabled() { return !!googleKey(); }
 // nothing has to remember to flip a switch.
 let googleGeocodeDisabled = null; // null = untried, string = reason it is off
 
+// Places Text Search is capped at 100 requests PER DAY on this project
+// (quota_limit_value 100, quota_unit 1/d/{project}). That is a hard ceiling on
+// how many distinct pickup addresses can be resolved accurately in a day,
+// shared across every rider booking — and when it is gone, geocodeOne falls
+// back to OpenStreetMap, which is the source measured 51.7m out on a live
+// booking. Running out does not fail loudly; it quietly starts sending drivers
+// to the wrong house.
+//
+// Two defences here. First, a cache, so the same address never costs twice —
+// a rider retrying a booking, or a driver screen re-resolving, previously
+// burned a fresh request every time. Second, exhaustion is recorded and
+// reported rather than swallowed, so it can be seen instead of inferred from
+// bad pickups.
+let placesQuotaExhaustedAt = null;
+const _placesCache = new Map();
+const PLACES_TTL_MS = 24 * 60 * 60 * 1000; // an address does not move
+
 async function googleGeocode(query) {
   const key = googleKey();
   if (!key) return null;
@@ -120,6 +137,10 @@ function precisionFromPlaceTypes(types = []) {
 async function googlePlacesGeocode(query) {
   const key = googleKey();
   if (!key) return null;
+
+  const cacheKey = String(query).toLowerCase().trim();
+  const hit = _placesCache.get(cacheKey);
+  if (hit && Date.now() - hit.t < PLACES_TTL_MS) return hit.row;
   const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {
@@ -129,12 +150,20 @@ async function googlePlacesGeocode(query) {
     },
     body: JSON.stringify({ textQuery: query, regionCode: 'US', maxResultCount: 1 }),
   });
+  if (res.status === 429) {
+    placesQuotaExhaustedAt = Date.now();
+    console.error('[geocode] PLACES DAILY QUOTA EXHAUSTED — pickups will fall back to OpenStreetMap, '
+      + 'which is measurably less accurate. Raise the SearchTextRequest per-day limit in Cloud Console.');
+    throw new Error('google places geocode 429');
+  }
   if (!res.ok) throw new Error(`google places geocode ${res.status}`);
   const pl = (await res.json())?.places?.[0];
-  if (!pl?.location) return null;
+  // A negative result is cached too. Without that, an address Places genuinely
+  // cannot find costs a request on every single retry.
+  if (!pl?.location) { _placesCache.set(cacheKey, { t: Date.now(), row: null }); return null; }
   const full = pl.formattedAddress || pl.shortFormattedAddress || query;
   const parts = full.split(',');
-  return {
+  const row = {
     label: parts[0].trim(),
     sublabel: parts.slice(1, 3).join(',').trim(),
     address: full,
@@ -144,6 +173,8 @@ async function googlePlacesGeocode(query) {
     precision: precisionFromPlaceTypes(pl.types),
     source: 'google_places',
   };
+  _placesCache.set(cacheKey, { t: Date.now(), row });
+  return row;
 }
 
 function normalizeNominatim(rows) {
@@ -341,7 +372,13 @@ async function reverseGeocode(lat, lng) {
 // Exposed so an operator can see WHY geocoding is running on Places without
 // reading logs — and so a health check can report it.
 function geocodeProviderStatus() {
-  return { googleGeocodingDisabledReason: googleGeocodeDisabled };
+  return {
+    googleGeocodingDisabledReason: googleGeocodeDisabled,
+    // Non-null means pickups are currently being resolved by OpenStreetMap and
+    // are less accurate than they should be. Worth alerting on.
+    placesQuotaExhaustedAt: placesQuotaExhaustedAt ? new Date(placesQuotaExhaustedAt).toISOString() : null,
+    placesCacheSize: _placesCache.size,
+  };
 }
 
 module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween, googleGeocode, googlePlacesGeocode, isGoogleEnabled, geocodeProviderStatus };
