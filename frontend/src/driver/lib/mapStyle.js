@@ -22,7 +22,13 @@ export const NAV_STYLES = [
   // --- surfaces ---------------------------------------------------------
   { elementType: 'geometry', stylers: [{ color: '#E8EBE8' }] },
   { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#E4E9E4' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#E6E9E6' }] },
+  // Buildings and parcels. Previously #E6E9E6 against #E8EBE8 land — a two-point
+  // difference, so footprints were drawn and then rendered invisible, which is
+  // why address numbers appeared floating over nothing. Given a real step in
+  // value plus an outline, a driver can see the block they are pulling up to.
+  // Still quieter than the roads, which are quieter than the route.
+  { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#DCE1DD' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#C6CDC8' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#DFE7DF' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#D5E3E0' }] },
 
@@ -55,3 +61,33 @@ export const NAV_STYLES = [
   // Highway shields ARE useful — "I-95 N" is how a driver confirms the ramp.
   { featureType: 'road.highway', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
 ];
+
+// ---------------------------------------------------------------------------
+// Vector rendering (3D buildings, tilt, heading-up)
+// ---------------------------------------------------------------------------
+// Google renders 3D buildings ONLY on vector maps, and a map is vector only if
+// it is given a mapId that is configured as vector in Cloud Console. Verified:
+// a raster map ignores `tilt` outright — Google's own DEMO_MAP_ID reports
+// renderingType RASTER and tilt 0 no matter what is requested.
+//
+// The trade nobody mentions: WHEN A mapId IS SET, THE `styles` ARRAY ABOVE IS
+// IGNORED. Vector maps are styled in the Cloud Console, not in code. So every
+// decision in NAV_STYLES — the quiet greys, the road hierarchy, the label cull
+// that removed the parcel numbers — has to be recreated there or the map comes
+// back as stock Google Maps with all its clutter.
+//
+// Hence: opt-in. With no VITE_GOOGLE_MAPS_MAP_ID the app runs the raster style
+// exactly as before. Set one, and the map becomes vector with 3D buildings and
+// a heading-up camera. Nothing is guessed at runtime.
+export function mapOptionsFor(mapId) {
+  const base = {
+    disableDefaultUI: true, clickableIcons: false, gestureHandling: 'greedy',
+    keyboardShortcuts: false, backgroundColor: '#E8EBE8', minZoom: 4, maxZoom: 20,
+  };
+  // Passing BOTH mapId and styles logs a console warning and drops styles.
+  return mapId ? { ...base, mapId } : { ...base, styles: NAV_STYLES };
+}
+
+// Tilt only once there is a route to look along, and only on a vector map.
+// A tilted map with no route is just a harder-to-read map.
+export const NAV_TILT_DEG = 45;

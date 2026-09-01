@@ -144,7 +144,8 @@ export class NavController {
     const ahead = phase === 'arriving' ? 0.06 : this.config.aheadFraction;
     const center = lookAheadCenter(p, this.stableHeading ?? 0, this.viewportH, zoom, ahead);
     this.lastCenter = { lat: p.lat, lng: p.lng };
-    return { center, zoom, phase };
+    // Carried so a vector map can rotate to heading-up. Ignored on raster.
+    return { center, zoom, phase, heading: this.stableHeading ?? 0 };
   }
 
   // Feed a GPS fix. `now` is injectable for deterministic tests.

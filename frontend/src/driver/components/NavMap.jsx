@@ -4,7 +4,7 @@ import { useGoogleMaps } from '../../lib/GoogleMapsProvider';
 import { useAnimatedPosition, usePrefersReducedMotion } from '../../lib/useAnimatedPosition';
 import { NavController, RequestGuard } from '../lib/navController';
 import { parseNavRoute } from '../lib/navRoute';
-import { NAV_STYLES } from '../lib/mapStyle';
+import { mapOptionsFor, NAV_TILT_DEG } from '../lib/mapStyle';
 import { traceWeights } from '../lib/navMath';
 import { driverApi } from '../../lib/driverApi';
 
@@ -67,11 +67,12 @@ const ROUTE_ERROR_TEXT = {
   unavailable: 'Route unavailable',
 };
 
-const MAP_OPTIONS = {
-  disableDefaultUI: true, clickableIcons: false, gestureHandling: 'greedy',
-  keyboardShortcuts: false, styles: NAV_STYLES, backgroundColor: '#f3f5f2',
-  minZoom: 4, maxZoom: 19,
-};
+// Vector rendering is opt-in via env. Empty string = raster + NAV_STYLES,
+// which is the shipped behaviour. See mapStyle.js for why this is a switch and
+// not a default: a mapId silently disables the entire styles array.
+const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || '';
+const IS_VECTOR = Boolean(MAP_ID);
+const MAP_OPTIONS = mapOptionsFor(MAP_ID);
 
 function maneuverGlyph(m) {
   switch (m) {
@@ -278,6 +279,22 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     programmatic.current = true;
     if (map.getZoom() !== cam.zoom) map.setZoom(cam.zoom);
     map.panTo(cam.center);
+
+    // Vector maps only — a raster map ignores both of these outright.
+    if (IS_VECTOR) {
+      // HEADING-UP. Rotating the map so travel direction is screen-up is what
+      // finally puts the vehicle in the lower third for EVERY heading. On a
+      // north-up map the look-ahead offset points geographically ahead, so it
+      // only reads as "below centre" when the driver happens to be going north;
+      // heading east it pushed them to the left edge instead.
+      if (Number.isFinite(cam.heading)) map.setHeading(cam.heading);
+      // Tilt flattens on arrival. Perspective helps read a street you are
+      // travelling along; it hurts when the task is picking out which of four
+      // doors to stop at, where a plan view is strictly better.
+      const tilt = cam.phase === 'arriving' ? 0 : NAV_TILT_DEG;
+      if (map.getTilt() !== tilt) map.setTilt(tilt);
+    }
+
     window.clearTimeout(applyCamera._t);
     applyCamera._t = window.setTimeout(() => { programmatic.current = false; }, 420);
   }, []);
@@ -312,6 +329,11 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     }
     const bannerH = bannerRef.current?.offsetHeight || 0;
     programmatic.current = true;
+    // Overview frames the whole journey, which only reads correctly flat and
+    // north-up: fitBounds computes a bounding box in geographic space and does
+    // not account for a rotated or tilted viewport, so a tilted overview cuts
+    // the far end of the route off the screen.
+    if (IS_VECTOR) { map.setTilt(0); map.setHeading(0); }
     map.fitBounds(bounds, {
       // Banner sits at top:12 and covers the map completely.
       // The pin and its label are drawn upward from the coordinate, so a
