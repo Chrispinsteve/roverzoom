@@ -48,7 +48,7 @@
     "elementType": "geometry.stroke",
     "stylers": [
       {
-        "color": "#A9A399"
+        "color": "#8F887C"
       }
     ]
   },
@@ -57,16 +57,16 @@
     "elementType": "geometry.fill",
     "stylers": [
       {
-        "color": "#FFFFFF"
+        "color": "#9AA096"
       }
     ]
   },
   {
-    "featureType": "road",
-    "elementType": "geometry.stroke",
+    "featureType": "road.local",
+    "elementType": "geometry.fill",
     "stylers": [
       {
-        "color": "#C2BAAE"
+        "color": "#9AA096"
       }
     ]
   },
@@ -75,16 +75,7 @@
     "elementType": "geometry.fill",
     "stylers": [
       {
-        "color": "#FFFFFF"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry.stroke",
-    "stylers": [
-      {
-        "color": "#B9B0A3"
+        "color": "#8E958A"
       }
     ]
   },
@@ -93,16 +84,16 @@
     "elementType": "geometry.fill",
     "stylers": [
       {
-        "color": "#FBEFD2"
+        "color": "#C9B98E"
       }
     ]
   },
   {
-    "featureType": "road.highway",
-    "elementType": "geometry.stroke",
+    "featureType": "road.highway.controlled_access",
+    "elementType": "geometry.fill",
     "stylers": [
       {
-        "color": "#D9C99E"
+        "color": "#BFAE81"
       }
     ]
   },
@@ -163,7 +154,7 @@
         "visibility": "on"
       },
       {
-        "color": "#6E675E"
+        "color": "#3F443C"
       }
     ]
   },
@@ -178,7 +169,7 @@
         "color": "#F1EEE9"
       },
       {
-        "weight": 3
+        "weight": 4
       }
     ]
   },

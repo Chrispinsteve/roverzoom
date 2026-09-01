@@ -8,6 +8,12 @@ import PassengerRow from '../components/PassengerRow';
 
 export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
   const [route, setRoute] = useState({});
+  // Same collapse as OnTrip, with one deliberate difference: "Arrived at
+  // Pickup" stays visible. It is safe and reversible, and it is the action the
+  // driver came to this screen to take — burying it would cost more than it
+  // protects. Only the irreversible one (End Trip, on the next screen) is put
+  // behind a deliberate expand.
+  const [expanded, setExpanded] = useState(false);
   return (
     <DriverShell rightSlot={
       <button className="drv-icon-btn" aria-label="Safety">
@@ -25,7 +31,17 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
           />
         </div>
 
-        <div className="drv-nav-card">
+        <div className={`drv-nav-card${expanded ? '' : ' drv-nav-card--collapsed'}`}>
+          <button
+            type="button"
+            className="drv-nav-expand"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Hide pickup details' : 'Show pickup details'}
+          >
+            <span className="drv-nav-grip" />
+          </button>
+
           <div className="drv-nav-stats">
             <div>
               <div className="drv-nav-stat-k">ETA</div>
@@ -37,28 +53,27 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
             </div>
           </div>
 
-          {/* Reaching the rider matters most on the way to collect them —
-              a wrong gate, a back entrance, or someone not yet outside. */}
-          {booking.rider_name && (
-            <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
-          )}
-
-          <div className="drv-nav-dest">
-            <span className="drv-nav-dest-icon"><Icon name="arrowUp" size={15} color="var(--ink)" /></span>
-            <div className="drv-nav-dest-main">
-              <div className="drv-nav-dest-k">Pickup</div>
-              {/* Street on its own line, city secondary. The street number is
-                  the part a driver needs at the kerb, so it never shares a
-                  line with anything that could push it into a truncation. */}
-              <div className="drv-nav-dest-addr">{addressLines(booking.pickup_address).street}</div>
-              {addressLines(booking.pickup_address).locality && (
-                <div className="drv-nav-dest-sub">{addressLines(booking.pickup_address).locality}</div>
+          {expanded && (
+            <>
+              {booking.rider_name && (
+                <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
               )}
-            </div>
-            <a className="drv-nav-openmaps" href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)} target="_blank" rel="noreferrer">
-              Open in Maps <span aria-hidden="true">↗</span>
-            </a>
-          </div>
+
+              <div className="drv-nav-dest">
+                <span className="drv-nav-dest-icon"><Icon name="arrowUp" size={15} color="var(--ink)" /></span>
+                <div className="drv-nav-dest-main">
+                  <div className="drv-nav-dest-k">Pickup</div>
+                  <div className="drv-nav-dest-addr">{addressLines(booking.pickup_address).street}</div>
+                  {addressLines(booking.pickup_address).locality && (
+                    <div className="drv-nav-dest-sub">{addressLines(booking.pickup_address).locality}</div>
+                  )}
+                </div>
+                <a className="drv-nav-openmaps" href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)} target="_blank" rel="noreferrer">
+                  Open in Maps <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            </>
+          )}
 
           {error && <p className="error-text center" style={{ margin: '0 0 10px' }}>{error}</p>}
           <button className="btn" onClick={onArrived} disabled={busy} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>

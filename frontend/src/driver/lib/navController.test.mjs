@@ -620,4 +620,39 @@ function dropoffRoute() {
 }
 
 
+// --- distance to the next maneuver ---------------------------------------
+// "Turn right onto Deerfield Pl" without a distance is a fact, not an
+// instruction: the driver still has to work out whether it means now or after
+// the next two junctions.
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+
+  assert.equal(new NavController().distanceToManeuver(), null, 'no route, no claim');
+
+  c.onPosition({ lat: 26.3500, lng: LNG });
+  const far = c.distanceToManeuver();
+  c.onPosition({ lat: 26.3530, lng: LNG });
+  const near = c.distanceToManeuver();
+  assert.ok(far > near, `must count down: ${far} then ${near}`);
+  assert.ok(near >= 0, 'never negative');
+  ok('the distance to the turn counts down as the driver approaches it');
+
+  // It must reset upward at a step boundary rather than going negative — the
+  // next maneuver is further away than the one just taken.
+  c.onPosition({ lat: 26.3550, lng: LNG }); // end of step 0
+  const atTurn = c.distanceToManeuver();
+  c.onPosition({ lat: 26.3560, lng: LNG }); // into step 1
+  assert.equal(c.stepIndex, 1, 'precondition: advanced a step');
+  assert.ok(c.distanceToManeuver() > atTurn, 'the next maneuver is further away again');
+  ok('it re-targets the next maneuver at a step boundary');
+
+  // Never larger than what is left of the whole route.
+  assert.ok(c.distanceToManeuver() <= c.remaining().distM + 1,
+    'a maneuver cannot be beyond the end of the route');
+  ok('it never exceeds the distance remaining');
+}
+
+
 console.log(`\nnavController: ${n}/9 lifecycle groups passed`);

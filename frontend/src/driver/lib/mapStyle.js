@@ -44,25 +44,29 @@ export const NAV_STYLES = [
   // enough to read at a glance. It costs almost no visual weight — the shapes
   // appear, the ground stays quiet, and the route is untouched.
   { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#EAE7E1' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#A9A399' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#8F887C' }] },
 
-  // --- roads are CHANNELS, not stripes ----------------------------------
-  // Inverted from what was here. Roads used to be painted DARKER than the
-  // land, which is backwards from how every map a driver has ever read works,
-  // and it made the network sit on top of the ground rather than being cut
-  // into it.
+  // --- roads carry their own weight ------------------------------------
+  // Third attempt, and the first two were both wrong for reasons worth keeping.
   //
-  // Now roads are white with a grey casing — the surface is the lightest thing
-  // on the map and the casing gives it an edge. That is Apple's system, and it
-  // is what makes a street legible at a glance without the road needing to be
-  // dark. Hierarchy is carried by the casing weight and by the highway's warm
-  // tint, not by making the tarmac progressively grubbier.
-  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#C2BAAE' }] },
-  { featureType: 'road.arterial', elementType: 'geometry.fill', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#B9B0A3' }] },
-  { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#FBEFD2' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#D9C99E' }] },
+  // Originally roads were DARKER than the land, which put the network on top of
+  // the ground instead of cut into it. Then they were made white with a grey
+  // casing, copying how iOS reads — except a probe with a pure BLACK casing
+  // rendered nothing at all: Google's raster styler does not apply road
+  // geometry.stroke at navigation zoom. The casing was never being drawn, so
+  // the roads were simply white-on-cream with no edge, which is why they
+  // dissolved into the ground.
+  //
+  // With no casing available, the road's own FILL has to do the work. A mid
+  // grey-olive band on warm ground reads exactly like the iOS road it is
+  // matching, and needs no edge to be legible. Hierarchy is by value: local
+  // streets lightest, arterials a step down, highways warm so a motorway never
+  // reads as just another street.
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#9AA096' }] },
+  { featureType: 'road.local', elementType: 'geometry.fill', stylers: [{ color: '#9AA096' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.fill', stylers: [{ color: '#8E958A' }] },
+  { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#C9B98E' }] },
+  { featureType: 'road.highway.controlled_access', elementType: 'geometry.fill', stylers: [{ color: '#BFAE81' }] },
 
   // --- everything is silent until proven useful --------------------------
   { elementType: 'labels', stylers: [{ visibility: 'off' }] },
@@ -75,8 +79,8 @@ export const NAV_STYLES = [
   // --- and then: road names, because that is what the banner names -------
   // The banner says "Deerfield Pl"; the driver has to be able to find
   // Deerfield Pl on the map. Everything else stays off.
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ visibility: 'on' }, { color: '#6E675E' }] },
-  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ visibility: 'on' }, { color: '#F1EEE9' }, { weight: 3 }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ visibility: 'on' }, { color: '#3F443C' }] },
+  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ visibility: 'on' }, { color: '#F1EEE9' }, { weight: 4 }] },
   { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   // Local street names only from close in; at route zoom they are clutter.
   { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'simplified' }] },

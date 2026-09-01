@@ -75,6 +75,20 @@ const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || '';
 const IS_VECTOR = Boolean(MAP_ID);
 const MAP_OPTIONS = mapOptionsFor(MAP_ID);
 
+// Distance to the next turn, in the units a driver thinks in.
+//
+// Rounded hard on purpose: 500ft, not 512ft. The number is read at a glance
+// from a moving car, and false precision costs legibility while adding nothing
+// — nobody measures their turn to the foot.
+function fmtManeuverDistance(m) {
+  if (!Number.isFinite(m) || m <= 0) return null;
+  const ft = m * 3.28084;
+  if (ft < 150) return 'Now';
+  if (ft < 1000) return `${Math.round(ft / 50) * 50} ft`;
+  const mi = m / 1609.34;
+  return mi < 10 ? `${mi.toFixed(1)} mi` : `${Math.round(mi)} mi`;
+}
+
 function maneuverGlyph(m) {
   switch (m) {
     case 'turn-left': case 'ramp-left': case 'fork-left': case 'keep-left': case 'roundabout-left': return '↰';
@@ -302,6 +316,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     setView({
       mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading,
       visual: c.visualPosition(), phase: c.approachPhase(), connector: c.routeConnector(),
+      toManeuver: c.distanceToManeuver(),
       side: c.arrivalSide(destRef.current),
     });
     const l = c.traceLanes();
@@ -528,6 +543,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
 
   const step = view.step;
   const weights = traceWeights(zoom);
+  const maneuverDist = fmtManeuverDistance(view.toManeuver);
 
   // Draw the vehicle where the controller says to, which inside the corridor is
   // on the road rather than at the raw fix. Falls back to the raw coordinate
@@ -601,19 +617,23 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         {hasDriver && <VehicleMarker position={vehiclePos} intervalMs={updateIntervalMs} />}
       </GoogleMap>
 
-      {/* Maneuver banner — trusted ACTION (large) + road (secondary).
+      {/* Maneuver banner — DISTANCE first, then the action.
           Driven by the controller's forward-only step index, so it is the step
-          the driver is ON, never steps[0]. */}
+          the driver is on, never steps[0]. The distance counts down from the
+          step's own end rather than jumping at boundaries. */}
       {step && (
-        <div ref={bannerRef} style={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 6, background: '#0e1512', color: '#fff', borderRadius: 16, boxShadow: '0 6px 20px rgba(0,0,0,0.28)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 28, lineHeight: 1, color: MINT, flexShrink: 0 }}>{maneuverGlyph(step.maneuver)}</span>
+        <div ref={bannerRef} style={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 6, background: '#0e1512', color: '#fff', borderRadius: 16, boxShadow: '0 6px 20px rgba(0,0,0,0.28)', padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 13 }}>
+          <span style={{ fontSize: 30, lineHeight: 1, color: MINT, flexShrink: 0 }}>{maneuverGlyph(step.maneuver)}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{step.action}</div>
-            {step.road && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.road}</div>}
+            {/* The largest thing in the banner, because "how far" is the
+                question a driver is actually asking. */}
+            {maneuverDist && (
+              <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.02em' }}>{maneuverDist}</div>
+            )}
+            <div style={{ fontSize: maneuverDist ? 14 : 17, fontWeight: maneuverDist ? 600 : 800, lineHeight: 1.2, letterSpacing: '-0.01em', marginTop: maneuverDist ? 1 : 0, color: maneuverDist ? 'rgba(255,255,255,0.92)' : '#fff' }}>
+              {step.action}{step.road ? ` · ${step.road}` : ''}
+            </div>
             <LaneHint lane={step.lane} />
-            {/* Which side to pull over on, once that is the live question.
-                Replaces the next-turn preview during the approach, because at
-                that point there is no next turn worth previewing. */}
             {view.phase !== 'cruise' && view.side && (
               <div style={{ fontSize: 12.5, fontWeight: 700, color: MINT, marginTop: 3 }}>
                 {String(destinationLabel).toUpperCase().startsWith('PICK') ? 'Pickup' : 'Drop-off'} on your {view.side}

@@ -389,6 +389,22 @@ export class NavController {
     return rel > 0 ? 'right' : 'left';
   }
 
+  // Metres to the next maneuver — the number Apple puts in the largest type on
+  // the screen, and the one the banner was missing.
+  //
+  // "Turn right onto Deerfield Pl" without a distance is not an instruction, it
+  // is a fact. The driver still has to work out whether it means now, or after
+  // the next two junctions, and that is the question they are actually asking.
+  //
+  // Taken from the step's own end distance minus measured progress, so it
+  // counts down continuously rather than jumping at step boundaries.
+  distanceToManeuver() {
+    if (!this.hasRoute || !this.stepMeta.length) return null;
+    const end = this.stepEndDistance();
+    const left = end - this.progressM;
+    return left > 0 ? left : 0;
+  }
+
   currentStep() { return this.stepMeta[this.stepIndex] || null; }
   nextStep() { return this.stepMeta[this.stepIndex + 1] || null; }
 

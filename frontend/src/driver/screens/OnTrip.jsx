@@ -8,6 +8,17 @@ import PassengerRow from '../components/PassengerRow';
 
 export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error }) {
   const [route, setRoute] = useState({});
+  // The card starts COLLAPSED and the map gets the screen.
+  //
+  // Everything below the fold — the rider's name, the address, Open in Maps —
+  // is reference material. A driver mid-trip needs the road and two numbers;
+  // the rest was taking half the display to answer questions nobody was asking
+  // at 40mph.
+  //
+  // It also puts End Trip behind a deliberate action. That button ends the ride
+  // irreversibly, and it was sitting under the driver's thumb for the whole
+  // journey. Now reaching it takes an expand plus a confirm.
+  const [expanded, setExpanded] = useState(false);
   // Ending a trip is irreversible from the driver's side: complete_booking()
   // flips the status, writes the earnings row and increments rides_completed
   // in one transaction. A single mistaken tap while holding the phone is not
@@ -30,7 +41,17 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
           />
         </div>
 
-        <div className="drv-nav-card">
+        <div className={`drv-nav-card${expanded ? '' : ' drv-nav-card--collapsed'}`}>
+          <button
+            type="button"
+            className="drv-nav-expand"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Hide trip details' : 'Show trip details'}
+          >
+            <span className="drv-nav-grip" />
+          </button>
+
           <div className="drv-nav-stats">
             <div>
               <div className="drv-nav-stat-k">ETA</div>
@@ -40,66 +61,58 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
               <div className="drv-nav-stat-k">Distance</div>
               <div className="drv-nav-stat-v">{route.distanceText || `${booking.distance_miles} mi`}</div>
             </div>
-            {/* The driver's own cut, not the rider's fare. driver_payout comes
-                from the API (57.5% of the standard fare); falling back to the
-                fare would overstate what they take home. */}
-            {booking.driver_payout != null && (
-              <div>
-                <div className="drv-nav-stat-k">You earn</div>
-                <div className="drv-nav-stat-v">${Number(booking.driver_payout).toFixed(2)}</div>
-              </div>
-            )}
+            {/* No earnings here, deliberately. The figure is the driver's
+                private business and the back seat can read this screen; it also
+                keeps them doing arithmetic instead of driving. It is shown on
+                TripComplete, where it is the point rather than a distraction. */}
           </div>
 
-          {/* Who is in the car, with one tap to call or text. A dropoff like
-              an office park or a hospital has several entrances, and the driver
-              had no way to ask which one without leaving the screen. Uses the
-              same row as the pickup and ride-detail screens rather than a
-              bespoke variant. */}
-          {booking.rider_name && (
-            <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
-          )}
-
-          <div className="drv-nav-dest">
-            <span className="drv-nav-dest-icon"><Icon name="flag" size={15} color="var(--ink)" /></span>
-            <div className="drv-nav-dest-main">
-              <div className="drv-nav-dest-k">Drop-off</div>
-              {/* Labelled and given its own line. Previously the address sat
-                  inline with the Maps link competing for the same row, which
-                  squeezed it into a truncation the street number fell off. */}
-              <div className="drv-nav-dest-addr">{addressLines(booking.dropoff_address).street}</div>
-              {addressLines(booking.dropoff_address).locality && (
-                <div className="drv-nav-dest-sub">{addressLines(booking.dropoff_address).locality}</div>
+          {expanded && (
+            <>
+              {booking.rider_name && (
+                <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
               )}
-            </div>
-            {/* Fallback, not a primary control: Roverzoom's own map is the
-                navigation interface. Kept reachable, styled to recede. */}
-            <a className="drv-nav-openmaps" href={mapsUrl(booking.dropoff_lat, booking.dropoff_lng, booking.dropoff_address)} target="_blank" rel="noreferrer">
-              Open in Maps <span aria-hidden="true">↗</span>
-            </a>
-          </div>
 
-          {error && <p className="error-text center" style={{ margin: '0 0 10px' }}>{error}</p>}
-
-          {confirming ? (
-            <div className="drv-confirm">
-              <p className="drv-confirm-q">End the trip and record your earnings?</p>
-              <div className="drv-confirm-row">
-                <button className="btn drv-confirm-no" onClick={() => setConfirming(false)} disabled={busy}>
-                  Not yet
-                </button>
-                <button className="btn drv-danger-btn drv-confirm-yes" onClick={onEndTrip} disabled={busy}>
-                  {busy ? 'Ending…' : 'Yes, end trip'}
-                </button>
+              <div className="drv-nav-dest">
+                <span className="drv-nav-dest-icon"><Icon name="flag" size={15} color="var(--ink)" /></span>
+                <div className="drv-nav-dest-main">
+                  <div className="drv-nav-dest-k">Drop-off</div>
+                  <div className="drv-nav-dest-addr">{addressLines(booking.dropoff_address).street}</div>
+                  {addressLines(booking.dropoff_address).locality && (
+                    <div className="drv-nav-dest-sub">{addressLines(booking.dropoff_address).locality}</div>
+                  )}
+                </div>
+                <a className="drv-nav-openmaps" href={mapsUrl(booking.dropoff_lat, booking.dropoff_lng, booking.dropoff_address)} target="_blank" rel="noreferrer">
+                  Open in Maps <span aria-hidden="true">↗</span>
+                </a>
               </div>
-            </div>
-          ) : (
-            <button className="btn drv-danger-btn" onClick={() => setConfirming(true)} disabled={busy}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <Icon name="stop" size={16} color="var(--danger)" />
-              End Trip
-            </button>
+
+              {error && <p className="error-text center" style={{ margin: '0 0 10px' }}>{error}</p>}
+
+              {confirming ? (
+                <div className="drv-confirm">
+                  <p className="drv-confirm-q">End the trip and record your earnings?</p>
+                  <div className="drv-confirm-row">
+                    <button className="btn drv-confirm-no" onClick={() => setConfirming(false)} disabled={busy}>
+                      Not yet
+                    </button>
+                    <button className="btn drv-danger-btn drv-confirm-yes" onClick={onEndTrip} disabled={busy}>
+                      {busy ? 'Ending…' : 'Yes, end trip'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className="btn drv-danger-btn" onClick={() => setConfirming(true)} disabled={busy}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <Icon name="stop" size={16} color="var(--danger)" />
+                  End Trip
+                </button>
+              )}
+            </>
           )}
+
+          {/* An error must never be hidden behind a collapsed card. */}
+          {!expanded && error && <p className="error-text center" style={{ margin: '8px 0 0' }}>{error}</p>}
         </div>
       </div>
     </DriverShell>
