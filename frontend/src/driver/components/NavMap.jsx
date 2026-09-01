@@ -4,7 +4,7 @@ import { useGoogleMaps } from '../../lib/GoogleMapsProvider';
 import { useAnimatedPosition, usePrefersReducedMotion } from '../../lib/useAnimatedPosition';
 import { NavController, RequestGuard } from '../lib/navController';
 import { parseNavRoute } from '../lib/navRoute';
-import { mapOptionsFor, NAV_TILT_DEG } from '../lib/mapStyle';
+import { mapOptionsFor, stylesForZoom, NAV_TILT_DEG } from '../lib/mapStyle';
 import { traceWeights } from '../lib/navMath';
 import { driverApi } from '../../lib/driverApi';
 
@@ -241,6 +241,9 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   const [zoom, setZoom] = useState(17);
   // Where the driver actually stops, and whether we trust it.
   const [access, setAccess] = useState({ point: null, offsetM: null, needsVerification: false });
+  // Which style set is currently applied, so the map is only re-styled when it
+  // actually crosses the threshold rather than on every idle event.
+  const styleRef = useRef(null);
   // Measured, not guessed: the banner's real height decides how much of the
   // top of the map is covered and therefore unusable for framing.
   const bannerRef = useRef(null);
@@ -396,8 +399,19 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   }, [destPt, fitToRoute, snapshot]);
 
   const onZoom = useCallback(() => {
-    const z = mapRef.current?.getZoom();
-    if (Number.isFinite(z)) setZoom((prev) => (Math.abs(prev - z) < 0.01 ? prev : z));
+    const map = mapRef.current;
+    const z = map?.getZoom();
+    if (!Number.isFinite(z)) return;
+    setZoom((prev) => (Math.abs(prev - z) < 0.01 ? prev : z));
+    // House numbers appear as the driver gets close. Skipped entirely on a
+    // vector map, where a mapId means the styles array is ignored and the
+    // equivalent has to be configured as a cloud style instead.
+    if (IS_VECTOR) return;
+    const next = stylesForZoom(z);
+    if (styleRef.current !== next) {
+      styleRef.current = next;
+      map.setOptions({ styles: next });
+    }
   }, []);
 
   const onLoad = useCallback((map) => {

@@ -91,3 +91,38 @@ export function mapOptionsFor(mapId) {
 // Tilt only once there is a route to look along, and only on a vector map.
 // A tilted map with no route is just a harder-to-read map.
 export const NAV_TILT_DEG = 45;
+
+// ---------------------------------------------------------------------------
+// Close-in detail: house numbers
+// ---------------------------------------------------------------------------
+// NAV_STYLES turns labels off wholesale, which removed the house numbers along
+// with the clutter. That was right for one job and wrong for the other.
+//
+// At route-following zoom a screen full of parcel numbers is noise: the driver
+// is reading the road network and the numbers are unreadable at speed anyway.
+// At the kerb it inverts completely — the house number IS the task. "5941" on
+// the correct roof is worth more than every other label on the map combined,
+// and it is the one thing that lets a driver confirm the pin rather than trust
+// it. Given that the pin was two houses out on a real booking, that
+// confirmation matters.
+//
+// So the numbers are not a style decision, they are a ZOOM decision. Built by
+// removing the blanket labels-off rule rather than by hand-listing feature
+// types, so it cannot drift out of sync with NAV_STYLES.
+export const DETAIL_STYLES = [
+  ...NAV_STYLES.filter((r) => !(r.elementType === 'labels' && !r.featureType)),
+  // The blanket rule was also what suppressed these, so re-state them.
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+];
+
+// Below this the numbers are too small to read and only add noise; above it
+// Google starts rendering them and they become the most useful thing on screen.
+// Both arrival zooms the camera forces (17.6 approach, 18.4 arriving) sit above
+// it, so simply driving up to a pickup reveals them with no extra wiring.
+export const DETAIL_ZOOM = 17.5;
+
+export function stylesForZoom(zoom) {
+  return Number.isFinite(zoom) && zoom >= DETAIL_ZOOM ? DETAIL_STYLES : NAV_STYLES;
+}
