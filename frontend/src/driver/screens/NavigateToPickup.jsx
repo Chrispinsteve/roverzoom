@@ -3,7 +3,7 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
-import { addressLines } from '../lib/address';
+import { addressLines, houseNumber } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
 
 export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
@@ -20,6 +20,7 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
             driver={driverPosition}
             destination={{ lat: booking.pickup_lat, lng: booking.pickup_lng }}
             destinationLabel="PICKUP"
+            destinationNumber={houseNumber(booking.pickup_address)}
             onRouteInfo={setRoute}
           />
         </div>

@@ -31,22 +31,23 @@ const MINT = '#3EE0A0';
 const MINT_CASING = '#1FA574';
 
 // ---- Trace Lane palette --------------------------------------------------
-// Three states, ranked by how much of the driver's attention they deserve.
-// The ranking is carried by VALUE (light/dark) as much as hue, so it survives
-// glare, a dirty windscreen, and colour-vision deficiency — none of which a
-// hue-only scheme survives.
+// The lane is BLUE, not brand mint. Deliberate, and the one place brand loses.
 //
-//   TRACE_DONE     behind you        — grey. Recedes. Carries no instruction.
-//   TRACE_AHEAD    the rest of it    — pale mint. Present, not competing.
-//   TRACE_NOW      this maneuver     — full mint. The one thing to act on.
+// Mint is Roverzoom's colour and it is used everywhere else — the pickup pin,
+// the maneuver arrow, the controls. On the map that became a problem: a green
+// route over a grey-green base map shares a hue with the thing it is drawn on,
+// and the two compete at exactly the moment they must not. Blue has no
+// neighbour on this map. It is also the colour every driver already reads as
+// "the route" from Apple Maps and Google Maps, and a navigation screen is the
+// wrong place to teach someone a new convention.
 //
-// One casing runs under both live states so the road reads as a single
-// continuous lane; the brightness step rides on top of it instead of chopping
-// the lane into two objects with a joint the eye catches on.
-const TRACE_EDGE = '#0E7A57';
-const TRACE_NOW = MINT;
-const TRACE_AHEAD = '#8FE8C6';
-const TRACE_DONE = '#BCC6C1';
+// Green stays for the DESTINATION, so path and target never blur together.
+const ROUTE_BLUE = '#0A84FF';       // iOS system blue
+const ROUTE_BLUE_EDGE = '#0B57C4';  // deeper edge, holds the colour off the grey
+const TRACE_NOW = ROUTE_BLUE;
+const TRACE_AHEAD = '#7CBEFF';      // still to drive: present, not competing
+const TRACE_EDGE = ROUTE_BLUE_EDGE;
+const TRACE_DONE = '#BCC6C1';       // behind you: recedes
 
 // Framing insets, in CSS pixels. Named because fitBounds pads around
 // COORDINATES while the driver sees MARKERS, and the difference between the
@@ -151,17 +152,38 @@ function VehicleMarker({ position, intervalMs }) {
   if (!animated) return null;
   return (
     <OverlayViewF position={{ lat: animated.lat, lng: animated.lng }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-      <div style={{ transform: 'translate(-50%,-50%)', width: 44, height: 44, position: 'relative' }}>
-        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(62,224,160,0.18)', animation: 'rz-map-pulse 3s ease-out infinite' }} />
-        <span style={{ position: 'absolute', inset: 9, borderRadius: '50%', background: '#0e1512', border: `2.5px solid ${MINT}`, boxShadow: '0 3px 10px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `rotate(${animated.heading || 0}deg)` }}>
-          <svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3l7 16-7-4-7 4z" fill={MINT} stroke={MINT} strokeWidth="1.5" strokeLinejoin="round" /></svg>
+      {/* Three concentric layers, which is what makes this read as a physical
+          object on the map rather than an icon pasted over it:
+
+            halo   soft blue, breathing — "this is live", not a dropped pin
+            ring   opaque WHITE — separates the puck from any road colour
+                   underneath, at any brightness, without a black outline
+            disc   blue, carrying a white chevron that points where the car is
+                   actually going
+
+          The white ring is the part that is easy to skip and the part that does
+          the work: without it the puck sits ON the route and the two blues
+          merge, so the driver loses their own position in the line. */}
+      <div style={{ transform: 'translate(-50%,-50%)', width: 46, height: 46, position: 'relative' }}>
+        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(10,132,255,0.20)', animation: 'rz-map-pulse 3s ease-out infinite' }} />
+        <span style={{ position: 'absolute', inset: 7, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 9px rgba(0,0,0,0.32)' }} />
+        <span style={{
+          position: 'absolute', inset: 10, borderRadius: '50%', background: ROUTE_BLUE,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          // Rotated only here, so the halo and the ring stay perfectly circular
+          // and no edge appears to wobble as the heading changes.
+          transform: `rotate(${animated.heading || 0}deg)`,
+        }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4.2 L18.4 19.2 L12 15.6 L5.6 19.2 Z" fill="#fff" />
+          </svg>
         </span>
       </div>
     </OverlayViewF>
   );
 }
 
-function DestMarker({ position, label, uncertain = false }) {
+function DestMarker({ position, label, number = '', uncertain = false }) {
   const isPickup = String(label).toUpperCase().startsWith('PICK');
   const ring = uncertain ? '#F5B301' : MINT;
   return (
@@ -182,7 +204,19 @@ function DestMarker({ position, label, uncertain = false }) {
           fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
           color: '#0e1512', background: ring, padding: '3px 8px', borderRadius: 6,
           whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.22)', marginBottom: 5,
-        }}>{label}</span>
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span>{label}</span>
+          {/* The house number, carried in the pin because the pin covers the
+              map's own label for that roof. Separated by a hairline rather than
+              a bullet so it reads as a second field, not part of the word. */}
+          {number && (
+            <>
+              <span style={{ width: 1, height: 9, background: 'rgba(14,21,18,0.28)' }} />
+              <span style={{ fontWeight: 900, letterSpacing: '0.02em' }}>{number}</span>
+            </>
+          )}
+        </span>
         {/* Only when we genuinely do not know: the address point is far from
             any road a vehicle can stop on, so the pin is a best guess. Saying
             so beats a confident pin on the wrong side of a complex. */}
@@ -218,7 +252,7 @@ function DestMarker({ position, label, uncertain = false }) {
   );
 }
 
-export default function NavMap({ driver, destination, destinationLabel = 'PICKUP', onRouteInfo, updateIntervalMs = 5000 }) {
+export default function NavMap({ driver, destination, destinationLabel = 'PICKUP', destinationNumber = '', onRouteInfo, updateIntervalMs = 5000 }) {
   const { isLoaded, hasApiKey, loadError } = useGoogleMaps();
   const mapRef = useRef(null);
   const ctrlRef = useRef(null);
@@ -561,7 +595,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
           />
         )}
         {(access.point || destPt) && (
-          <DestMarker position={access.point || destPt} label={destinationLabel} uncertain={access.needsVerification} />
+          <DestMarker position={access.point || destPt} label={destinationLabel} number={destinationNumber} uncertain={access.needsVerification} />
         )}
         {hasDriver && <VehicleMarker position={vehiclePos} intervalMs={updateIntervalMs} />}
       </GoogleMap>

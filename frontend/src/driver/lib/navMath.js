@@ -52,11 +52,16 @@ export function metersPerPixel(lat, zoom) {
 // camera eases between levels instead of stepping.
 export function zoomForSpeed(mph) {
   const v = Number.isFinite(mph) ? Math.max(0, mph) : 0;
-  if (v >= 60) return 15.8;   // highway: see the exit well ahead
-  if (v >= 45) return 16.4;
-  if (v >= 30) return 17.0;   // arterial
-  if (v >= 12) return 17.6;   // town streets
-  return 18.2;                // stopped or crawling: maximum street detail
+  if (v >= 60) return 16.2;   // highway: see the exit well ahead
+  if (v >= 45) return 16.8;
+  if (v >= 30) return 17.4;   // arterial
+  if (v >= 12) return 18.0;   // town streets
+  // Stopped or crawling. 18.6, not 18.2, because Google does not draw house
+  // numbers below about zoom 19 — measured by rendering this street at 17,
+  // 17.5, 18, 18.5 and 19, where only 19 carried them. At walking pace the
+  // house number is the entire question, so the camera has to get close
+  // enough that the map can answer it.
+  return 18.6;
 }
 
 // Kept for the OVERVIEW camera, where fitting the whole route IS the job.
@@ -496,22 +501,22 @@ export function snapToRoute(pos, path, cum, progressM, lateralM, corridorM = SNA
 // zoom becomes a fat ribbon swallowing the junction when the driver zooms in,
 // and a thread when they zoom out to see the whole trip.
 //
-// Target at navigation zoom (17-18, which is what zoomForSpeed produces): about
-// 10px of total lane with a 7px mint interior — heavy enough to dominate the
-// base map, light enough that it does not hide the road it is drawn on. The
-// casing is only ~1.75px per side: enough to separate mint from grey, not so
-// much that the lane reads as black-edged.
+// Target at navigation zoom: a 13-14px lane with a 9-10px interior. Heavier
+// than a map line has any business being, on purpose — this is the object the
+// driver is following at speed, and a thin line reads as data drawn over a map
+// rather than as the road they are on. The casing is 2px per side: enough to
+// hold the colour away from the grey underneath at any brightness.
 export function traceWeights(zoom) {
   const z = Number.isFinite(zoom) ? zoom : 17;
   let core;
-  if (z >= 18) core = 7;
-  else if (z >= 17) core = 6.5;
-  else if (z >= 16) core = 6;
-  else if (z >= 15) core = 5.5;
-  else core = 5;
+  if (z >= 18) core = 10;
+  else if (z >= 17) core = 9;
+  else if (z >= 16) core = 8;
+  else if (z >= 15) core = 7;
+  else core = 6;
   return {
     core,
-    casing: core + 3.5,
+    casing: core + 4,
     // The completed lane is deliberately narrower as well as duller: it has
     // already been driven, so it should read as a trace, not as a road.
     done: Math.max(4, core - 1),

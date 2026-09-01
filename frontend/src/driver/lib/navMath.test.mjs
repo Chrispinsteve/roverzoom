@@ -124,11 +124,22 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
 {
   // Legible street detail at every speed. Below ~15 and a driver cannot tell
   // which turning is theirs.
+  //
+  // The upper bound is 19, not 18.5. It was 18.5 on the reasoning that closer
+  // than that shows too little road — which was a guess, and wrong in the one
+  // case that matters. Google does not render house numbers below about zoom
+  // 19 (rendered at 17 / 17.5 / 18 / 18.5 / 19; only 19 carried them), so a
+  // ceiling under 19 guaranteed a driver crawling up to a pickup could never
+  // see the number they were looking for. Still bounded: past 19 the road
+  // itself disappears from the frame.
   for (const mph of [0, 5, 15, 30, 45, 60, 80]) {
     assert.ok(zoomForSpeed(mph) >= 15.5, `zoom at ${mph}mph must stay legible`);
-    assert.ok(zoomForSpeed(mph) <= 18.5, `zoom at ${mph}mph must not be absurdly close`);
+    assert.ok(zoomForSpeed(mph) <= 19, `zoom at ${mph}mph must not be absurdly close`);
   }
-  ok('nav zoom stays in a legible band at every speed');
+  // Moving faster must never be closer than moving slowly.
+  const zs = [0, 15, 30, 45, 60].map(zoomForSpeed);
+  for (let i = 1; i < zs.length; i++) assert.ok(zs[i] <= zs[i - 1], 'zoom widens with speed');
+  ok('nav zoom stays in a legible band and widens with speed');
 
   // Faster means seeing further ahead, which means a wider view.
   const speeds = [0, 15, 30, 45, 60];
@@ -143,7 +154,7 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
   // A missing or nonsense speed must not throw or snap to a silly zoom.
   for (const bad of [undefined, null, NaN, -10, 'fast']) {
     const z = zoomForSpeed(bad);
-    assert.ok(Number.isFinite(z) && z >= 15.5 && z <= 18.5, `bad speed ${bad} -> usable zoom`);
+    assert.ok(Number.isFinite(z) && z >= 15.5 && z <= 19, `bad speed ${bad} -> usable zoom`);
   }
   ok('a missing or invalid speed still yields a usable zoom');
 
@@ -213,9 +224,12 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
 // of the zoom range: a ribbon that swallows the junction close in, a thread
 // when the driver zooms out to see the trip.
 {
+  // Heavier than a map line has any business being, deliberately. At 10px the
+  // lane read as data drawn over a map; the object the driver is following at
+  // speed has to read as the road itself.
   const nav = traceWeights(17.6);
-  assert.ok(nav.casing >= 8 && nav.casing <= 11, `nav-zoom lane should be 8-11px, got ${nav.casing}`);
-  assert.ok(nav.core >= 5 && nav.core <= 7, `nav-zoom interior should be 5-7px, got ${nav.core}`);
+  assert.ok(nav.casing >= 12 && nav.casing <= 15, `nav-zoom lane should be 12-15px, got ${nav.casing}`);
+  assert.ok(nav.core >= 8 && nav.core <= 11, `nav-zoom interior should be 8-11px, got ${nav.core}`);
   ok('at navigation zoom the lane matches the target width');
 
   // Monotonic: never thinner as you zoom in.
@@ -231,7 +245,7 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
 
   // Bounded at both ends: no hairlines, no cartoon ribbons.
   assert.ok(traceWeights(3).core >= 4, 'stays visible when zoomed right out');
-  assert.ok(traceWeights(22).casing <= 13, 'never becomes cartoonishly thick');
+  assert.ok(traceWeights(22).casing <= 16, 'never becomes cartoonishly thick');
   assert.ok(traceWeights(undefined).core > 0, 'a missing zoom still yields a drawable width');
   ok('width is bounded at both extremes and survives a missing zoom');
 }

@@ -3,7 +3,7 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
-import { addressLines } from '../lib/address';
+import { addressLines, houseNumber } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
 
 export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error }) {
@@ -25,6 +25,7 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
             driver={driverPosition}
             destination={{ lat: booking.dropoff_lat, lng: booking.dropoff_lng }}
             destinationLabel="DROPOFF"
+            destinationNumber={houseNumber(booking.dropoff_address)}
             onRouteInfo={setRoute}
           />
         </div>

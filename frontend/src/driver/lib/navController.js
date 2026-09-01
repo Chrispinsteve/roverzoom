@@ -141,8 +141,12 @@ export class NavController {
     // Floors, never ceilings: a driver still doing 40mph a hundred metres out
     // must not be zoomed in past what they can react to, so this only ever
     // tightens a camera that speed has already left wide.
-    if (phase === 'approach') zoom = Math.max(zoom, 17.6);
-    if (phase === 'arriving') zoom = Math.max(zoom, 18.4);
+    if (phase === 'approach') zoom = Math.max(zoom, 18.0);
+    // 19 is where Google starts drawing house numbers — verified by rendering
+    // this street at 17 / 17.5 / 18 / 18.5 / 19. Anything less and the driver
+    // arrives at a row of identical roofs with nothing to tell them apart,
+    // which is the whole question at this point in the trip.
+    if (phase === 'arriving') zoom = Math.max(zoom, 19);
     // Look-ahead collapses on arrival. Holding the driver in the lower third
     // pushes the pickup off the top of the screen exactly when it is the only
     // thing that matters.

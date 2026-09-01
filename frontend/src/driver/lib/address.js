@@ -41,3 +41,18 @@ export function addressLines(addr) {
   const parts = full.split(',').map((s) => s.trim()).filter(Boolean);
   return { street: parts[0] || full, locality: parts.slice(1).join(', ') };
 }
+
+// The street number on its own, when the address starts with one.
+//
+// The pin sits on the target roof, which is exactly where Google draws that
+// roof's number — so the marker covers the single label the driver most needs.
+// Putting the number IN the pin resolves the collision and reads better than
+// either alone: the driver sees "5941" attached to the building rather than
+// having to match a floating label to a pin next to it.
+//
+// Returns '' for anything that does not begin with a number — a named venue,
+// an intersection, a plus code — rather than inventing one.
+export function houseNumber(addr) {
+  const m = /^\s*(\d+[a-z]?)\b/i.exec(shortAddress(addr));
+  return m ? m[1] : '';
+}

@@ -117,11 +117,10 @@ export const DETAIL_STYLES = [
   { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
 ];
 
-// Below this the numbers are too small to read and only add noise; above it
-// Google starts rendering them and they become the most useful thing on screen.
-// Both arrival zooms the camera forces (17.6 approach, 18.4 arriving) sit above
-// it, so simply driving up to a pickup reveals them with no extra wiring.
-export const DETAIL_ZOOM = 17;
+// Google itself does not draw house numbers below about zoom 19, so a lower
+// threshold only swapped stylesheets with nothing to show for it. Set just
+// under, so the labels are enabled by the time the tiles carry them.
+export const DETAIL_ZOOM = 18.5;
 
 // Zoom OR phase. Zoom alone was too fragile: the overview that plays for the
 // first few seconds of a trip sits below any sensible threshold, and a driver
