@@ -246,3 +246,32 @@ export function parseManeuver(step) {
     durSec: Number(step.durSec) || 0,
   };
 }
+
+
+// Is a freshly-fetched route worth switching to mid-trip?
+//
+// Rerouting today only happens when the driver leaves the route. That misses
+// the case navigation is most useful for: the road ahead has just gone wrong
+// and a better one exists. But swapping routes is disruptive — the line moves,
+// the next turn changes, and a driver who had built a picture of the journey
+// loses it. So the bar is deliberately high, and BOTH tests must pass:
+//
+//   * an absolute saving, so a two-minute trip is not rerouted to save nine
+//     seconds, and
+//   * a proportional saving, so a ninety-minute trip is not rerouted for a
+//     rounding error that congestion will erase again in a minute.
+//
+// Numbers chosen to sit above normal traffic-model noise. Google's own
+// estimates for the same route drift by tens of seconds between calls.
+export const REROUTE_MIN_SAVING_SEC = 120;
+export const REROUTE_MIN_SAVING_FRAC = 0.10;
+
+export function isMateriallyBetter(currentSec, candidateSec, opts = {}) {
+  const minSec = opts.minSec ?? REROUTE_MIN_SAVING_SEC;
+  const minFrac = opts.minFrac ?? REROUTE_MIN_SAVING_FRAC;
+  if (!Number.isFinite(currentSec) || !Number.isFinite(candidateSec)) return false;
+  if (currentSec <= 0 || candidateSec <= 0) return false;
+  const saving = currentSec - candidateSec;
+  if (saving < minSec) return false;
+  return saving / currentSec >= minFrac;
+}

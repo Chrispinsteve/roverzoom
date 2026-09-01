@@ -11,7 +11,7 @@
 
 import {
   cumulativeDistances, projectToRoute, evaluateReroute, nextHeading,
-  lookAheadCenter, zoomForSpeed, shouldRepan,
+  lookAheadCenter, zoomForSpeed, shouldRepan, isMateriallyBetter,
 } from './navMath.js';
 
 export const NAV_DEFAULTS = {
@@ -20,7 +20,9 @@ export const NAV_DEFAULTS = {
   cooldownMs: 8000,        // min gap between reroutes
   repanThreshM: 8,         // min driver movement before the camera re-pans
   headingMoveThreshM: 6,   // below this movement, hold heading (no spin)
-  aheadFraction: 0.26,     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
+  aheadFraction: 0.26,
+  alternateCheckMs: 120000, // how often to look for a faster route while following
+  alternateMinRemainSec: 300, // do not bother looking inside the last five minutes     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
 };
 
 export class NavController {
@@ -47,6 +49,7 @@ export class NavController {
     this.lastSpeedMph = 0;
     this.lastPos = null;
     this.lastCenter = null;
+    this.lastAlternateCheckAt = -Infinity;
   }
 
   setViewport(h) { if (h > 0) this.viewportH = h; }
@@ -131,6 +134,23 @@ export class NavController {
 
     this.lastPos = p;
     return { camera, needsReroute, rerouteOrigin };
+  }
+
+  // Time to look for a faster route? Only while actually driving a route, and
+  // not in the final minutes, when a reroute cannot save enough to be worth
+  // the disruption of changing the picture the driver is holding.
+  shouldCheckAlternate(now = Date.now()) {
+    if (!this.hasRoute || this.mode === 'overview') return false;
+    if (this.remaining().sec < this.config.alternateMinRemainSec) return false;
+    return now - this.lastAlternateCheckAt >= this.config.alternateCheckMs;
+  }
+
+  markAlternateChecked(now = Date.now()) { this.lastAlternateCheckAt = now; }
+
+  // Accept a candidate route only if it is materially faster than what is
+  // left of the current one. Returns true when the caller should adopt it.
+  isWorthSwitching(candidateDurSec) {
+    return isMateriallyBetter(this.remaining().sec, candidateDurSec);
   }
 
   onUserGesture() { if (this.mode === 'follow') this.mode = 'free'; }

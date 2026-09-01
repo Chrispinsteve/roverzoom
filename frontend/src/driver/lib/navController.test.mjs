@@ -234,4 +234,47 @@ function dropoffRoute() {
 }
 
 
+// --- looking for a faster route -------------------------------------------
+{
+  const path = [];
+  for (let i = 0; i <= 100; i++) path.push({ lat: 26.0 + i * 0.001, lng: -80.1, step: 0 });
+  const steps = [{ action: 'Continue', road: 'I-95', distM: 20000, durSec: 1800 }];
+  const mk = () => {
+    const c = new NavController();
+    c.setRoute({ path, steps, totalDistM: 20000, totalDurSec: 1800 });
+    c.startFollowing();
+    return c;
+  };
+
+  // Not while still showing the initial overview — the driver has not started.
+  const overview = new NavController();
+  overview.setRoute({ path, steps, totalDistM: 20000, totalDurSec: 1800 });
+  assert.equal(overview.shouldCheckAlternate(0), false, 'no alternate check during overview');
+  ok('does not hunt for alternates before the driver sets off');
+
+  // First check is allowed; a second immediately after is not.
+  const c = mk();
+  assert.equal(c.shouldCheckAlternate(0), true, 'first check allowed');
+  c.markAlternateChecked(0);
+  assert.equal(c.shouldCheckAlternate(1000), false, 'no re-check one second later');
+  assert.equal(c.shouldCheckAlternate(130000), true, 're-check after the interval');
+  ok('alternate checks are rate limited');
+
+  // Near the end, a switch cannot save enough to be worth redrawing the route.
+  const nearlyThere = mk();
+  nearlyThere.progressM = 19500;      // ~30s of a 30-minute route left
+  nearlyThere.markAlternateChecked(-Infinity);
+  assert.equal(nearlyThere.shouldCheckAlternate(999999), false, 'no checks in the last minutes');
+  ok('stops hunting for alternates near the destination');
+
+  // And the acceptance bar itself.
+  const d = mk();                      // 1800s remaining
+  assert.equal(d.isWorthSwitching(1500), true, '5 minutes faster is worth it');
+  assert.equal(d.isWorthSwitching(1740), false, '1 minute faster is noise');
+  assert.equal(d.isWorthSwitching(1800), false, 'no saving is not a reason to switch');
+  assert.equal(d.isWorthSwitching(2400), false, 'never switch to a slower route');
+  ok('only a materially faster route is adopted');
+}
+
+
 console.log(`\nnavController: ${n}/9 lifecycle groups passed`);

@@ -135,11 +135,38 @@ function VehicleMarker({ position, intervalMs }) {
 }
 
 function DestMarker({ position, label }) {
+  const isPickup = String(label).toUpperCase() === 'PICKUP';
   return (
     <OverlayViewF position={position} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
+      {/* translate(-50%,-100%) keeps the pin TIP on the coordinate, which is
+          why the label sits underneath rather than above: a label on top pushes
+          the marker up and the tip stops pointing at anything. */}
       <div style={{ transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: '#0e1512', background: MINT, padding: '3px 8px', borderRadius: 6, marginBottom: 4, whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}>{label}</span>
-        <span style={{ width: 20, height: 20, borderRadius: '50% 50% 50% 0', background: MINT, border: '3px solid #fff', boxShadow: '0 3px 8px rgba(0,0,0,0.3)', transform: 'rotate(45deg)' }} />
+        <span style={{
+          width: 30, height: 30, borderRadius: '50% 50% 50% 0',
+          background: MINT, border: '3px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+          transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {/* Counter-rotated so the glyph sits upright inside the tilted pin. */}
+          <span style={{ transform: 'rotate(45deg)', display: 'flex' }}>
+            {isPickup ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#0e1512">
+                <circle cx="12" cy="8" r="3.6" />
+                <path d="M4.8 20c0-3.6 3.2-6 7.2-6s7.2 2.4 7.2 6z" />
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0e1512" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+                <path d="M4 11l8-6 8 6" />
+                <path d="M6.5 10v9h11v-9" />
+              </svg>
+            )}
+          </span>
+        </span>
+        <span style={{
+          marginTop: 5, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+          color: '#0e1512', background: MINT, padding: '3px 8px', borderRadius: 6,
+          whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+        }}>{label}</span>
       </div>
     </OverlayViewF>
   );
@@ -210,7 +237,9 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     fitToRoute._t = window.setTimeout(() => { programmatic.current = false; }, 520);
   }, []);
 
-  const fetchRoute = useCallback((origin, isReroute) => {
+  // mode: undefined (first route) | 'candidate' (a periodic look for a faster
+  // road, adopted only if materially better).
+  const fetchRoute = useCallback((origin, isReroute, mode) => {
     if (!window.google?.maps || !destPt || !origin) return;
     const token = guardRef.current.begin();
     const svc = new window.google.maps.DirectionsService();
@@ -233,6 +262,18 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         if (status !== 'OK' || !res?.routes?.[0]) return;
         const parsed = parseDirections(res.routes[0]);
         if (parsed.path.length < 2) return;
+
+        // A periodic look for a faster road. Adopted only when it beats what
+        // is left of the current route by a margin worth the disruption of
+        // changing the line and the next turn under the driver.
+        if (mode === 'candidate') {
+          if (!ctrlRef.current.isWorthSwitching(parsed.totalDurSec)) return;
+          ctrlRef.current.setRoute(parsed, { reroute: true });
+          setRoutePath(parsed.path);
+          snapshot();
+          return;
+        }
+
         ctrlRef.current.setRoute(parsed, { reroute: !!isReroute });
         setRoutePath(parsed.path);
         // First route → show overview, then hand to follow.
@@ -275,6 +316,23 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
 
   useEffect(() => () => { window.clearTimeout(overviewTimer.current); }, []);
 
+  // Look for a faster route while driving. Rerouting previously only happened
+  // when the driver LEFT the route, which misses the case navigation is most
+  // useful for: the road ahead has gone wrong and a better one exists. The
+  // controller gates how often this runs (and refuses in the final minutes,
+  // where a switch cannot save enough to justify redrawing the journey);
+  // isWorthSwitching decides whether the answer is worth acting on.
+  useEffect(() => {
+    if (!ready || !hasDriver) return undefined;
+    const t = window.setInterval(() => {
+      const c = ctrlRef.current;
+      if (!c || !c.lastPos || !c.shouldCheckAlternate()) return;
+      c.markAlternateChecked();
+      fetchRoute(c.lastPos, true, 'candidate');
+    }, 30000);
+    return () => window.clearInterval(t);
+  }, [ready, hasDriver, fetchRoute]);
+
   const onGesture = useCallback(() => {
     if (programmatic.current) return;
     ctrlRef.current.onUserGesture();
@@ -316,8 +374,8 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
       >
         {routePath && (
           <>
-            <PolylineF path={routePath} options={{ strokeColor: MINT_CASING, strokeOpacity: 1, strokeWeight: 10, zIndex: 1 }} />
-            <PolylineF path={routePath} options={{ strokeColor: MINT, strokeOpacity: 1, strokeWeight: 6, zIndex: 2 }} />
+            <PolylineF path={routePath} options={{ strokeColor: MINT_CASING, strokeOpacity: 1, strokeWeight: 14, zIndex: 1 }} />
+            <PolylineF path={routePath} options={{ strokeColor: MINT, strokeOpacity: 1, strokeWeight: 9, zIndex: 2 }} />
           </>
         )}
         {destPt && <DestMarker position={destPt} label={destinationLabel} />}
