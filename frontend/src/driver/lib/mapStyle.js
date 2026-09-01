@@ -22,13 +22,20 @@ export const NAV_STYLES = [
   // --- surfaces ---------------------------------------------------------
   { elementType: 'geometry', stylers: [{ color: '#E8EBE8' }] },
   { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#E4E9E4' }] },
-  // Buildings and parcels. Previously #E6E9E6 against #E8EBE8 land — a two-point
-  // difference, so footprints were drawn and then rendered invisible, which is
-  // why address numbers appeared floating over nothing. Given a real step in
-  // value plus an outline, a driver can see the block they are pulling up to.
-  // Still quieter than the roads, which are quieter than the route.
-  { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#DCE1DD' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#C6CDC8' }] },
+  // Buildings, and the reason they were invisible twice over.
+  //
+  // First attempt set the FILL two points off the land, so footprints were
+  // drawn and then erased by the palette. Second attempt darkened the fill
+  // further and made it worse: landscape.man_made fills the whole developed
+  // AREA, not the individual roofs, so darkening it dimmed the entire block
+  // while the houses stayed invisible inside it.
+  //
+  // Buildings are drawn as outlined polygons whose interior matches the land.
+  // So the lever that works is the STROKE, not the fill: a 1px outline dark
+  // enough to read at a glance. It costs almost no visual weight — the shapes
+  // appear, the ground stays quiet, and the route is untouched.
+  { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#E4E8E4' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#828C85' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#DFE7DF' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#D5E3E0' }] },
 

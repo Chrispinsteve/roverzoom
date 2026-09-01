@@ -21,7 +21,7 @@
     "elementType": "geometry.fill",
     "stylers": [
       {
-        "color": "#DCE1DD"
+        "color": "#E4E8E4"
       }
     ]
   },
@@ -30,7 +30,7 @@
     "elementType": "geometry.stroke",
     "stylers": [
       {
-        "color": "#C6CDC8"
+        "color": "#828C85"
       }
     ]
   },
