@@ -24,7 +24,15 @@ export const NAV_DEFAULTS = {
   aheadFraction: 0.26,
   alternateCheckMs: 120000, // how often to look for a faster route while following
   alternateMinRemainSec: 300, // do not bother looking inside the last five minutes
-  snapCorridorM: SNAP_CORRIDOR_M, // how far off the line we still DRAW on it     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
+  snapCorridorM: SNAP_CORRIDOR_M, // how far off the line we still DRAW on it
+  // Approaching the destination is a different task from driving to it. Route
+  // following answers "which road next"; the last two hundred metres answer
+  // "where exactly do I stop", and that needs a tighter, less forward-leaning
+  // camera. Thresholds are in metres of route remaining, not straight-line
+  // distance, so a driver on the far side of a divided road is still treated
+  // as far away — because they are.
+  approachM: 200,
+  arrivingM: 60,     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
 };
 
 export class NavController {
@@ -104,13 +112,39 @@ export class NavController {
     return { deviationM: proj.lateral, onRoute };
   }
 
+  // Which of the three driving tasks the camera should serve.
+  //
+  //   cruise    following a route      — look well ahead, zoom by speed
+  //   approach  the destination is in  — tighten, so the stopping point and
+  //             play                     the doors around it are legible
+  //   arriving  find the exact spot    — tightest, and stop leaning forward:
+  //                                      what matters is now BESIDE the driver,
+  //                                      not ahead of them
+  approachPhase() {
+    if (!this.hasRoute) return 'cruise';
+    const d = this.remaining().distM;
+    if (d > 0 && d <= this.config.arrivingM) return 'arriving';
+    if (d > 0 && d <= this.config.approachM) return 'approach';
+    return 'cruise';
+  }
+
   cameraFor(pos) {
     const p = { lat: Number(pos.lat), lng: Number(pos.lng) };
+    const phase = this.approachPhase();
     // Speed, not remaining distance. See zoomForSpeed for why.
-    const zoom = zoomForSpeed(this.lastSpeedMph);
-    const center = lookAheadCenter(p, this.stableHeading ?? 0, this.viewportH, zoom, this.config.aheadFraction);
+    let zoom = zoomForSpeed(this.lastSpeedMph);
+    // Floors, never ceilings: a driver still doing 40mph a hundred metres out
+    // must not be zoomed in past what they can react to, so this only ever
+    // tightens a camera that speed has already left wide.
+    if (phase === 'approach') zoom = Math.max(zoom, 17.6);
+    if (phase === 'arriving') zoom = Math.max(zoom, 18.4);
+    // Look-ahead collapses on arrival. Holding the driver in the lower third
+    // pushes the pickup off the top of the screen exactly when it is the only
+    // thing that matters.
+    const ahead = phase === 'arriving' ? 0.06 : this.config.aheadFraction;
+    const center = lookAheadCenter(p, this.stableHeading ?? 0, this.viewportH, zoom, ahead);
     this.lastCenter = { lat: p.lat, lng: p.lng };
-    return { center, zoom };
+    return { center, zoom, phase };
   }
 
   // Feed a GPS fix. `now` is injectable for deterministic tests.

@@ -3,7 +3,7 @@
 import assert from 'node:assert';
 import {
   distanceMeters, distanceToPath, advanceStepIndex,
-  shouldReroute, shouldRepan, followCamera, zoomForDistance, zoomForSpeed, parseLaneHint,
+  shouldReroute, shouldRepan, followCamera, zoomForDistance, zoomForSpeed, parseLaneHint, traceWeights,
   lookAheadCenter, metersPerPixel,
 } from './navMath.js';
 
@@ -205,6 +205,35 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
   const html = parseLaneHint('Use the <b>right 2 lanes</b> to turn right onto <b>NW 2nd Ave</b>');
   assert.ok(html && html.side === 'right' && html.count === 2, 'HTML instructions parse');
   ok('handles the HTML instruction format');
+}
+
+
+// --- trace lane width ----------------------------------------------------
+// Stroke weight is in SCREEN pixels, so one fixed number is wrong at both ends
+// of the zoom range: a ribbon that swallows the junction close in, a thread
+// when the driver zooms out to see the trip.
+{
+  const nav = traceWeights(17.6);
+  assert.ok(nav.casing >= 8 && nav.casing <= 11, `nav-zoom lane should be 8-11px, got ${nav.casing}`);
+  assert.ok(nav.core >= 5 && nav.core <= 7, `nav-zoom interior should be 5-7px, got ${nav.core}`);
+  ok('at navigation zoom the lane matches the target width');
+
+  // Monotonic: never thinner as you zoom in.
+  let prev = 0;
+  for (const z of [12, 14, 15, 16, 17, 18, 19, 21]) {
+    const w = traceWeights(z);
+    assert.ok(w.core >= prev, `width must not shrink as zoom grows (z=${z})`);
+    prev = w.core;
+    assert.ok(w.casing > w.core, 'the casing must always be wider than the core');
+    assert.ok(w.done < w.casing, 'the completed trace must be lighter than the live lane');
+  }
+  ok('width grows with zoom and never inverts the casing');
+
+  // Bounded at both ends: no hairlines, no cartoon ribbons.
+  assert.ok(traceWeights(3).core >= 4, 'stays visible when zoomed right out');
+  assert.ok(traceWeights(22).casing <= 13, 'never becomes cartoonishly thick');
+  assert.ok(traceWeights(undefined).core > 0, 'a missing zoom still yields a drawable width');
+  ok('width is bounded at both extremes and survives a missing zoom');
 }
 
 

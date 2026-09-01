@@ -69,6 +69,61 @@ async function googleSearchNear(query, anchor, limit) {
   }));
 }
 
+// How precise is a coordinate, really?
+//
+// Every geocoder returns a lat/lng with the same number of decimal places
+// whether it found the building or guessed the middle of the street. Carrying
+// the distinction is the difference between routing a driver to a door and
+// routing them to a block.
+function precisionFromPlaceTypes(types = []) {
+  const t = new Set(types);
+  if (t.has('subpremise') || t.has('premise') || t.has('street_address')) return 'rooftop';
+  if (t.has('route') || t.has('intersection')) return 'street';
+  if (t.has('postal_code') || t.has('locality') || t.has('neighborhood')) return 'area';
+  return 'unknown';
+}
+
+// Single-address resolution via Places Text Search.
+//
+// This exists because the Geocoding API is NOT enabled for this project — it
+// returns REQUEST_DENIED, so googleGeocode() above has always resolved to null
+// and every pickup silently fell through to OpenStreetMap. For US residential
+// addresses that is a real accuracy problem, not a theoretical one: measured on
+// a live booking, "5941 Deerfield Place" resolved 51.7m from where Places puts
+// it — about the spacing between two houses on that street, and enough to send
+// a driver to the wrong door.
+//
+// Places IS enabled, and is the same index Google Maps itself answers from —
+// which also matters because the driver's "Open in Maps" fallback goes there.
+async function googlePlacesGeocode(query) {
+  const key = googleKey();
+  if (!key) return null;
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask': 'places.formattedAddress,places.shortFormattedAddress,places.location,places.types,places.displayName',
+    },
+    body: JSON.stringify({ textQuery: query, regionCode: 'US', maxResultCount: 1 }),
+  });
+  if (!res.ok) throw new Error(`google places geocode ${res.status}`);
+  const pl = (await res.json())?.places?.[0];
+  if (!pl?.location) return null;
+  const full = pl.formattedAddress || pl.shortFormattedAddress || query;
+  const parts = full.split(',');
+  return {
+    label: parts[0].trim(),
+    sublabel: parts.slice(1, 3).join(',').trim(),
+    address: full,
+    lat: pl.location.latitude,
+    lng: pl.location.longitude,
+    // Carried through so callers can tell a rooftop from a guess.
+    precision: precisionFromPlaceTypes(pl.types),
+    source: 'google_places',
+  };
+}
+
 function normalizeNominatim(rows) {
   return rows.map((r) => ({
     label: r.name || r.display_name.split(',')[0],
@@ -76,6 +131,12 @@ function normalizeNominatim(rows) {
     address: r.display_name,
     lat: Number(r.lat),
     lng: Number(r.lon),
+    // OSM's own classification. 'house'/'building' is a mapped structure;
+    // anything else is a street or an area, and should not be presented to a
+    // driver as if it were a doorstep.
+    precision: /^(house|building|residential)$/i.test(r.type || '') ? 'rooftop'
+      : /^(road|residential|street)$/i.test(r.class || '') ? 'street' : 'unknown',
+    source: 'osm_nominatim',
   }));
 }
 
@@ -90,6 +151,8 @@ function normalizePhoton(features) {
       address: line || p.name || 'Location',
       lat,
       lng,
+      precision: p.housenumber ? 'rooftop' : p.street ? 'street' : 'unknown',
+      source: 'osm_photon',
     };
   });
 }
@@ -221,8 +284,14 @@ async function geocodeOne(query) {
   // Prefer Google for precise single-address resolution (pickup/dropoff, and the
   // anchor point for nearby place search); fall back to the free stack.
   if (isGoogleEnabled()) {
-    try { const g = await googleGeocode(query); if (g) return g; }
+    // Geocoding API first — but it is NOT enabled for this project and returns
+    // REQUEST_DENIED, so this has always yielded null. Kept because it is the
+    // right call the day the API is switched on, and it costs one attempt.
+    try { const g = await googleGeocode(query); if (g) return { ...g, precision: 'unknown', source: 'google_geocoding' }; }
     catch (e) { console.warn('google geocode failed, falling back:', e.message); }
+    // Places IS enabled, and is what actually resolves addresses today.
+    try { const p = await googlePlacesGeocode(query); if (p) return p; }
+    catch (e) { console.warn('google places geocode failed, falling back:', e.message); }
   }
   const results = await geocode(query, 1).catch(() => []);
   return results[0] || null;
@@ -247,4 +316,4 @@ async function reverseGeocode(lat, lng) {
   };
 }
 
-module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween, googleGeocode, isGoogleEnabled };
+module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween, googleGeocode, googlePlacesGeocode, isGoogleEnabled };

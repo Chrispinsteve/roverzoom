@@ -138,6 +138,40 @@ async function roadRoute(pickup, dropoff, whenIso) {
 }
 
 
+// Google's polyline algorithm, server side.
+//
+// Needed because the ACCESS POINT — where a vehicle can actually reach the
+// address — is the last vertex of the route, and answering "how far is the
+// address from the road?" means reading it.
+function decodePolyline(encoded) {
+  const pts = [];
+  let i = 0, lat = 0, lng = 0;
+  while (i < encoded.length) {
+    let b, shift = 0, result = 0;
+    do { b = encoded.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { b = encoded.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    pts.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return pts;
+}
+
+function metresBetween(a, b) {
+  const R = 6378137, rad = (x) => (x * Math.PI) / 180;
+  const dp = rad(b.lat - a.lat), dl = rad(b.lng - a.lng);
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Beyond this, the address point and the road the driver can actually stop on
+// are far enough apart that the coordinate should not be presented as a
+// doorstep. Ordinary driveway setbacks run 10-30m; 60m means the address sits
+// well off any routable road — a parcel centroid inside a large complex, a
+// mall, or simply a bad geocode. Flagged rather than silently corrected.
+const ACCESS_VERIFY_THRESHOLD_M = 60;
+
 // ---------------------------------------------------------------------------
 // navRoute — the geometry the DRIVER's map is drawn from.
 // ---------------------------------------------------------------------------
@@ -229,10 +263,30 @@ async function navRoute(origin, destination) {
       instruction: st.navigationInstruction?.instructions || '',
     }));
 
+    // WHERE THE DRIVER CAN ACTUALLY STOP.
+    //
+    // The requested destination is an ADDRESS point — a rooftop, a parcel
+    // centroid, or a geocoder's guess. Google routes to the nearest point on
+    // the road network that serves it, so the last vertex of the returned
+    // polyline is the vehicle-accessible access point. That is the coordinate
+    // the driver should be navigated to and the pin should sit on; the address
+    // point is for display.
+    //
+    // Derived from routing data that was already fetched — not an offset
+    // applied to the pin, which would be inventing a location.
+    const decoded = decodePolyline(route.polyline.encodedPolyline);
+    const accessPoint = decoded.length ? decoded[decoded.length - 1] : null;
+    const accessOffsetM = accessPoint ? metresBetween(b, accessPoint) : null;
+
     return {
       ok: true,
       polyline: route.polyline.encodedPolyline,
       steps,
+      accessPoint,
+      accessOffsetM,
+      // Surfaced to the driver rather than silently trusted. A large gap means
+      // we genuinely do not know where the rider will be standing.
+      needsVerification: accessOffsetM != null && accessOffsetM > ACCESS_VERIFY_THRESHOLD_M,
       distanceMeters: route.distanceMeters || 0,
       // TRAFFIC_AWARE means duration already accounts for congestion;
       // staticDuration is the same road empty. The driver's ETA must use the
@@ -245,4 +299,4 @@ async function navRoute(origin, destination) {
   }
 }
 
-module.exports = { roadRoute, googleRoute, osrmRoute, navRoute };
+module.exports = { roadRoute, googleRoute, osrmRoute, navRoute, decodePolyline, metresBetween, ACCESS_VERIFY_THRESHOLD_M };

@@ -3,7 +3,7 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
-import { shortAddress } from '../lib/address';
+import { addressLines } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
 
 export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error }) {
@@ -66,7 +66,10 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
               {/* Labelled and given its own line. Previously the address sat
                   inline with the Maps link competing for the same row, which
                   squeezed it into a truncation the street number fell off. */}
-              <div className="drv-nav-dest-addr">{shortAddress(booking.dropoff_address)}</div>
+              <div className="drv-nav-dest-addr">{addressLines(booking.dropoff_address).street}</div>
+              {addressLines(booking.dropoff_address).locality && (
+                <div className="drv-nav-dest-sub">{addressLines(booking.dropoff_address).locality}</div>
+              )}
             </div>
             {/* Fallback, not a primary control: Roverzoom's own map is the
                 navigation interface. Kept reachable, styled to recede. */}

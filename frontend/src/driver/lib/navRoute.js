@@ -66,5 +66,12 @@ export function parseNavRoute(data, decode) {
     // TRAFFIC_AWARE: this is the road as it is now, not as it would be empty.
     totalDurSec: data.durationSec || 0,
     trafficAware: true,
+    // Where a vehicle can actually reach the address — the last vertex of the
+    // route, which Google snapped to the road network. This, not the raw
+    // address coordinate, is what the driver is navigating to, so it is what
+    // the pin must sit on.
+    accessPoint: data.accessPoint || null,
+    accessOffsetM: data.accessOffsetM ?? null,
+    needsVerification: !!data.needsVerification,
   };
 }

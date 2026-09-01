@@ -4,6 +4,8 @@ import { useGoogleMaps } from '../../lib/GoogleMapsProvider';
 import { useAnimatedPosition, usePrefersReducedMotion } from '../../lib/useAnimatedPosition';
 import { NavController, RequestGuard } from '../lib/navController';
 import { parseNavRoute } from '../lib/navRoute';
+import { NAV_STYLES } from '../lib/mapStyle';
+import { traceWeights } from '../lib/navMath';
 import { driverApi } from '../../lib/driverApi';
 
 // ============================================================
@@ -50,7 +52,7 @@ const TRACE_DONE = '#BCC6C1';
 // COORDINATES while the driver sees MARKERS, and the difference between the
 // two is exactly how a destination ends up half off the screen.
 const CARD_OVERLAP_PX = 20;   // .drv-nav-card's negative top margin
-const DEST_LABEL_H = 26;      // pin label, drawn below the coordinate
+const DEST_LABEL_H = 30;      // pin + label, drawn ABOVE the coordinate
 const DEST_LABEL_HALF_W = 58; // half the widest label ("DROPOFF") plus slack
 const MARKER_HALO = 18;       // breathing room so nothing sits on the edge
 
@@ -64,28 +66,6 @@ const ROUTE_ERROR_TEXT = {
   no_api_key: 'Navigation is not configured',
   unavailable: 'Route unavailable',
 };
-
-const NAV_STYLES = [
-  { elementType: 'geometry', stylers: [{ color: '#f3f5f2' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#5b615c' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f3f5f2' }, { weight: 2 }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#eceeea' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#eef1ec' }] },
-  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#e6e8e4' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#d3d7d1' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#c2c7bf' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cfe0dc' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#93a5a0' }] },
-];
 
 const MAP_OPTIONS = {
   disableDefaultUI: true, clickableIcons: false, gestureHandling: 'greedy',
@@ -180,17 +160,41 @@ function VehicleMarker({ position, intervalMs }) {
   );
 }
 
-function DestMarker({ position, label }) {
-  const isPickup = String(label).toUpperCase() === 'PICKUP';
+function DestMarker({ position, label, uncertain = false }) {
+  const isPickup = String(label).toUpperCase().startsWith('PICK');
+  const ring = uncertain ? '#F5B301' : MINT;
   return (
     <OverlayViewF position={position} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-      {/* translate(-50%,-100%) keeps the pin TIP on the coordinate, which is
-          why the label sits underneath rather than above: a label on top pushes
-          the marker up and the tip stops pointing at anything. */}
-      <div style={{ transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* ANCHORING.
+          translate(-50%,-100%) puts the BOTTOM of this box on the coordinate,
+          so whatever is last in the column is what touches the map. The label
+          used to be last, which meant the coordinate sat under the bottom of
+          the LABEL and the pin tip floated about 25px above it — roughly 30m
+          of visual error at navigation zoom, on top of whatever the geocoder
+          was already wrong by.
+
+          Label first, pin last: the tip is now exactly on the coordinate, and
+          the label sits ABOVE the pin where it cannot cover the road the
+          driver still has to drive to reach it. */}
+      <div style={{ transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none' }}>
+        <span style={{
+          fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+          color: '#0e1512', background: ring, padding: '3px 8px', borderRadius: 6,
+          whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.22)', marginBottom: 5,
+        }}>{label}</span>
+        {/* Only when we genuinely do not know: the address point is far from
+            any road a vehicle can stop on, so the pin is a best guess. Saying
+            so beats a confident pin on the wrong side of a complex. */}
+        {uncertain && (
+          <span style={{
+            fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em', color: '#0e1512',
+            background: 'rgba(245,179,1,0.92)', padding: '2px 7px', borderRadius: 5,
+            whiteSpace: 'nowrap', marginBottom: 5,
+          }}>APPROXIMATE — CONFIRM WITH RIDER</span>
+        )}
         <span style={{
           width: 30, height: 30, borderRadius: '50% 50% 50% 0',
-          background: MINT, border: '3px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+          background: ring, border: '3px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
           transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {/* Counter-rotated so the glyph sits upright inside the tilted pin. */}
@@ -208,11 +212,6 @@ function DestMarker({ position, label }) {
             )}
           </span>
         </span>
-        <span style={{
-          marginTop: 5, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
-          color: '#0e1512', background: MINT, padding: '3px 8px', borderRadius: 6,
-          whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-        }}>{label}</span>
       </div>
     </OverlayViewF>
   );
@@ -236,6 +235,11 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   // Why there is no line, when there is no line. Previously a failed route was
   // an early `return` and the driver got an empty map with no explanation.
   const [routeError, setRouteError] = useState(null);
+  // Stroke weights are screen pixels, so the lane has to be re-weighted as the
+  // driver zooms or it becomes a ribbon close in and a thread far out.
+  const [zoom, setZoom] = useState(17);
+  // Where the driver actually stops, and whether we trust it.
+  const [access, setAccess] = useState({ point: null, offsetM: null, needsVerification: false });
   // Measured, not guessed: the banner's real height decides how much of the
   // top of the map is covered and therefore unusable for framing.
   const bannerRef = useRef(null);
@@ -259,7 +263,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     const c = ctrlRef.current;
     setView({
       mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading,
-      visual: c.visualPosition(),
+      visual: c.visualPosition(), phase: c.approachPhase(),
     });
     const l = c.traceLanes();
     const key = `${c.routeVersion}:${c.stepIndex}`;
@@ -310,10 +314,11 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     programmatic.current = true;
     map.fitBounds(bounds, {
       // Banner sits at top:12 and covers the map completely.
-      top: (bannerH ? bannerH + 12 : 0) + MARKER_HALO,
-      // The card overlaps the map by its negative margin only; the rest of the
-      // inset is the destination pin's own label, drawn BELOW its coordinate.
-      bottom: CARD_OVERLAP_PX + DEST_LABEL_H + MARKER_HALO,
+      // The pin and its label are drawn upward from the coordinate, so a
+      // destination near the top needs room for both, not just for the banner.
+      top: (bannerH ? bannerH + 12 : 0) + DEST_LABEL_H + MARKER_HALO,
+      // The card overlaps the map by its negative margin only.
+      bottom: CARD_OVERLAP_PX + MARKER_HALO,
       // Half the widest marker label, so a pin near the edge stays whole.
       left: DEST_LABEL_HALF_W,
       right: DEST_LABEL_HALF_W,
@@ -357,6 +362,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
       return;
     }
 
+    setAccess({ point: parsed.accessPoint, offsetM: parsed.accessOffsetM, needsVerification: parsed.needsVerification });
     ctrlRef.current.setRoute(parsed, { reroute: !!isReroute });
     // First route → show the whole journey briefly, then hand to follow.
     if (!isReroute) {
@@ -367,10 +373,17 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     snapshot();
   }, [destPt, fitToRoute, snapshot]);
 
+  const onZoom = useCallback(() => {
+    const z = mapRef.current?.getZoom();
+    if (Number.isFinite(z)) setZoom((prev) => (Math.abs(prev - z) < 0.01 ? prev : z));
+  }, []);
+
   const onLoad = useCallback((map) => {
     mapRef.current = map;
     const h = map.getDiv()?.offsetHeight;
     if (h) ctrlRef.current.setViewport(h);
+    const z = map.getZoom();
+    if (Number.isFinite(z)) setZoom(z);
     setReady(true);
   }, []);
   const onUnmount = useCallback(() => { mapRef.current = null; setReady(false); }, []);
@@ -443,6 +456,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   }
 
   const step = view.step;
+  const weights = traceWeights(zoom);
 
   // Draw the vehicle where the controller says to, which inside the corridor is
   // on the road rather than at the raw fix. Falls back to the raw coordinate
@@ -464,6 +478,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         onUnmount={onUnmount}
         onDragStart={onGesture}
         onZoomChanged={onGesture}
+        onIdle={onZoom}
       >
         {/* ---- Trace Lane ------------------------------------------------
             Drawn back to front: what is done, then the road still to drive,
@@ -474,24 +489,30 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
             Each state is two polylines (a long cached one and a short live
             one) sharing a colour and width, so they read as a single lane. */}
         {lanes.donePast.length > 1 && (
-          <PolylineF path={lanes.donePast} options={{ strokeColor: TRACE_DONE, strokeOpacity: 0.85, strokeWeight: 8, zIndex: 1 }} />
+          <PolylineF path={lanes.donePast} options={{ strokeColor: TRACE_DONE, strokeOpacity: 0.85, strokeWeight: weights.done, zIndex: 1 }} />
         )}
         {lanes.doneNow.length > 1 && (
-          <PolylineF path={lanes.doneNow} options={{ strokeColor: TRACE_DONE, strokeOpacity: 0.85, strokeWeight: 8, zIndex: 1 }} />
+          <PolylineF path={lanes.doneNow} options={{ strokeColor: TRACE_DONE, strokeOpacity: 0.85, strokeWeight: weights.done, zIndex: 1 }} />
         )}
         {lanes.ahead.length > 1 && (
-          <PolylineF path={lanes.ahead} options={{ strokeColor: TRACE_EDGE, strokeOpacity: 1, strokeWeight: 15, zIndex: 2 }} />
+          <PolylineF path={lanes.ahead} options={{ strokeColor: TRACE_EDGE, strokeOpacity: 1, strokeWeight: weights.casing, zIndex: 2 }} />
         )}
         {lanes.now.length > 1 && (
-          <PolylineF path={lanes.now} options={{ strokeColor: TRACE_EDGE, strokeOpacity: 1, strokeWeight: 15, zIndex: 2 }} />
+          <PolylineF path={lanes.now} options={{ strokeColor: TRACE_EDGE, strokeOpacity: 1, strokeWeight: weights.casing, zIndex: 2 }} />
         )}
         {lanes.ahead.length > 1 && (
-          <PolylineF path={lanes.ahead} options={{ strokeColor: TRACE_AHEAD, strokeOpacity: 1, strokeWeight: 9.5, zIndex: 3 }} />
+          <PolylineF path={lanes.ahead} options={{ strokeColor: TRACE_AHEAD, strokeOpacity: 1, strokeWeight: weights.core, zIndex: 3 }} />
         )}
         {lanes.now.length > 1 && (
-          <PolylineF path={lanes.now} options={{ strokeColor: TRACE_NOW, strokeOpacity: 1, strokeWeight: 9.5, zIndex: 4 }} />
+          <PolylineF path={lanes.now} options={{ strokeColor: TRACE_NOW, strokeOpacity: 1, strokeWeight: weights.core, zIndex: 4 }} />
         )}
-        {destPt && <DestMarker position={destPt} label={destinationLabel} />}
+        {/* Anchored on the access point — where a vehicle can actually stop —
+            rather than the address coordinate, which may be a rooftop or a
+            parcel centroid the driver cannot park on. Falls back to the address
+            point before a route exists. */}
+        {(access.point || destPt) && (
+          <DestMarker position={access.point || destPt} label={destinationLabel} uncertain={access.needsVerification} />
+        )}
         {hasDriver && <VehicleMarker position={vehiclePos} intervalMs={updateIntervalMs} />}
       </GoogleMap>
 

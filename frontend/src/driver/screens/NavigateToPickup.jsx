@@ -3,7 +3,7 @@ import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
-import { shortAddress } from '../lib/address';
+import { addressLines } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
 
 export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
@@ -44,8 +44,19 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
 
           <div className="drv-nav-dest">
             <span className="drv-nav-dest-icon"><Icon name="arrowUp" size={15} color="var(--ink)" /></span>
-            <span className="drv-nav-dest-addr">{shortAddress(booking.pickup_address)}</span>
-            <a className="drv-nav-openmaps" href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)} target="_blank" rel="noreferrer">Open in Maps</a>
+            <div className="drv-nav-dest-main">
+              <div className="drv-nav-dest-k">Pickup</div>
+              {/* Street on its own line, city secondary. The street number is
+                  the part a driver needs at the kerb, so it never shares a
+                  line with anything that could push it into a truncation. */}
+              <div className="drv-nav-dest-addr">{addressLines(booking.pickup_address).street}</div>
+              {addressLines(booking.pickup_address).locality && (
+                <div className="drv-nav-dest-sub">{addressLines(booking.pickup_address).locality}</div>
+              )}
+            </div>
+            <a className="drv-nav-openmaps" href={mapsUrl(booking.pickup_lat, booking.pickup_lng, booking.pickup_address)} target="_blank" rel="noreferrer">
+              Open in Maps <span aria-hidden="true">↗</span>
+            </a>
           </div>
 
           {error && <p className="error-text center" style={{ margin: '0 0 10px' }}>{error}</p>}

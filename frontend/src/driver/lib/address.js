@@ -19,5 +19,25 @@ export function shortAddress(addr) {
     !/^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/i.test(p) &&
     !/^(florida)(\s+\d{5}(-\d{4})?)?$/i.test(p)
   );
-  return (kept.length ? kept : parts).join(', ');
+  const out = kept.length ? kept : parts;
+
+  // OSM's display_name puts the house number in its OWN comma part:
+  //   "5941, Deerfield Place, Palm Beach County, Florida, 33463, United States"
+  // Joined naively that renders as "5941, Deerfield Place" — a comma no
+  // canonical address has, and the form the driver saw on screen. Rejoin the
+  // number to the street it belongs to. Google's Places format already has
+  // them together, so this is a no-op there.
+  if (out.length > 1 && /^\d+[a-z]?$/i.test(out[0])) {
+    out.splice(0, 2, `${out[0]} ${out[1]}`);
+  }
+  return out.join(', ');
+}
+
+// The street line on its own, for a two-line display where the city is
+// secondary. Returns the whole thing when there is nothing to split off.
+export function addressLines(addr) {
+  const full = shortAddress(addr);
+  if (!full) return { street: '', locality: '' };
+  const parts = full.split(',').map((s) => s.trim()).filter(Boolean);
+  return { street: parts[0] || full, locality: parts.slice(1).join(', ') };
 }

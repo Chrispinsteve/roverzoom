@@ -488,3 +488,32 @@ export function snapToRoute(pos, path, cum, progressM, lateralM, corridorM = SNA
   if (!at) return { lat: raw.lat, lng: raw.lng, snapped: false, courseDeg: null };
   return { lat: at.lat, lng: at.lng, snapped: true, courseDeg: routeBearingAt(path, cum, progressM) };
 }
+
+// How wide to draw the Trace Lane at a given zoom.
+//
+// A fixed stroke weight is wrong at both ends of the range. Google's polylines
+// are specified in SCREEN pixels, not metres, so a width tuned for navigation
+// zoom becomes a fat ribbon swallowing the junction when the driver zooms in,
+// and a thread when they zoom out to see the whole trip.
+//
+// Target at navigation zoom (17-18, which is what zoomForSpeed produces): about
+// 10px of total lane with a 7px mint interior — heavy enough to dominate the
+// base map, light enough that it does not hide the road it is drawn on. The
+// casing is only ~1.75px per side: enough to separate mint from grey, not so
+// much that the lane reads as black-edged.
+export function traceWeights(zoom) {
+  const z = Number.isFinite(zoom) ? zoom : 17;
+  let core;
+  if (z >= 18) core = 7;
+  else if (z >= 17) core = 6.5;
+  else if (z >= 16) core = 6;
+  else if (z >= 15) core = 5.5;
+  else core = 5;
+  return {
+    core,
+    casing: core + 3.5,
+    // The completed lane is deliberately narrower as well as duller: it has
+    // already been driven, so it should read as a trace, not as a road.
+    done: Math.max(4, core - 1),
+  };
+}

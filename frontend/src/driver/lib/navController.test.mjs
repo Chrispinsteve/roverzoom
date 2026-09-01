@@ -463,4 +463,42 @@ function dropoffRoute() {
 }
 
 
+// --- approaching the pickup ----------------------------------------------
+// The last 200m is a different task from route following. "Which road next"
+// becomes "where exactly do I stop", and the camera has to change job.
+{
+  const path = [];
+  for (let i = 0; i < 40; i++) path.push({ lat: 26.30 + i * 0.0002, lng: LNG, step: 0 });
+  const c = new NavController();
+  c.setRoute({ path, steps: [{ action: 'Continue straight', road: 'A', maneuver: 'straight', distM: 880, durSec: 90 }],
+    totalDistM: 880, totalDurSec: 90 });
+  c.startFollowing();
+
+  const phaseAt = (i) => { c.onPosition({ lat: path[i].lat, lng: path[i].lng, speedMph: 35 }); return c.cameraFor(c.lastPos); };
+  assert.equal(phaseAt(0).phase, 'cruise', 'far out is cruise');
+  assert.equal(phaseAt(28).phase, 'cruise', 'still cruise at ~250m');
+  const approach = phaseAt(33);
+  assert.equal(approach.phase, 'approach', 'inside 200m is approach');
+  const arriving = phaseAt(38);
+  assert.equal(arriving.phase, 'arriving', 'inside 60m is arriving');
+  ok('the camera changes task as the destination comes in');
+
+  // Tightening only. A driver still moving fast must never be zoomed in past
+  // what they can react to, so the phase sets a FLOOR, not a value.
+  assert.ok(arriving.zoom > approach.zoom, 'arriving is tighter than approach');
+  const fast = new NavController();
+  fast.setRoute({ path, steps: [{ action: 'x', road: 'A', maneuver: 'straight', distM: 880, durSec: 90 }],
+    totalDistM: 880, totalDurSec: 90 });
+  fast.startFollowing();
+  fast.onPosition({ lat: path[38].lat, lng: path[38].lng, speedMph: 0 });
+  const stopped = fast.cameraFor(fast.lastPos);
+  assert.ok(stopped.zoom >= arriving.zoom, 'a stopped driver is never zoomed out by the phase');
+  ok('phases raise the zoom floor and never override speed downward');
+
+  // No route: no phase machinery, no crash.
+  assert.equal(new NavController().approachPhase(), 'cruise', 'no route means cruise');
+  ok('the phase degrades safely with no route');
+}
+
+
 console.log(`\nnavController: ${n}/9 lifecycle groups passed`);
