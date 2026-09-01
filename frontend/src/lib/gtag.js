@@ -11,8 +11,23 @@
 // CONVERSION_LABEL comes from the Google Ads "Purchases" conversion action
 // (looks like 'AbC-D_1efGhIjkLmN'). Until it's filled in, the base tag still
 // tracks the account and the conversion event no-ops.
-const CONVERSION_ID = 'AW-18393777489';
-const CONVERSION_LABEL = ''; // <-- paste the Purchases conversion label here
+const CONVERSION_ID = import.meta.env.VITE_ADS_CONVERSION_ID || 'AW-18393777489';
+
+// Set VITE_ADS_CONVERSION_LABEL in the Vercel environment rather than editing
+// this file. It is configuration, not code: an operator can correct it without
+// a commit, and it cannot be lost in a merge.
+const CONVERSION_LABEL = import.meta.env.VITE_ADS_CONVERSION_LABEL || '';
+
+// Without a label, reportBookingConversion() silently does nothing — which is
+// exactly how this went unnoticed while the campaign spent money with no
+// signal at all. Say so once, loudly, in the console.
+if (typeof window !== 'undefined' && !CONVERSION_LABEL) {
+  console.warn(
+    '[ads] VITE_ADS_CONVERSION_LABEL is not set — booking conversions are NOT being ' +
+    'reported to Google Ads. Performance Max is optimising blind. Get the label from ' +
+    'Google Ads > Goals > Conversions > (your action) > Tag setup.'
+  );
+}
 
 // Google click identifiers: gclid (web), gbraid/wbraid (iOS app/limited).
 const CLICK_KEYS = ['gclid', 'gbraid', 'wbraid'];
@@ -55,8 +70,11 @@ if (typeof window !== 'undefined') captureAdClick();
 // transaction_id de-dupes so a re-render of the confirmation can't double-count.
 export function reportBookingConversion(booking) {
   if (typeof window === 'undefined' || typeof window.gtag !== 'function') return;
-  if (!CONVERSION_LABEL) return;     // no conversion action wired yet
-  if (!cameFromAd()) return;          // not an ad-driven booking → do not count
+  if (!CONVERSION_LABEL) return;     // warned about at load; stay quiet per booking
+  // Not an ad-driven booking. Kiosk walk-ups and organic visitors must never
+  // generate a conversion signal, or the campaign learns from traffic it did
+  // not buy.
+  if (!cameFromAd()) return;
   try {
     window.gtag('event', 'conversion', {
       send_to: `${CONVERSION_ID}/${CONVERSION_LABEL}`,

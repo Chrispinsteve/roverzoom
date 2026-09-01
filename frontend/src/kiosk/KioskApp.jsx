@@ -85,9 +85,14 @@ export default function KioskApp({ onDriverMode }) {
     setAssistantOpen(false);
     const b = assistantBooking;
     setAssistantBooking(null);
-    // The assistant books without passing through PayStep, so the funnel would
-    // otherwise show these riders abandoning at the price step.
-    if (b) once('booked', { bookingRef: b.reference });
+    // The assistant books without passing through PayStep, so this path needs
+    // its own reporting: the funnel would otherwise show these riders
+    // abandoning at the price step, and Google Ads would never learn that an
+    // ad click turned into a booking.
+    if (b) {
+      once('booked', { bookingRef: b.reference });
+      reportBookingConversion(b);
+    }
     if (b && b.booking_id) track(b.booking_id);
   };
   const assistantLayer = assistantOpen ? (
