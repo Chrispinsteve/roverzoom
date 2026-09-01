@@ -9,6 +9,7 @@ const { sendDriverAcceptedNotification } = require('../services/sms');
 const { stripe } = require('../services/stripe');
 const checkr = require('../services/checkr');
 const { getScreening, setScreening } = require('../services/screening');
+const { navRoute } = require('../services/routing');
 
 const router = express.Router();
 
@@ -168,6 +169,30 @@ router.post('/ensure-profile', requireUser, async (req, res) => {
 // empty) schedule — harmless, no need to also gate on active. Dropoff stays
 // exact here — these are the driver's own assigned/completed rides, not the
 // pre-claim browse list.
+// Road geometry for the driver's navigation map.
+//
+// The browser used to ask Google's DirectionsService for this directly. That
+// call returns REQUEST_DENIED for this project — confirmed against the live
+// origin with the production browser key — so the driver map had never once
+// drawn a route. It goes through the server now, on the Routes API, which is
+// the same engine that prices the ride and is known to work.
+//
+// Server-side is also where this belongs regardless of the outage: the API key
+// stays out of the browser, one engine answers both the fare and the map (so
+// the ETA a rider is quoted and the ETA the driver drives cannot drift apart),
+// and responses are cacheable.
+router.get('/nav-route', requireDriver, async (req, res) => {
+  const { olat, olng, dlat, dlng } = req.query;
+  const r = await navRoute({ lat: olat, lng: olng }, { lat: dlat, lng: dlng });
+  if (!r.ok) {
+    // 200 with ok:false, not an error status. The map treats "no route" as a
+    // state to show the driver, not an exception to swallow — which is exactly
+    // how this failure stayed invisible for so long.
+    return res.json({ ok: false, reason: r.reason });
+  }
+  res.json(r);
+});
+
 router.get('/schedule', requireDriver, async (req, res) => {
   try {
     const { data, error } = await supabase

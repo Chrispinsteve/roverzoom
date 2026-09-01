@@ -61,11 +61,18 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
 
           <div className="drv-nav-dest">
             <span className="drv-nav-dest-icon"><Icon name="flag" size={15} color="var(--ink)" /></span>
-            {/* Wraps to two lines rather than truncating. A clipped
-                "6001 Broken Sound Parkway Northwes…" loses the suite or
-                building number, which is the part that matters on arrival. */}
-            <span className="drv-nav-dest-addr">{shortAddress(booking.dropoff_address)}</span>
-            <a className="drv-nav-openmaps" href={mapsUrl(booking.dropoff_lat, booking.dropoff_lng, booking.dropoff_address)} target="_blank" rel="noreferrer">Open in Maps</a>
+            <div className="drv-nav-dest-main">
+              <div className="drv-nav-dest-k">Drop-off</div>
+              {/* Labelled and given its own line. Previously the address sat
+                  inline with the Maps link competing for the same row, which
+                  squeezed it into a truncation the street number fell off. */}
+              <div className="drv-nav-dest-addr">{shortAddress(booking.dropoff_address)}</div>
+            </div>
+            {/* Fallback, not a primary control: Roverzoom's own map is the
+                navigation interface. Kept reachable, styled to recede. */}
+            <a className="drv-nav-openmaps" href={mapsUrl(booking.dropoff_lat, booking.dropoff_lng, booking.dropoff_address)} target="_blank" rel="noreferrer">
+              Open in Maps <span aria-hidden="true">↗</span>
+            </a>
           </div>
 
           {error && <p className="error-text center" style={{ margin: '0 0 10px' }}>{error}</p>}

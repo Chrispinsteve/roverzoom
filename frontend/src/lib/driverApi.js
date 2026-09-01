@@ -49,6 +49,12 @@ export const driverApi = {
   // call whenever a logged-in account has no profile — idempotent server-side.
   ensureProfile: () => authedReq('/driver/ensure-profile', { method: 'POST' }),
 
+  // Road geometry for the navigation map. Resolves to { ok:false, reason }
+  // rather than throwing when Google is unavailable, so the map can show the
+  // driver what happened instead of rendering an empty grid.
+  navRoute: ({ olat, olng, dlat, dlng }) =>
+    authedReq(`/driver/nav-route?${new URLSearchParams({ olat, olng, dlat, dlng })}`),
+
   // Live tracking: batched GPS upload during an active trip + online toggle.
   sendLocation: ({ bookingId, pings }) =>
     authedReq('/driver/location', { method: 'POST', body: JSON.stringify({ bookingId, pings }) }),

@@ -10,7 +10,14 @@ export function shortAddress(addr) {
     !/^(united states|usa|u\.?s\.?a?\.?)$/i.test(p) &&
     !/\bcounty\b/i.test(p) &&
     !/^\d{5}(-\d{4})?$/.test(p) &&
-    !/^(fl|florida)$/i.test(p)
+    // Google returns the state and ZIP as a SINGLE comma part — "FL 33487" —
+    // so tests for them separately both miss and the whole tail survives. That
+    // is what pushed "6001 Broken Sound Parkway Northwest, Boca Raton, FL
+    // 33487" past two lines and truncated the street number off the end, which
+    // is the part a driver needs on arrival. Matches either form, and any
+    // state, since the service area is no longer only Florida.
+    !/^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/i.test(p) &&
+    !/^(florida)(\s+\d{5}(-\d{4})?)?$/i.test(p)
   );
   return (kept.length ? kept : parts).join(', ');
 }

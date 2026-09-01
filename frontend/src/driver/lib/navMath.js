@@ -233,7 +233,45 @@ const MANEUVER_ACTION = {
   'merge': 'Merge', 'straight': 'Continue straight',
   'ferry': 'Take the ferry', 'ferry-train': 'Take the ferry',
 };
-export function actionForManeuver(m) { return MANEUVER_ACTION[m] || 'Continue straight'; }
+export function actionForManeuver(m) { return MANEUVER_ACTION[normalizeManeuver(m)] || 'Continue straight'; }
+
+// The Routes API names maneuvers in SCREAMING_SNAKE ('TURN_LEFT'); the legacy
+// Directions API used kebab ('turn-left'), which is what the glyphs and the
+// action table above are keyed on. Normalising here means the rest of the
+// navigation stack never learns which engine produced a route — and if the
+// browser DirectionsService is ever re-enabled, both shapes keep working.
+const ROUTES_API_ALIASES = {
+  depart: 'straight',
+  'name-change': 'straight',
+  'roundabout-clockwise': 'roundabout-right',
+  'roundabout-counterclockwise': 'roundabout-left',
+  'roundabout-exit-clockwise': 'roundabout-right',
+  'roundabout-exit-counterclockwise': 'roundabout-left',
+  'roundabout-left-clockwise': 'roundabout-left',
+  'roundabout-right-counterclockwise': 'roundabout-right',
+  'roundabout-straight-clockwise': 'roundabout-right',
+  'roundabout-straight-counterclockwise': 'roundabout-left',
+  'roundabout-sharp-left-clockwise': 'roundabout-left',
+  'roundabout-sharp-right-clockwise': 'roundabout-right',
+  'roundabout-slight-left-clockwise': 'roundabout-left',
+  'roundabout-slight-right-clockwise': 'roundabout-right',
+  'merge-left': 'merge',
+  'merge-right': 'merge',
+  'fork-straight': 'straight',
+  'uturn': 'uturn-left',
+};
+export function normalizeManeuver(m) {
+  if (!m) return null;
+  const k = String(m).toLowerCase().replace(/_/g, '-');
+  if (MANEUVER_ACTION[k]) return k;
+  if (ROUTES_API_ALIASES[k]) return ROUTES_API_ALIASES[k];
+  // Unknown roundabout or merge variants degrade to their family rather than
+  // to "Continue straight", which would tell a driver to drive into a circle.
+  if (k.startsWith('roundabout')) return k.includes('left') ? 'roundabout-left' : 'roundabout-right';
+  if (k.startsWith('merge')) return 'merge';
+  if (k.startsWith('ramp')) return k.includes('left') ? 'ramp-left' : 'ramp-right';
+  return k;
+}
 
 export function roadFromInstruction(instruction) {
   if (!instruction) return '';
@@ -296,7 +334,9 @@ export function parseManeuver(step) {
   return {
     action: step.maneuver ? actionForManeuver(step.maneuver) : 'Continue straight',
     road: roadFromInstruction(step.instruction || ''),
-    maneuver: step.maneuver || null,
+    // Normalised, so the glyph table and any downstream comparison see one
+    // vocabulary regardless of which Google API produced the route.
+    maneuver: normalizeManeuver(step.maneuver),
     instruction: step.instruction || '',
     // Carried so remaining time can be summed over the steps still ahead
     // rather than interpolated from the total. Default 0 keeps older callers

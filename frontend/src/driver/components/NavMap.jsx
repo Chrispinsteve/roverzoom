@@ -3,17 +3,26 @@ import { GoogleMap, OverlayViewF, OverlayView, PolylineF } from '@react-google-m
 import { useGoogleMaps } from '../../lib/GoogleMapsProvider';
 import { useAnimatedPosition, usePrefersReducedMotion } from '../../lib/useAnimatedPosition';
 import { NavController, RequestGuard } from '../lib/navController';
-import { parseManeuver } from '../lib/navMath';
+import { parseNavRoute } from '../lib/navRoute';
+import { driverApi } from '../../lib/driverApi';
 
 // ============================================================
 // NavMap — thin React/Google shell over the tested NavController
 // ============================================================
 // All navigation decisions (progress, current step, deviation/reroute, camera
 // mode, heading) live in ../lib/navController.js and are unit-tested against a
-// simulated GPS stream. This file only: fetches routes from Google (with a
-// race guard so a stale response can't overwrite a newer route), feeds GPS in,
-// applies the camera imperatively, and renders the mint route + markers +
-// maneuver banner. No faked native-nav behaviour.
+// simulated GPS stream. This file only: fetches routes (with a race guard so a
+// stale response can't overwrite a newer route), feeds GPS in, applies the
+// camera imperatively, and renders the Trace Lane + markers + maneuver banner.
+//
+// ROUTES COME FROM THE SERVER, NOT THE BROWSER.
+// This file used to call google.maps.DirectionsService directly. That call
+// returns REQUEST_DENIED for this project — reproduced against the live origin
+// with the production browser key — and the failure was swallowed by an early
+// `return`, so the map silently drew no route, ever. Geometry now comes from
+// /api/driver/nav-route on the Routes API, which is the engine that already
+// prices rides. A failure is now STATE the driver can see, not a dropped
+// promise.
 // ============================================================
 
 const MINT = '#3EE0A0';
@@ -36,6 +45,25 @@ const TRACE_EDGE = '#0E7A57';
 const TRACE_NOW = MINT;
 const TRACE_AHEAD = '#8FE8C6';
 const TRACE_DONE = '#BCC6C1';
+
+// Framing insets, in CSS pixels. Named because fitBounds pads around
+// COORDINATES while the driver sees MARKERS, and the difference between the
+// two is exactly how a destination ends up half off the screen.
+const CARD_OVERLAP_PX = 20;   // .drv-nav-card's negative top margin
+const DEST_LABEL_H = 26;      // pin label, drawn below the coordinate
+const DEST_LABEL_HALF_W = 58; // half the widest label ("DROPOFF") plus slack
+const MARKER_HALO = 18;       // breathing room so nothing sits on the edge
+
+// Said in the driver's terms, not the API's. Each one implies a different
+// action: wait, check the address, or stop trying and use Maps.
+const ROUTE_ERROR_TEXT = {
+  network: 'Can’t reach routing',
+  timeout: 'Routing timed out',
+  no_geometry: 'No driving route to this address',
+  bad_coordinates: 'This drop-off has no valid location',
+  no_api_key: 'Navigation is not configured',
+  unavailable: 'Route unavailable',
+};
 
 const NAV_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#f3f5f2' }] },
@@ -65,14 +93,6 @@ const MAP_OPTIONS = {
   minZoom: 4, maxZoom: 19,
 };
 
-function stripHtml(s) {
-  if (!s) return '';
-  if (typeof document === 'undefined') return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const div = document.createElement('div');
-  div.innerHTML = s;
-  return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
-}
-
 function maneuverGlyph(m) {
   switch (m) {
     case 'turn-left': case 'ramp-left': case 'fork-left': case 'keep-left': case 'roundabout-left': return '↰';
@@ -100,7 +120,18 @@ function fmtRemaining(rem) {
   // A real route always has SOME length. Zero means we have not got one.
   if (rem.distM <= 0) return null;
   const mi = rem.distM / 1609.34;
-  const distanceText = mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
+  // Under a tenth of a mile, miles round to "0.0" — which a driver reads as
+  // "arrived" and stops looking for the turn, while they may still have two
+  // city blocks to go. Feet are both meaningful and available at that range:
+  // the number comes from route geometry minus measured progress, not from an
+  // estimate. Rounded to 50ft so it does not imply survey precision.
+  let distanceText;
+  if (mi < 0.1) {
+    const ft = Math.max(50, Math.round((rem.distM * 3.28084) / 50) * 50);
+    distanceText = `${ft} ft`;
+  } else {
+    distanceText = mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
+  }
   const etaText = `${Math.max(1, Math.round(rem.sec / 60))} min`;
   return { etaText, distanceText };
 }
@@ -131,37 +162,6 @@ function LaneHint({ lane }) {
       <span style={{ fontSize: 12, fontWeight: 700, color: MINT, letterSpacing: '-0.01em' }}>{label}</span>
     </div>
   );
-}
-
-// Turn Directions' route into the controller's shape: a detailed path with each
-// vertex tagged by its step, plus parsed { action, road } maneuvers.
-function parseDirections(route) {
-  const leg = route.legs?.[0];
-  const path = [];
-  const steps = [];
-  (leg?.steps || []).forEach((s, si) => {
-    steps.push(parseManeuver({
-      maneuver: s.maneuver || null,
-      instruction: stripHtml(s.instructions),
-      // Carried per step so remaining time can be SUMMED rather than
-      // interpolated. Interpolating total duration by distance assumes every
-      // mile takes the same time, so a route that is mostly highway then city
-      // reports nonsense the moment the driver leaves the highway.
-      distM: s.distance?.value ?? 0,
-      durSec: s.duration?.value ?? 0,
-    }));
-    const pts = s.path || [];
-    pts.forEach((pt) => path.push({ lat: pt.lat(), lng: pt.lng(), step: si }));
-  });
-  return {
-    path,
-    steps,
-    totalDistM: leg?.distance?.value || 0,
-    // duration_in_traffic is present only when drivingOptions was sent and
-    // Google has data for the road. Prefer it; fall back to free-flow.
-    totalDurSec: leg?.duration_in_traffic?.value || leg?.duration?.value || 0,
-    trafficAware: Boolean(leg?.duration_in_traffic?.value),
-  };
 }
 
 function VehicleMarker({ position, intervalMs }) {
@@ -233,6 +233,12 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
 
   const [ready, setReady] = useState(false);
   const [lanes, setLanes] = useState({ donePast: [], doneNow: [], now: [], ahead: [] });
+  // Why there is no line, when there is no line. Previously a failed route was
+  // an early `return` and the driver got an empty map with no explanation.
+  const [routeError, setRouteError] = useState(null);
+  // Measured, not guessed: the banner's real height decides how much of the
+  // top of the map is covered and therefore unusable for framing.
+  const bannerRef = useRef(null);
   // donePast and ahead span most of the route and change only when the driver
   // finishes a maneuver. Handing the Maps API a fresh array for them on every
   // GPS fix would re-tessellate thousands of points a few times a minute for no
@@ -272,6 +278,19 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     applyCamera._t = window.setTimeout(() => { programmatic.current = false; }, 420);
   }, []);
 
+  // Frame the journey inside the part of the map that is actually VISIBLE.
+  //
+  // fitBounds pads in pixels around the raw coordinates, which is not the same
+  // as keeping the markers on screen: the destination pin is drawn 30px wide
+  // with a label under it, so a coordinate sitting exactly on the padding edge
+  // still has half its pin and all of its label off-screen. That is why the
+  // dropoff was clipped against the left edge.
+  //
+  // Every inset below is either measured from the DOM or derived from a marker
+  // that is actually drawn, rather than guessed. The old bottom inset of 176px
+  // was guessing at a card that in fact overlaps the map by 20px, so it threw
+  // away a third of the viewport and forced the camera to zoom out to
+  // compensate — which is why the screen showed half of Boca Raton.
   const fitToRoute = useCallback(() => {
     const map = mapRef.current;
     const c = ctrlRef.current;
@@ -280,68 +299,72 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     if (c.path.length) {
       c.path.forEach((p) => bounds.extend(p));
     } else {
-      // No route — a failed Directions call, or one still in flight. Fit the
-      // driver and the destination anyway, so the screen still answers "where
-      // am I and where am I going" instead of sitting at a default zoom with
-      // the destination off the edge.
+      // No route — a failed request, or one still in flight. Fit the driver and
+      // the destination anyway, so the screen still answers "where am I and
+      // where am I going" instead of sitting at a default zoom.
       const pts = [lastDriverRef.current, destRef.current].filter(Boolean);
       if (pts.length < 2) return;
       pts.forEach((pt) => bounds.extend(pt));
     }
+    const bannerH = bannerRef.current?.offsetHeight || 0;
     programmatic.current = true;
-    // Padding leaves room for the maneuver banner (top) and the bottom card so
-    // the route/destination are never hidden behind the UI overlays.
-    map.fitBounds(bounds, { top: 96, bottom: 176, left: 44, right: 44 });
+    map.fitBounds(bounds, {
+      // Banner sits at top:12 and covers the map completely.
+      top: (bannerH ? bannerH + 12 : 0) + MARKER_HALO,
+      // The card overlaps the map by its negative margin only; the rest of the
+      // inset is the destination pin's own label, drawn BELOW its coordinate.
+      bottom: CARD_OVERLAP_PX + DEST_LABEL_H + MARKER_HALO,
+      // Half the widest marker label, so a pin near the edge stays whole.
+      left: DEST_LABEL_HALF_W,
+      right: DEST_LABEL_HALF_W,
+    });
     window.clearTimeout(fitToRoute._t);
     fitToRoute._t = window.setTimeout(() => { programmatic.current = false; }, 520);
   }, []);
 
   // mode: undefined (first route) | 'candidate' (a periodic look for a faster
   // road, adopted only if materially better).
-  const fetchRoute = useCallback((origin, isReroute, mode) => {
-    if (!window.google?.maps || !destPt || !origin) return;
+  const fetchRoute = useCallback(async (origin, isReroute, mode) => {
+    if (!destPt || !origin) return;
     const token = guardRef.current.begin();
-    const svc = new window.google.maps.DirectionsService();
-    svc.route(
-      {
-        origin,
-        destination: destPt,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-        // Without drivingOptions the Directions API returns FREE-FLOW time —
-        // the road as if empty. On I-95 at 5pm that is fiction, and it was
-        // what the driver's ETA had always been built on.
-        drivingOptions: {
-          departureTime: new Date(),
-          trafficModel: window.google.maps.TrafficModel.BEST_GUESS,
-        },
-      },
-      (res, status) => {
-        // Race guard: ignore a response that a newer request has superseded.
-        if (!guardRef.current.isCurrent(token)) return;
-        if (status !== 'OK' || !res?.routes?.[0]) return;
-        const parsed = parseDirections(res.routes[0]);
-        if (parsed.path.length < 2) return;
+    let data;
+    try {
+      data = await driverApi.navRoute({
+        olat: origin.lat, olng: origin.lng, dlat: destPt.lat, dlng: destPt.lng,
+      });
+    } catch (err) {
+      if (guardRef.current.isCurrent(token)) setRouteError('network');
+      return;
+    }
+    // Race guard: ignore a response that a newer request has superseded.
+    if (!guardRef.current.isCurrent(token)) return;
 
-        // A periodic look for a faster road. Adopted only when it beats what
-        // is left of the current route by a margin worth the disruption of
-        // changing the line and the next turn under the driver.
-        if (mode === 'candidate') {
-          if (!ctrlRef.current.isWorthSwitching(parsed.totalDurSec)) return;
-          ctrlRef.current.setRoute(parsed, { reroute: true });
-          snapshot();
-          return;
-        }
+    if (!data?.ok) { setRouteError(data?.reason || 'unavailable'); return; }
+    const parsed = parseNavRoute(data, window.google?.maps?.geometry?.encoding?.decodePath);
+    // Two points is the minimum that can be drawn as a line. Below that there
+    // is no route, and saying so beats rendering an empty map.
+    // parseNavRoute returns null unless it produced a drawable line.
+    if (!parsed) { setRouteError('no_geometry'); return; }
+    setRouteError(null);
 
-        ctrlRef.current.setRoute(parsed, { reroute: !!isReroute });
-        // First route → show overview, then hand to follow.
-        if (!isReroute) {
-          requestAnimationFrame(fitToRoute);
-          window.clearTimeout(overviewTimer.current);
-          overviewTimer.current = window.setTimeout(() => { ctrlRef.current.startFollowing(); snapshot(); }, 2500);
-        }
-        snapshot();
-      }
-    );
+    // A periodic look for a faster road. Adopted only when it beats what is
+    // left of the current route by a margin worth the disruption of changing
+    // the line and the next turn under the driver.
+    if (mode === 'candidate') {
+      if (!ctrlRef.current.isWorthSwitching(parsed.totalDurSec)) return;
+      ctrlRef.current.setRoute(parsed, { reroute: true });
+      snapshot();
+      return;
+    }
+
+    ctrlRef.current.setRoute(parsed, { reroute: !!isReroute });
+    // First route → show the whole journey briefly, then hand to follow.
+    if (!isReroute) {
+      requestAnimationFrame(fitToRoute);
+      window.clearTimeout(overviewTimer.current);
+      overviewTimer.current = window.setTimeout(() => { ctrlRef.current.startFollowing(); snapshot(); }, 2500);
+    }
+    snapshot();
   }, [destPt, fitToRoute, snapshot]);
 
   const onLoad = useCallback((map) => {
@@ -354,10 +377,10 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
 
   // Initial route: once the map, driver and destination are all available.
   useEffect(() => {
-    if (ready && isLoaded && hasDriver && destPt && ctrlRef.current.path.length === 0) {
+    if (ready && isLoaded && hasDriver && destPt && ctrlRef.current.path.length === 0 && !routeError) {
       fetchRoute({ lat: Number(driver.lat), lng: Number(driver.lng) }, false);
     }
-  }, [ready, isLoaded, hasDriver, destPt, fetchRoute, driver]);
+  }, [ready, isLoaded, hasDriver, destPt, fetchRoute, driver, routeError]);
 
   // Every GPS fix flows through the controller; we just apply its output.
   useEffect(() => {
@@ -395,6 +418,10 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     ctrlRef.current.onUserGesture();
     setView((v) => ({ ...v, mode: ctrlRef.current.mode }));
   }, []);
+
+  // Clearing the error re-arms the initial-route effect, which fires again as
+  // soon as a driver position and destination are both present.
+  const retryRoute = useCallback(() => { setRouteError(null); }, []);
 
   const recenter = useCallback(() => {
     const cam = ctrlRef.current.recenter();
@@ -468,9 +495,11 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         {hasDriver && <VehicleMarker position={vehiclePos} intervalMs={updateIntervalMs} />}
       </GoogleMap>
 
-      {/* Maneuver banner — trusted ACTION (large) + road (secondary). */}
+      {/* Maneuver banner — trusted ACTION (large) + road (secondary).
+          Driven by the controller's forward-only step index, so it is the step
+          the driver is ON, never steps[0]. */}
       {step && (
-        <div style={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 6, background: '#0e1512', color: '#fff', borderRadius: 16, boxShadow: '0 6px 20px rgba(0,0,0,0.28)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div ref={bannerRef} style={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 6, background: '#0e1512', color: '#fff', borderRadius: 16, boxShadow: '0 6px 20px rgba(0,0,0,0.28)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 28, lineHeight: 1, color: MINT, flexShrink: 0 }}>{maneuverGlyph(step.maneuver)}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{step.action}</div>
@@ -478,6 +507,19 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
             <LaneHint lane={step.lane} />
             {view.next && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>then {maneuverGlyph(view.next.maneuver)} {view.next.action}{view.next.road ? ` · ${view.next.road}` : ''}</div>}
           </div>
+        </div>
+      )}
+
+      {/* No route, and why. A blank map with no line teaches the driver the
+          feature is broken; this is something they can act on and report. */}
+      {routeError && !step && (
+        <div ref={bannerRef} style={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 6, background: '#0e1512', color: '#fff', borderRadius: 16, boxShadow: '0 6px 20px rgba(0,0,0,0.28)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 22, lineHeight: 1, color: '#F5B301', flexShrink: 0 }} aria-hidden="true">!</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em' }}>{ROUTE_ERROR_TEXT[routeError] || ROUTE_ERROR_TEXT.unavailable}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>The map still shows you and the destination.</div>
+          </div>
+          <button type="button" onClick={retryRoute} style={{ flexShrink: 0, background: 'transparent', border: `1.5px solid ${MINT}`, color: MINT, borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Retry</button>
         </div>
       )}
 
