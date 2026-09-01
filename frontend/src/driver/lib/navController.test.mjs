@@ -2,6 +2,7 @@
 // navigation lifecycle. Run: node frontend/src/driver/lib/navController.test.mjs
 import assert from 'node:assert';
 import { NavController, RequestGuard } from './navController.js';
+import { bearing, distanceMeters } from './navMath.js';
 
 const LNG = -80.1;
 const v = (lat, step = 0) => ({ lat, lng: LNG, step });
@@ -527,6 +528,95 @@ function dropoffRoute() {
   // No route at all: nothing, rather than a crash or a line to nowhere.
   assert.equal(new NavController().routeConnector(), null, 'no route means no connector');
   ok('the connector degrades safely with no route');
+}
+
+
+// --- the camera must not hide the destination ----------------------------
+// Reproduces the screenshot: parked facing north-east with the pickup to the
+// west. Aiming the look-ahead along the heading pushed the pin off the left
+// edge while a third of the map showed empty ground behind the car.
+{
+  const car = { lat: 26.592330, lng: -80.138560 };
+  const pick = { lat: 26.592553, lng: -80.138948 };
+  const path = [car, { lat: 26.592400, lng: -80.138700 }, pick].map((p) => ({ ...p, step: 0 }));
+  const c = new NavController();
+  c.setViewport(700);
+  c.setRoute({ path, steps: [{ action: 'x', road: 'Deerfield Pl', maneuver: 'straight', distM: 50, durSec: 30 }],
+    totalDistM: 50, totalDurSec: 30 });
+  c.startFollowing();
+  c.onPosition({ lat: car.lat, lng: car.lng, heading: 45, speedMph: 0 });
+  c.stableHeading = 45; // stale: facing north-east, pickup is west
+
+  const cam = c.cameraFor(c.lastPos);
+  const toDest = bearing(car, pick);
+  const toCam = bearing(car, cam.center);
+  const apart = Math.abs(((toCam - toDest + 540) % 360) - 180);
+  assert.ok(apart < 15, `camera should aim at the destination, ${apart.toFixed(0)}deg off`);
+  ok('approaching, the camera aims at the destination rather than a stale heading');
+
+  // While actually driving a route it must still look AHEAD, not at a
+  // destination that may be miles away in another direction.
+  const long = [];
+  for (let i = 0; i < 60; i++) long.push({ lat: 26.30 + i * 0.002, lng: -80.1, step: 0 });
+  const d = new NavController();
+  d.setViewport(700);
+  d.setRoute({ path: long, steps: [{ action: 'x', road: 'A', maneuver: 'straight', distM: 13000, durSec: 900 }],
+    totalDistM: 13000, totalDurSec: 900 });
+  d.startFollowing();
+  d.onPosition({ lat: long[2].lat, lng: long[2].lng, heading: 0, speedMph: 40 });
+  const cruise = d.cameraFor(d.lastPos);
+  assert.equal(cruise.phase, 'cruise', 'precondition: still cruising');
+  const ahead = bearing(d.lastPos, cruise.center);
+  assert.ok(Math.abs(((ahead - 0 + 540) % 360) - 180) < 15, 'cruise camera looks along the heading');
+  ok('cruising, the camera still looks along the road ahead');
+}
+
+// --- heading must not be believed at crawling speed ----------------------
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+  c.onPosition({ lat: 26.3500, lng: LNG, heading: 0, speedMph: 30 });
+  // Driving properly: the device knows which way the car points.
+  c.onPosition({ lat: 26.3530, lng: LNG, heading: 88, speedMph: 30 });
+  assert.equal(c.stableHeading, 88, 'a moving car trusts its device heading');
+  ok('at speed the device heading is used');
+
+  // Crawling: CoreLocation derives course from position deltas, so at walking
+  // pace it is mostly noise. The road is the better answer.
+  const slow = new NavController();
+  slow.setRoute(pickupRoute());
+  slow.startFollowing();
+  slow.onPosition({ lat: 26.3500, lng: LNG, heading: 0, speedMph: 1 });
+  slow.onPosition({ lat: 26.3530, lng: LNG, heading: 217, speedMph: 1 });
+  assert.notEqual(slow.stableHeading, 217, 'a crawling car does not believe a wild device heading');
+  assert.ok(slow.stableHeading < 20 || slow.stableHeading > 340,
+    `expected the road bearing (~north), got ${slow.stableHeading}`);
+  ok('at crawling speed the road bearing wins over the device');
+}
+
+// --- which side of the road to stop on -----------------------------------
+{
+  // Eastbound road; north is left, south is right.
+  const path = [{ lat: 26.5, lng: -80.10, step: 0 }, { lat: 26.5, lng: -80.099, step: 0 }, { lat: 26.5, lng: -80.098, step: 0 }];
+  const mk = () => {
+    const c = new NavController();
+    c.setRoute({ path, steps: [{ action: 'x', road: 'A', maneuver: 'straight', distM: 200, durSec: 30 }],
+      totalDistM: 200, totalDurSec: 30 });
+    return c;
+  };
+  assert.equal(mk().arrivalSide({ lat: 26.5003, lng: -80.098 }), 'left', 'north of an eastbound road is left');
+  assert.equal(mk().arrivalSide({ lat: 26.4997, lng: -80.098 }), 'right', 'south of an eastbound road is right');
+  ok('the side of the road is derived from the direction of travel');
+
+  // Silence beats a confident wrong answer: a driver told "on your right" who
+  // stops opposite the rider is worse off than one told nothing.
+  assert.equal(mk().arrivalSide({ lat: 26.5, lng: -80.0975 }), null, 'straight ahead has no side');
+  assert.equal(mk().arrivalSide({ lat: 26.5, lng: -80.098 }), null, 'a point on the road has no side');
+  assert.equal(mk().arrivalSide(null), null, 'no address point, no claim');
+  assert.equal(mk().arrivalSide({ lat: NaN, lng: 0 }), null, 'a nonsense point makes no claim');
+  assert.equal(new NavController().arrivalSide({ lat: 26.5, lng: -80.1 }), null, 'no route, no claim');
+  ok('the side is withheld whenever it would not be trustworthy');
 }
 
 

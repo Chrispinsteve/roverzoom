@@ -12,7 +12,7 @@
 import {
   cumulativeDistances, projectToRoute, evaluateReroute, nextHeading,
   lookAheadCenter, zoomForSpeed, shouldRepan, isMateriallyBetter,
-  snapToRoute, slicePath, routeBearingAt, pointAtDistance, SNAP_CORRIDOR_M,
+  snapToRoute, slicePath, routeBearingAt, pointAtDistance, bearing, distanceMeters, SNAP_CORRIDOR_M,
 } from './navMath.js';
 
 export const NAV_DEFAULTS = {
@@ -151,7 +151,28 @@ export class NavController {
     // pushes the pickup off the top of the screen exactly when it is the only
     // thing that matters.
     const ahead = phase === 'arriving' ? 0.06 : this.config.aheadFraction;
-    const center = lookAheadCenter(p, this.stableHeading ?? 0, this.viewportH, zoom, ahead);
+
+    // WHICH WAY TO LOOK.
+    //
+    // While driving a route the answer is the heading: show the road coming up,
+    // not the road already driven.
+    //
+    // Once the destination is the task, the heading is the wrong question and
+    // can actively hide the answer. A driver stopped facing north-east with the
+    // pickup to the west gets the camera pushed north-east — away from the one
+    // thing they are looking for, which slides off the edge of the screen.
+    // That is exactly what happened: the pickup pin was clipped against the
+    // left edge while a third of the map showed empty ground behind the car.
+    //
+    // So on approach the camera aims at the DESTINATION instead. Below a few
+    // metres the bearing to it is pure noise, so it falls back to the heading
+    // rather than spinning the map on the spot.
+    let aim = this.stableHeading ?? 0;
+    if (phase !== 'cruise' && this.path.length >= 2) {
+      const dest = this.path[this.path.length - 1];
+      if (distanceMeters(p, dest) > 8) aim = bearing(p, dest);
+    }
+    const center = lookAheadCenter(p, aim, this.viewportH, zoom, ahead);
     this.lastCenter = { lat: p.lat, lng: p.lng };
     // Carried so a vector map can rotate to heading-up. Ignored on raster.
     return { center, zoom, phase, heading: this.stableHeading ?? 0 };
@@ -194,6 +215,7 @@ export class NavController {
     this.stableHeading = nextHeading(
       this.stableHeading, this.lastPos, p, pos.heading,
       this.config.headingMoveThreshM, snap.snapped ? snap.courseDeg : null,
+      Number.isFinite(pos.speedMph) ? pos.speedMph : null,
     );
     this.lastSnap = snap;
 
@@ -336,6 +358,35 @@ export class NavController {
     const to = pointAtDistance(this.path, this.cum, this.lastProjM);
     if (!to) return null;
     return [{ lat: this.lastPos.lat, lng: this.lastPos.lng }, { lat: to.lat, lng: to.lng }];
+  }
+
+  // Which side of the road the address sits on — Apple Maps' "On your right",
+  // which is the single most useful thing it says during a pickup.
+  //
+  // Derivable from geometry already held, with no extra data: the route ends at
+  // the ACCESS point, which is on the road, while the address point is the
+  // building. The signed angle between the direction of travel at the end of
+  // the route and the direction from there to the building is the side.
+  //
+  // Returns null rather than guessing whenever the answer would not be
+  // trustworthy: too close to the road to have a side, or near enough to
+  // straight ahead / straight behind that "left" and "right" are meaningless.
+  // A confident "on your right" that is wrong makes a driver stop opposite the
+  // rider, so silence is the better failure.
+  arrivalSide(addressPoint) {
+    if (!this.hasRoute || this.path.length < 2 || !addressPoint) return null;
+    const lat = Number(addressPoint.lat);
+    const lng = Number(addressPoint.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const end = this.path[this.path.length - 1];
+    if (distanceMeters(end, { lat, lng }) < 6) return null; // no meaningful side
+    const total = this.cum[this.cum.length - 1] || 0;
+    const course = routeBearingAt(this.path, this.cum, total);
+    if (!Number.isFinite(course)) return null;
+    const rel = ((bearing(end, { lat, lng }) - course + 540) % 360) - 180;
+    const off = Math.abs(rel);
+    if (off < 20 || off > 160) return null; // ahead or behind, not a side
+    return rel > 0 ? 'right' : 'left';
   }
 
   currentStep() { return this.stepMeta[this.stepIndex] || null; }

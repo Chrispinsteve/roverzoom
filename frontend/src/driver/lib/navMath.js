@@ -214,12 +214,21 @@ export function evaluateReroute({ offStreak, lastRerouteAt, now, sustainedTicks 
 //                             any speed, where a fix-to-fix bearing is noisy
 //                             when crawling and undefined when stopped.
 //   4. movement bearing     — off-route, where there is no road to borrow from.
-export function nextHeading(prevHeading, prevPos, newPos, gpsHeading, moveThreshM = 6, routeCourse = null) {
+// Below this the device's course is not trustworthy. CoreLocation derives
+// heading from successive positions, so at walking pace it is mostly GPS noise
+// — and a car sitting still with a stale course points the arrow somewhere the
+// driver is definitely not facing. The road's own bearing is better in that
+// range, because a car on a road is pointing along it.
+export const HEADING_TRUST_MPH = 4;
+
+export function nextHeading(prevHeading, prevPos, newPos, gpsHeading, moveThreshM = 6, routeCourse = null, speedMph = null) {
   if (prevPos && distanceMeters(prevPos, newPos) < moveThreshM) return prevHeading; // stopped/creeping → hold
   const g = Number(gpsHeading);
   // Reject NaN and out-of-range values as well as null: a device reporting -1
   // or 999 for "unknown" would otherwise be believed and point the car nowhere.
-  if (gpsHeading != null && Number.isFinite(g) && g >= 0 && g <= 360) return g % 360;
+  // And only believe it at a speed where the device can actually measure it.
+  const fastEnough = !Number.isFinite(speedMph) || speedMph >= HEADING_TRUST_MPH;
+  if (fastEnough && gpsHeading != null && Number.isFinite(g) && g >= 0 && g <= 360) return g % 360;
   if (Number.isFinite(routeCourse)) return routeCourse;
   if (prevPos) return bearing(prevPos, newPos); // derive from movement
   return prevHeading;

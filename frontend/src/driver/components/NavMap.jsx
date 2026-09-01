@@ -302,6 +302,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     setView({
       mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading,
       visual: c.visualPosition(), phase: c.approachPhase(), connector: c.routeConnector(),
+      side: c.arrivalSide(destRef.current),
     });
     const l = c.traceLanes();
     const key = `${c.routeVersion}:${c.stepIndex}`;
@@ -610,7 +611,15 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
             <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{step.action}</div>
             {step.road && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.road}</div>}
             <LaneHint lane={step.lane} />
-            {view.next && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>then {maneuverGlyph(view.next.maneuver)} {view.next.action}{view.next.road ? ` · ${view.next.road}` : ''}</div>}
+            {/* Which side to pull over on, once that is the live question.
+                Replaces the next-turn preview during the approach, because at
+                that point there is no next turn worth previewing. */}
+            {view.phase !== 'cruise' && view.side && (
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: MINT, marginTop: 3 }}>
+                {String(destinationLabel).toUpperCase().startsWith('PICK') ? 'Pickup' : 'Drop-off'} on your {view.side}
+              </div>
+            )}
+            {view.phase === 'cruise' && view.next && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>then {maneuverGlyph(view.next.maneuver)} {view.next.action}{view.next.road ? ` · ${view.next.road}` : ''}</div>}
           </div>
         </div>
       )}
