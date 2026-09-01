@@ -4,6 +4,7 @@ import Icon from '../../components/Icon';
 import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
 import { shortAddress } from '../lib/address';
+import PassengerRow from '../components/PassengerRow';
 
 export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
   const [route, setRoute] = useState({});
@@ -34,6 +35,12 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
               <div className="drv-nav-stat-v">{route.distanceText || `${booking.distance_miles} mi`}</div>
             </div>
           </div>
+
+          {/* Reaching the rider matters most on the way to collect them —
+              a wrong gate, a back entrance, or someone not yet outside. */}
+          {booking.rider_name && (
+            <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
+          )}
 
           <div className="drv-nav-dest">
             <span className="drv-nav-dest-icon"><Icon name="arrowUp" size={15} color="var(--ink)" /></span>

@@ -853,7 +853,14 @@ input, textarea { font-family: inherit; }
 .drv-nav-stat-v { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .drv-nav-dest { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .drv-nav-dest-icon { width: 30px; height: 30px; border-radius: 50%; background: var(--canvas-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.drv-nav-dest-addr { flex: 1; min-width: 0; font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Wraps to two lines instead of truncating on one. A clipped address loses
+   its tail — the suite, unit or building number — which is precisely the part
+   a driver needs on arrival at an office park or a hospital. */
+.drv-nav-dest-addr {
+  flex: 1; min-width: 0; font-size: 14px; line-height: 1.35; color: var(--ink-2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-word;
+}
 .drv-nav-openmaps { font-size: 12.5px; color: var(--ink-3); text-decoration: underline; white-space: nowrap; flex-shrink: 0; }
 .drv-nav-card .btn { margin-top: 0; }
 
@@ -1061,3 +1068,26 @@ input, textarea { font-family: inherit; }
   font-size: 13.5px;
   line-height: 1.5;
 }
+
+
+/* Compact PassengerRow, for the navigation cards where vertical space is
+   scarce. Same component as the pickup and ride-detail screens — only the
+   density changes. */
+.drv-passenger-row.compact {
+  padding: 8px 10px; margin-bottom: 12px;
+  background: var(--canvas-2); border-radius: 14px;
+}
+.drv-passenger-row.compact .drv-passenger-name { font-size: 14.5px; }
+
+/* --- Driver: two-step trip end -------------------------------------------
+   Ending a trip writes the earnings ledger and increments rides_completed in
+   one transaction, so it is not something to undo. The confirm is inline
+   rather than a system dialog: a native confirm() steals focus and reads as a
+   browser artefact rather than part of the app. */
+.drv-confirm { display: flex; flex-direction: column; gap: 10px; }
+.drv-confirm-q {
+  margin: 0; text-align: center; font-size: 14px; line-height: 1.45; color: var(--ink-2);
+}
+.drv-confirm-row { display: flex; gap: 10px; }
+.drv-confirm-row .btn { flex: 1; margin-top: 0; }
+.drv-confirm-no { background: var(--canvas-2); border: 1px solid var(--line); color: var(--ink); }
