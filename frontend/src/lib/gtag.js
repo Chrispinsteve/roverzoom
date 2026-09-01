@@ -13,10 +13,16 @@
 // tracks the account and the conversion event no-ops.
 const CONVERSION_ID = import.meta.env.VITE_ADS_CONVERSION_ID || 'AW-18393777489';
 
-// Set VITE_ADS_CONVERSION_LABEL in the Vercel environment rather than editing
-// this file. It is configuration, not code: an operator can correct it without
-// a commit, and it cannot be lost in a merge.
-const CONVERSION_LABEL = import.meta.env.VITE_ADS_CONVERSION_LABEL || '';
+// The label for the "Purchase" conversion action. Committed as the default,
+// the same way CONVERSION_ID is: it is not a secret — it ships in the client
+// HTML of every site that reports conversions, and is readable by anyone who
+// views source. Having a working default means a redeploy is enough, with no
+// dashboard step to forget.
+//
+// VITE_ADS_CONVERSION_LABEL still overrides it, so the action can be swapped
+// without a commit.
+const CONVERSION_LABEL =
+  import.meta.env.VITE_ADS_CONVERSION_LABEL || 'iimjCPrp3uIcENGK68JE';
 
 // Without a label, reportBookingConversion() silently does nothing — which is
 // exactly how this went unnoticed while the campaign spent money with no
