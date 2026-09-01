@@ -20,13 +20,35 @@ const USER_AGENT = 'RoverZoom/1.0 (https://roverzoom.com; support@roverzoom.com)
 function googleKey() { return process.env.GOOGLE_MAPS_API_KEY || ''; }
 function isGoogleEnabled() { return !!googleKey(); }
 
+// Set once the Geocoding API has told us it will not serve this project, so we
+// stop paying a round-trip to be refused on every single address.
+//
+// Measured against the live project: the key is refused with "You must enable
+// Billing on the Google Cloud Project", which is a standing condition, not a
+// transient one — 14 requests, 100% errors. Retrying it per lookup added
+// latency to every pickup resolution and produced nothing but error-rate.
+//
+// Deliberately a runtime probe rather than a config flag: the day billing or
+// the key restriction is fixed, a restart picks it up with no code change, and
+// nothing has to remember to flip a switch.
+let googleGeocodeDisabled = null; // null = untried, string = reason it is off
+
 async function googleGeocode(query) {
   const key = googleKey();
   if (!key) return null;
+  if (googleGeocodeDisabled) return null;
   const params = new URLSearchParams({ address: query, key, region: 'us' });
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
   if (!res.ok) throw new Error(`google geocode ${res.status}`);
   const data = await res.json();
+  // REQUEST_DENIED is a project/key condition, not a bad query: no address will
+  // ever succeed until a human changes something in the Cloud Console. ZERO_RESULTS
+  // and the like are per-query and must NOT disable the provider.
+  if (data.status === 'REQUEST_DENIED') {
+    googleGeocodeDisabled = data.error_message || 'REQUEST_DENIED';
+    console.warn('[geocode] Geocoding API disabled for this project, using Places instead:', googleGeocodeDisabled.slice(0, 140));
+    return null;
+  }
   if (data.status !== 'OK' || !data.results || !data.results.length) return null;
   const r = data.results[0];
   const parts = r.formatted_address.split(',');
@@ -316,4 +338,10 @@ async function reverseGeocode(lat, lng) {
   };
 }
 
-module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween, googleGeocode, googlePlacesGeocode, isGoogleEnabled };
+// Exposed so an operator can see WHY geocoding is running on Places without
+// reading logs — and so a health check can report it.
+function geocodeProviderStatus() {
+  return { googleGeocodingDisabledReason: googleGeocodeDisabled };
+}
+
+module.exports = { geocode, geocodeOne, reverseGeocode, searchNear, milesBetween, googleGeocode, googlePlacesGeocode, isGoogleEnabled, geocodeProviderStatus };
