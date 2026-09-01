@@ -141,6 +141,12 @@ export class NavController {
   // the disruption of changing the picture the driver is holding.
   shouldCheckAlternate(now = Date.now()) {
     if (!this.hasRoute || this.mode === 'overview') return false;
+    // Never while off-route. A deviation reroute is either in flight or about
+    // to be, and the two requests share the RequestGuard: whichever starts
+    // last wins, so a candidate check can discard the reroute response. Worse,
+    // isWorthSwitching would then judge the candidate against the remaining
+    // time on a route the driver has already left, which is meaningless.
+    if (this.offStreak > 0) return false;
     if (this.remaining().sec < this.config.alternateMinRemainSec) return false;
     return now - this.lastAlternateCheckAt >= this.config.alternateCheckMs;
   }

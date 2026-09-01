@@ -267,6 +267,16 @@ function dropoffRoute() {
   assert.equal(nearlyThere.shouldCheckAlternate(999999), false, 'no checks in the last minutes');
   ok('stops hunting for alternates near the destination');
 
+  // Never hunt for an alternate while off-route: a deviation reroute is
+  // already coming, the two share the RequestGuard, and a candidate would be
+  // judged against a route the driver has left.
+  const strayed = mk();
+  strayed.markAlternateChecked(-Infinity);
+  for (let i = 0; i < 2; i++) strayed.onPosition({ lat: 26.05, lng: -80.4, speedMph: 40 }, 1000 + i * 1000);
+  assert.ok(strayed.offStreak > 0, 'driver is off-route for this check');
+  assert.equal(strayed.shouldCheckAlternate(999999), false, 'no alternate hunt while off-route');
+  ok('does not hunt for alternates while off-route');
+
   // And the acceptance bar itself.
   const d = mk();                      // 1800s remaining
   assert.equal(d.isWorthSwitching(1500), true, '5 minutes faster is worth it');
