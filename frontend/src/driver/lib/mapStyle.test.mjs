@@ -1,6 +1,6 @@
 // Map styling invariants. Run: node frontend/src/driver/lib/mapStyle.test.mjs
 import assert from 'node:assert';
-import { NAV_STYLES, DETAIL_STYLES, DETAIL_ZOOM, stylesForZoom, mapOptionsFor } from './mapStyle.js';
+import { NAV_STYLES, DETAIL_STYLES, DETAIL_ZOOM, stylesFor, stylesForZoom, mapOptionsFor } from './mapStyle.js';
 let n = 0;
 const ok = (name) => { n++; console.log('  ✓', name); };
 
@@ -24,6 +24,17 @@ const blanketLabelsOff = (a) => a.some((r) => r.elementType === 'labels' && !r.f
   }
   assert.ok(DETAIL_ZOOM < 17.6, 'the threshold sits below the approach zoom');
   ok('both camera arrival zooms reveal the numbers');
+
+  // Approaching is a statement about the TASK, not the scale. The opening
+  // overview sits below any sensible zoom threshold, and a driver looking at
+  // the map during it still needs to see which house they are heading for.
+  assert.strictEqual(stylesFor({ zoom: 14, phase: 'approach' }), DETAIL_STYLES,
+    'approaching reveals numbers even when zoomed out');
+  assert.strictEqual(stylesFor({ zoom: 14, phase: 'arriving' }), DETAIL_STYLES,
+    'arriving reveals numbers even when zoomed out');
+  assert.strictEqual(stylesFor({ zoom: 14, phase: 'cruise' }), NAV_STYLES,
+    'cruising far out stays quiet');
+  ok('the approach phase reveals numbers regardless of zoom');
 }
 
 // Clutter stays gone at every zoom. Re-admitting labels must not re-admit
@@ -53,6 +64,8 @@ const blanketLabelsOff = (a) => a.some((r) => r.elementType === 'labels' && !r.f
   for (const z of [undefined, null, NaN, -1]) {
     assert.ok(Array.isArray(stylesForZoom(z)), `zoom ${z} still yields a style array`);
   }
+  assert.ok(Array.isArray(stylesFor()), 'no arguments still yields a style array');
+  assert.ok(Array.isArray(stylesFor({})), 'an empty descriptor still yields a style array');
   ok('a missing or nonsense zoom still styles the map');
 }
 

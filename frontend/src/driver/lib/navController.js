@@ -12,7 +12,7 @@
 import {
   cumulativeDistances, projectToRoute, evaluateReroute, nextHeading,
   lookAheadCenter, zoomForSpeed, shouldRepan, isMateriallyBetter,
-  snapToRoute, slicePath, routeBearingAt, SNAP_CORRIDOR_M,
+  snapToRoute, slicePath, routeBearingAt, pointAtDistance, SNAP_CORRIDOR_M,
 } from './navMath.js';
 
 export const NAV_DEFAULTS = {
@@ -62,6 +62,7 @@ export class NavController {
     this.lastCenter = null;
     this.lastAlternateCheckAt = -Infinity;
     this.lastLateralM = Infinity; // how far the last fix sat off the line
+    this.lastProjM = 0;           // where the raw fix projects onto the route
     this.routeVersion = 0; // bumped on every new route, so renderers can cache
   }
 
@@ -103,6 +104,10 @@ export class NavController {
     if (!this.hasRoute || this.path.length < 2) return { deviationM: Infinity, onRoute: false };
     const proj = projectToRoute(pos, this.path, this.cum);
     this.lastLateralM = proj.lateral;
+    // The TRUE nearest point, which may be behind progressM. progressM is
+    // forward-only and right for drawing the car; this is right for drawing the
+    // line back to the route.
+    this.lastProjM = proj.distanceAlong;
     const onRoute = proj.lateral <= this.config.deviationThreshM;
     if (onRoute) {
       if (proj.distanceAlong > this.progressM) this.progressM = proj.distanceAlong; // forward-only
@@ -310,6 +315,23 @@ export class NavController {
       now: slicePath(this.path, this.cum, p, end),
       ahead: slicePath(this.path, this.cum, end, total),
     };
+  }
+
+  // The gap between where the driver is and where the route begins.
+  //
+  // When a fix is too far off the line to be drawn on it, the car is rendered
+  // at its real coordinate — correct, but it leaves the vehicle floating in the
+  // middle of a block with the route apparently starting somewhere else, which
+  // reads as broken. Real navigation apps draw a dashed line across that gap:
+  // it says "you are here, the route starts there" without pretending the
+  // driver is on the road. Returns null whenever the car IS on the line, so
+  // nothing is drawn in the normal case.
+  routeConnector() {
+    if (!this.hasRoute || this.path.length < 2 || !this.lastPos) return null;
+    if (this.lastSnap?.snapped) return null;
+    const to = pointAtDistance(this.path, this.cum, this.lastProjM);
+    if (!to) return null;
+    return [{ lat: this.lastPos.lat, lng: this.lastPos.lng }, { lat: to.lat, lng: to.lng }];
   }
 
   currentStep() { return this.stepMeta[this.stepIndex] || null; }

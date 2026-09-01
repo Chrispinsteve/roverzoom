@@ -4,7 +4,7 @@ import { useGoogleMaps } from '../../lib/GoogleMapsProvider';
 import { useAnimatedPosition, usePrefersReducedMotion } from '../../lib/useAnimatedPosition';
 import { NavController, RequestGuard } from '../lib/navController';
 import { parseNavRoute } from '../lib/navRoute';
-import { mapOptionsFor, stylesForZoom, NAV_TILT_DEG } from '../lib/mapStyle';
+import { mapOptionsFor, stylesFor, NAV_TILT_DEG } from '../lib/mapStyle';
 import { traceWeights } from '../lib/navMath';
 import { driverApi } from '../../lib/driverApi';
 
@@ -267,7 +267,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     const c = ctrlRef.current;
     setView({
       mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading,
-      visual: c.visualPosition(), phase: c.approachPhase(),
+      visual: c.visualPosition(), phase: c.approachPhase(), connector: c.routeConnector(),
     });
     const l = c.traceLanes();
     const key = `${c.routeVersion}:${c.stepIndex}`;
@@ -407,7 +407,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     // vector map, where a mapId means the styles array is ignored and the
     // equivalent has to be configured as a cloud style instead.
     if (IS_VECTOR) return;
-    const next = stylesForZoom(z);
+    const next = stylesFor({ zoom: z, phase: ctrlRef.current.approachPhase() });
     if (styleRef.current !== next) {
       styleRef.current = next;
       map.setOptions({ styles: next });
@@ -546,6 +546,20 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
             rather than the address coordinate, which may be a rooftop or a
             parcel centroid the driver cannot park on. Falls back to the address
             point before a route exists. */}
+        {/* The driver is off the line — say so honestly with a dashed link
+            rather than leaving the car floating unexplained. */}
+        {view.connector && (
+          <PolylineF
+            path={view.connector}
+            options={{
+              strokeOpacity: 0, zIndex: 3,
+              icons: [{
+                icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.85, strokeColor: TRACE_EDGE, strokeWeight: 3, scale: 3 },
+                offset: '0', repeat: '11px',
+              }],
+            }}
+          />
+        )}
         {(access.point || destPt) && (
           <DestMarker position={access.point || destPt} label={destinationLabel} uncertain={access.needsVerification} />
         )}

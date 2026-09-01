@@ -121,8 +121,16 @@ export const DETAIL_STYLES = [
 // Google starts rendering them and they become the most useful thing on screen.
 // Both arrival zooms the camera forces (17.6 approach, 18.4 arriving) sit above
 // it, so simply driving up to a pickup reveals them with no extra wiring.
-export const DETAIL_ZOOM = 17.5;
+export const DETAIL_ZOOM = 17;
 
-export function stylesForZoom(zoom) {
+// Zoom OR phase. Zoom alone was too fragile: the overview that plays for the
+// first few seconds of a trip sits below any sensible threshold, and a driver
+// glancing at the map during it saw no numbers at all. Approaching a pickup is
+// a statement about the TASK, not the scale, so it reveals them regardless.
+export function stylesFor({ zoom, phase } = {}) {
+  if (phase && phase !== 'cruise') return DETAIL_STYLES;
   return Number.isFinite(zoom) && zoom >= DETAIL_ZOOM ? DETAIL_STYLES : NAV_STYLES;
 }
+
+// Kept for callers that only know the zoom.
+export function stylesForZoom(zoom) { return stylesFor({ zoom }); }

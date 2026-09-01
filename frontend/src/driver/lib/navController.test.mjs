@@ -501,4 +501,33 @@ function dropoffRoute() {
 }
 
 
+// --- the off-route connector ---------------------------------------------
+// A car drawn at its real coordinate while the route starts somewhere else
+// reads as broken, even though it is the honest rendering. The dashed link
+// says "you are here, the route is there" without faking a snap.
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+
+  // On the line: nothing to draw.
+  c.onPosition({ lat: 26.3530, lng: LNG });
+  assert.ok(c.visualPosition().snapped, 'precondition: snapped');
+  assert.equal(c.routeConnector(), null, 'no connector while the car is on the route');
+  ok('no connector is drawn when the vehicle is on the line');
+
+  // Off the line: a two-point link from the car to the nearest route point.
+  c.onPosition({ lat: 26.3535, lng: LNG + 0.0015 });
+  const link = c.routeConnector();
+  assert.ok(Array.isArray(link) && link.length === 2, 'connector is a two-point path');
+  assert.ok(Math.abs(link[0].lng - (LNG + 0.0015)) < 1e-9, 'it starts at the real GPS fix');
+  assert.ok(Math.abs(link[1].lng - LNG) < 1e-6, 'it ends on the route');
+  ok('off the line, the connector spans the real gap');
+
+  // No route at all: nothing, rather than a crash or a line to nowhere.
+  assert.equal(new NavController().routeConnector(), null, 'no route means no connector');
+  ok('the connector degrades safely with no route');
+}
+
+
 console.log(`\nnavController: ${n}/9 lifecycle groups passed`);
