@@ -200,9 +200,22 @@ export function evaluateReroute({ offStreak, lastRerouteAt, now, sustainedTicks 
 // --- Heading: stable at low speed, never spins when stopped -----------------
 // Hold the previous heading when the driver has barely moved (GPS heading is
 // unreliable at rest); otherwise use the GPS heading, or derive it from travel.
-export function nextHeading(prevHeading, prevPos, newPos, gpsHeading, moveThreshM = 6) {
+// Priority, in order:
+//   1. hold while stopped   — a parked car must not spin. GPS heading is
+//                             meaningless at zero speed and phones emit noise.
+//   2. device heading       — the only true measure of where the car POINTS,
+//                             as opposed to where it has been.
+//   3. the road's bearing   — when snapped to the route. Smooth and correct at
+//                             any speed, where a fix-to-fix bearing is noisy
+//                             when crawling and undefined when stopped.
+//   4. movement bearing     — off-route, where there is no road to borrow from.
+export function nextHeading(prevHeading, prevPos, newPos, gpsHeading, moveThreshM = 6, routeCourse = null) {
   if (prevPos && distanceMeters(prevPos, newPos) < moveThreshM) return prevHeading; // stopped/creeping → hold
-  if (gpsHeading != null && !Number.isNaN(Number(gpsHeading))) return Number(gpsHeading);
+  const g = Number(gpsHeading);
+  // Reject NaN and out-of-range values as well as null: a device reporting -1
+  // or 999 for "unknown" would otherwise be believed and point the car nowhere.
+  if (gpsHeading != null && Number.isFinite(g) && g >= 0 && g <= 360) return g % 360;
+  if (Number.isFinite(routeCourse)) return routeCourse;
   if (prevPos) return bearing(prevPos, newPos); // derive from movement
   return prevHeading;
 }
@@ -324,4 +337,114 @@ export function isMateriallyBetter(currentSec, candidateSec, opts = {}) {
   const saving = currentSec - candidateSec;
   if (saving < minSec) return false;
   return saving / currentSec >= minFrac;
+}
+
+// ============================================================
+// Trace Lane geometry — position and route as the driver SEES them
+// ============================================================
+// The controller already knew where the driver was along the route; it just
+// never told the renderer. These turn "distance along the route" into points
+// and sub-paths, which is what the Trace Lane and the vehicle are drawn from.
+
+// How far off the line the driver can be and still be DRAWN on it.
+//
+// Deliberately far tighter than deviationThreshM (65m, the point at which we
+// declare the driver off-route and reroute). Those two numbers answer different
+// questions and must not be the same:
+//
+//   deviationThreshM  "should we compute a new route?"   — expensive to get wrong
+//                                                          in either direction,
+//                                                          so it is forgiving
+//   SNAP_CORRIDOR_M   "should we DRAW the car on the road?" — a lie here is
+//                                                          read by the driver as
+//                                                          fact, so it is strict
+//
+// At 65m a driver on a frontage road running beside I-95 would be painted onto
+// the highway, and the map would be confidently showing them somewhere they are
+// not. 28m covers ordinary urban GPS error (a typical phone fix is 5-20m) and
+// stops well short of the next road over.
+export const SNAP_CORRIDOR_M = 28;
+
+// The point that lies `distM` along the path, interpolated WITHIN a segment
+// rather than rounded to the nearest vertex. Rounding to vertices would make
+// the car tick from vertex to vertex on a sparse highway polyline where the
+// gaps run to hundreds of metres.
+export function pointAtDistance(path, cum, distM) {
+  if (!path || path.length === 0) return null;
+  if (path.length === 1) return { lat: path[0].lat, lng: path[0].lng, index: 0, t: 0 };
+  const total = cum[cum.length - 1] || 0;
+  const d = Math.min(Math.max(0, distM), total);
+  // Last segment whose start is at or before d.
+  let i = 0;
+  for (let k = 0; k < cum.length - 1; k++) { if (cum[k] <= d) i = k; else break; }
+  const segLen = cum[i + 1] - cum[i];
+  const t = segLen > 0 ? (d - cum[i]) / segLen : 0;
+  return {
+    lat: path[i].lat + (path[i + 1].lat - path[i].lat) * t,
+    lng: path[i].lng + (path[i + 1].lng - path[i].lng) * t,
+    index: i,
+    t,
+  };
+}
+
+// The stretch of route between two distances, with both ends interpolated so
+// the cut lands exactly where asked. This is what makes the completed/remaining
+// seam sit UNDER the vehicle instead of at whichever vertex happens to be near
+// it — a seam that visibly leads or trails the car is the tell that a map is
+// faking its progress.
+export function slicePath(path, cum, fromM, toM) {
+  if (!path || path.length < 2) return [];
+  const total = cum[cum.length - 1] || 0;
+  const a = Math.min(Math.max(0, fromM), total);
+  const b = Math.min(Math.max(0, toM), total);
+  if (b <= a) return [];
+  const start = pointAtDistance(path, cum, a);
+  const end = pointAtDistance(path, cum, b);
+  const out = [{ lat: start.lat, lng: start.lng }];
+  for (let i = start.index + 1; i <= end.index; i++) out.push({ lat: path[i].lat, lng: path[i].lng });
+  out.push({ lat: end.lat, lng: end.lng });
+  return out;
+}
+
+// Which way the ROAD points at a given distance along it.
+//
+// Used to orient the vehicle when it is drawn on the route. A bearing taken
+// between two consecutive GPS fixes is noisy at low speed and meaningless when
+// stopped; the road's own direction is neither, and a car drawn on a road
+// should point along it.
+export function routeBearingAt(path, cum, distM) {
+  if (!path || path.length < 2) return null;
+  const at = pointAtDistance(path, cum, distM);
+  if (!at) return null;
+  const i = Math.min(at.index, path.length - 2);
+  return bearing(path[i], path[i + 1]);
+}
+
+// Where to DRAW the driver, which is not always where the GPS says.
+//
+// Two failure modes bracket this, and the whole design is about refusing both:
+//
+//   Draw the raw fix         the car wanders off the road, crosses buildings,
+//                            and shivers in place while parked
+//   Snap unconditionally     the car is painted onto a road the driver has
+//                            genuinely left, and the map lies at the exact
+//                            moment the driver most needs the truth
+//
+// So snapping is conditional on the fix being close enough to the line that the
+// difference is credibly GPS error. Inside the corridor the driver is drawn on
+// the road at their forward-only progress; outside it they are drawn exactly
+// where the GPS puts them, off the line, which is both honest and the clearest
+// possible signal that something has diverged.
+//
+// progressM is passed in rather than recomputed because it is forward-only.
+// That is what stops the car twitching backwards when a fix lands slightly
+// behind the last one, which is otherwise constant at low speed.
+export function snapToRoute(pos, path, cum, progressM, lateralM, corridorM = SNAP_CORRIDOR_M) {
+  const raw = { lat: Number(pos.lat), lng: Number(pos.lng) };
+  if (!path || path.length < 2 || !Number.isFinite(lateralM) || lateralM > corridorM) {
+    return { lat: raw.lat, lng: raw.lng, snapped: false, courseDeg: null };
+  }
+  const at = pointAtDistance(path, cum, progressM);
+  if (!at) return { lat: raw.lat, lng: raw.lng, snapped: false, courseDeg: null };
+  return { lat: at.lat, lng: at.lng, snapped: true, courseDeg: routeBearingAt(path, cum, progressM) };
 }

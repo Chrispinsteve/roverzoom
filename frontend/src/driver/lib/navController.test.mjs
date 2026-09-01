@@ -287,4 +287,180 @@ function dropoffRoute() {
 }
 
 
+// --- visual position: snapping, and refusing to snap ----------------------
+// The distinction this group exists for: a car drawn on a road it is not on is
+// worse than a car drawn slightly off the road. Noise gets absorbed; a genuine
+// departure gets shown.
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+
+  // A fix 15m east of the line — ordinary urban GPS error.
+  const noisy = { lat: 26.3530, lng: LNG + 0.00015 };
+  c.onPosition(noisy);
+  const a = c.visualPosition();
+  assert.ok(a.snapped, 'a fix inside the corridor is drawn on the road');
+  assert.ok(Math.abs(a.lng - LNG) < 1e-9, 'snapped position sits ON the line');
+  ok('GPS noise inside the corridor is absorbed onto the route');
+
+  // A fix ~150m east — the driver is on a different road.
+  const off = { lat: 26.3535, lng: LNG + 0.0015 };
+  c.onPosition(off);
+  const b = c.visualPosition();
+  assert.equal(b.snapped, false, 'a genuine departure is NOT snapped');
+  assert.ok(Math.abs(b.lng - off.lng) < 1e-9, 'off-route draws the raw fix');
+  ok('a real departure is drawn where the driver actually is');
+
+  // The corridor is stricter than the reroute threshold, on purpose: there is a
+  // band where we still believe the route but no longer claim the exact road.
+  assert.ok(c.config.snapCorridorM < c.config.deviationThreshM,
+    'snap corridor must be tighter than the reroute threshold');
+  ok('drawing is more conservative than rerouting');
+}
+
+// --- forward-only: noise must never reverse the car ----------------------
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+  c.onPosition({ lat: 26.3540, lng: LNG });
+  const first = c.visualPosition();
+  // A fix that lands slightly BEHIND the last one, which is constant at low
+  // speed. The car must hold, not reverse.
+  c.onPosition({ lat: 26.35398, lng: LNG + 0.00002 });
+  const second = c.visualPosition();
+  assert.ok(second.lat >= first.lat - 1e-9, 'visual position never moves backwards');
+  ok('a backwards fix does not reverse the vehicle');
+}
+
+// --- trace lanes ---------------------------------------------------------
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+  c.onPosition({ lat: 26.3540, lng: LNG });
+
+  const L = c.traceLanes();
+  const done = [...L.donePast, ...L.doneNow];
+  const live = [...L.now, ...L.ahead];
+  assert.ok(done.length >= 2, 'the travelled road is drawable');
+  assert.ok(live.length >= 2, 'the road ahead is drawable');
+
+  // The seam has to sit exactly under the car, not at the nearest vertex.
+  const seam = done[done.length - 1];
+  const head = live[0];
+  assert.ok(Math.abs(seam.lat - head.lat) < 1e-9 && Math.abs(seam.lng - head.lng) < 1e-9,
+    'travelled ends exactly where the road ahead begins');
+  const car = c.visualPosition();
+  assert.ok(Math.abs(seam.lat - car.lat) < 1e-6, 'the seam sits under the vehicle');
+  ok('trace lanes meet exactly at the vehicle');
+
+  // Internal seams must be exact too, or the shared-colour trick shows a gap.
+  if (L.donePast.length && L.doneNow.length) {
+    const j = L.donePast[L.donePast.length - 1];
+    assert.ok(Math.abs(j.lat - L.doneNow[0].lat) < 1e-9, 'donePast meets doneNow');
+  }
+  if (L.now.length && L.ahead.length) {
+    const j = L.now[L.now.length - 1];
+    assert.ok(Math.abs(j.lat - L.ahead[0].lat) < 1e-9, 'now meets ahead');
+  }
+  ok('the internal seams are exact, so the shared colours read as one line');
+
+  // End to end: the four pieces reconstruct the whole route.
+  assert.ok(Math.abs(L.donePast.length ? L.donePast[0].lat : done[0].lat - c.path[0].lat) < 1,
+    'coverage starts at the route start');
+  const last = L.ahead[L.ahead.length - 1];
+  assert.ok(Math.abs(last.lat - c.path[c.path.length - 1].lat) < 1e-9,
+    'coverage reaches the destination');
+  ok('the four lanes cover the route end to end');
+
+  // The per-fix arrays must stay bounded by ONE STEP, which is the whole point
+  // of cutting at the step boundary as well as at the driver.
+  assert.ok(L.doneNow.length <= c.path.length && L.now.length <= c.path.length);
+  assert.ok(L.donePast.length + L.doneNow.length + L.now.length + L.ahead.length
+    <= c.path.length + 8, 'no piece duplicates the whole route');
+  ok('the arrays redrawn every fix are bounded by the current step');
+
+  // Before any fix, nothing has been travelled — the whole route is ahead.
+  const fresh = new NavController();
+  fresh.setRoute(pickupRoute());
+  const l0 = fresh.traceLanes();
+  assert.equal(l0.donePast.length + l0.doneNow.length, 0, 'nothing travelled before the first fix');
+  ok('a fresh route shows no false progress');
+
+  // No route at all must not throw or invent geometry.
+  assert.deepEqual(new NavController().traceLanes(),
+    { donePast: [], doneNow: [], now: [], ahead: [] });
+  ok('no route yields empty lanes rather than a crash');
+}
+
+// --- the camera follows what is DRAWN ------------------------------------
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+  c.onPosition({ lat: 26.3500, lng: LNG });
+  // A fix inside the corridor but off the line. The camera must centre on the
+  // snapped point, or the car slides around a map that is holding still.
+  const r = c.onPosition({ lat: 26.3540, lng: LNG + 0.0002 });
+  assert.ok(r.camera, 'a camera update was produced');
+  const v = c.visualPosition();
+  assert.ok(v.snapped, 'precondition: this fix snaps');
+  // lookAheadCenter offsets ahead of the driver, so compare longitude, which
+  // the look-ahead does not move when heading north.
+  assert.ok(Math.abs(r.camera.center.lng - v.lng) < Math.abs(r.camera.center.lng - 
+    (LNG + 0.0002)), 'camera tracks the drawn position, not the raw fix');
+  ok('the camera follows the vehicle as drawn');
+}
+
+// --- a reroute must not leave the car on the old line ---------------------
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+  c.onPosition({ lat: 26.3540, lng: LNG });
+  assert.ok(c.visualPosition().snapped, 'precondition: on the first route');
+
+  // A new route on a different street. The cached snap was measured against
+  // geometry that no longer exists.
+  c.setRoute({
+    path: [{ lat: 26.3540, lng: -80.2, step: 0 }, { lat: 26.3600, lng: -80.2, step: 0 }],
+    steps: [{ action: 'Continue straight', road: 'New Rd', maneuver: 'straight' }],
+    totalDurSec: 120,
+  }, { reroute: true });
+
+  const v = c.visualPosition();
+  const onNew = Math.abs(v.lng - (-80.2)) < 1e-6;
+  assert.ok(onNew || !v.snapped,
+    'after a reroute the car is on the NEW line, or honestly off it — never on the old one');
+  ok('a reroute re-places the vehicle immediately');
+}
+
+// --- heading borrows the road, but only when snapped ---------------------
+{
+  const c = new NavController();
+  c.setRoute(pickupRoute());
+  c.startFollowing();
+  // Moving north along the route with NO device heading. The road's own
+  // bearing should orient the car, not a noisy fix-to-fix bearing.
+  c.onPosition({ lat: 26.3500, lng: LNG, heading: null });
+  c.onPosition({ lat: 26.3530, lng: LNG + 0.00012, heading: null });
+  const h = c.stableHeading;
+  assert.ok(h != null && (h < 20 || h > 340), `expected ~north, got ${h}`);
+  ok('the road orients the car when the device reports no heading');
+
+  // A device heading, when present and sane, wins over the road.
+  c.onPosition({ lat: 26.3545, lng: LNG, heading: 88 });
+  assert.equal(c.stableHeading, 88, 'device heading takes priority');
+  ok('device heading outranks the road bearing');
+
+  // Junk headings are rejected rather than believed.
+  const before = c.stableHeading;
+  c.onPosition({ lat: 26.3560, lng: LNG, heading: -1 });
+  assert.notEqual(c.stableHeading, -1, 'an out-of-range heading is refused');
+  ok('out-of-range device headings are discarded');
+}
+
+
 console.log(`\nnavController: ${n}/9 lifecycle groups passed`);

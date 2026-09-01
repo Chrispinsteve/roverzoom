@@ -19,6 +19,24 @@ import { parseManeuver } from '../lib/navMath';
 const MINT = '#3EE0A0';
 const MINT_CASING = '#1FA574';
 
+// ---- Trace Lane palette --------------------------------------------------
+// Three states, ranked by how much of the driver's attention they deserve.
+// The ranking is carried by VALUE (light/dark) as much as hue, so it survives
+// glare, a dirty windscreen, and colour-vision deficiency — none of which a
+// hue-only scheme survives.
+//
+//   TRACE_DONE     behind you        — grey. Recedes. Carries no instruction.
+//   TRACE_AHEAD    the rest of it    — pale mint. Present, not competing.
+//   TRACE_NOW      this maneuver     — full mint. The one thing to act on.
+//
+// One casing runs under both live states so the road reads as a single
+// continuous lane; the brightness step rides on top of it instead of chopping
+// the lane into two objects with a joint the eye catches on.
+const TRACE_EDGE = '#0E7A57';
+const TRACE_NOW = MINT;
+const TRACE_AHEAD = '#8FE8C6';
+const TRACE_DONE = '#BCC6C1';
+
 const NAV_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#f3f5f2' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -214,7 +232,13 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   const destRef = useRef(null);
 
   const [ready, setReady] = useState(false);
-  const [routePath, setRoutePath] = useState(null);
+  const [lanes, setLanes] = useState({ donePast: [], doneNow: [], now: [], ahead: [] });
+  // donePast and ahead span most of the route and change only when the driver
+  // finishes a maneuver. Handing the Maps API a fresh array for them on every
+  // GPS fix would re-tessellate thousands of points a few times a minute for no
+  // visual change, so they are cached BY IDENTITY on (route, step) — React and
+  // the Maps binding both skip the update when the reference is unchanged.
+  const laneCache = useRef({ key: null, donePast: [], ahead: [] });
   // Render snapshot mirrored from the controller.
   const [view, setView] = useState({ mode: 'overview', step: null, next: null, heading: 0 });
 
@@ -227,7 +251,14 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
 
   const snapshot = useCallback(() => {
     const c = ctrlRef.current;
-    setView({ mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading });
+    setView({
+      mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading,
+      visual: c.visualPosition(),
+    });
+    const l = c.traceLanes();
+    const key = `${c.routeVersion}:${c.stepIndex}`;
+    if (laneCache.current.key !== key) laneCache.current = { key, donePast: l.donePast, ahead: l.ahead };
+    setLanes({ ...l, donePast: laneCache.current.donePast, ahead: laneCache.current.ahead });
     if (onRouteInfo) onRouteInfo(fmtRemaining(c.remaining()) || {});
   }, [onRouteInfo]);
 
@@ -297,13 +328,11 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         if (mode === 'candidate') {
           if (!ctrlRef.current.isWorthSwitching(parsed.totalDurSec)) return;
           ctrlRef.current.setRoute(parsed, { reroute: true });
-          setRoutePath(parsed.path);
           snapshot();
           return;
         }
 
         ctrlRef.current.setRoute(parsed, { reroute: !!isReroute });
-        setRoutePath(parsed.path);
         // First route → show overview, then hand to follow.
         if (!isReroute) {
           requestAnimationFrame(fitToRoute);
@@ -388,6 +417,15 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
 
   const step = view.step;
 
+  // Draw the vehicle where the controller says to, which inside the corridor is
+  // on the road rather than at the raw fix. Falls back to the raw coordinate
+  // before the first route arrives, when there is no line to be on.
+  const vehiclePos = {
+    lat: view.visual ? view.visual.lat : Number(driver?.lat),
+    lng: view.visual ? view.visual.lng : Number(driver?.lng),
+    heading: view.heading ?? driver?.heading ?? 0,
+  };
+
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <GoogleMap
@@ -400,14 +438,34 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         onDragStart={onGesture}
         onZoomChanged={onGesture}
       >
-        {routePath && (
-          <>
-            <PolylineF path={routePath} options={{ strokeColor: MINT_CASING, strokeOpacity: 1, strokeWeight: 14, zIndex: 1 }} />
-            <PolylineF path={routePath} options={{ strokeColor: MINT, strokeOpacity: 1, strokeWeight: 9, zIndex: 2 }} />
-          </>
+        {/* ---- Trace Lane ------------------------------------------------
+            Drawn back to front: what is done, then the road still to drive,
+            then the maneuver in hand. Progress is a property of the ROUTE
+            here, not a number in a card — the driver reads how far along they
+            are from the line itself, without looking away from it.
+
+            Each state is two polylines (a long cached one and a short live
+            one) sharing a colour and width, so they read as a single lane. */}
+        {lanes.donePast.length > 1 && (
+          <PolylineF path={lanes.donePast} options={{ strokeColor: TRACE_DONE, strokeOpacity: 0.85, strokeWeight: 8, zIndex: 1 }} />
+        )}
+        {lanes.doneNow.length > 1 && (
+          <PolylineF path={lanes.doneNow} options={{ strokeColor: TRACE_DONE, strokeOpacity: 0.85, strokeWeight: 8, zIndex: 1 }} />
+        )}
+        {lanes.ahead.length > 1 && (
+          <PolylineF path={lanes.ahead} options={{ strokeColor: TRACE_EDGE, strokeOpacity: 1, strokeWeight: 15, zIndex: 2 }} />
+        )}
+        {lanes.now.length > 1 && (
+          <PolylineF path={lanes.now} options={{ strokeColor: TRACE_EDGE, strokeOpacity: 1, strokeWeight: 15, zIndex: 2 }} />
+        )}
+        {lanes.ahead.length > 1 && (
+          <PolylineF path={lanes.ahead} options={{ strokeColor: TRACE_AHEAD, strokeOpacity: 1, strokeWeight: 9.5, zIndex: 3 }} />
+        )}
+        {lanes.now.length > 1 && (
+          <PolylineF path={lanes.now} options={{ strokeColor: TRACE_NOW, strokeOpacity: 1, strokeWeight: 9.5, zIndex: 4 }} />
         )}
         {destPt && <DestMarker position={destPt} label={destinationLabel} />}
-        {hasDriver && <VehicleMarker position={{ lat: Number(driver.lat), lng: Number(driver.lng), heading: view.heading ?? driver.heading ?? 0 }} intervalMs={updateIntervalMs} />}
+        {hasDriver && <VehicleMarker position={vehiclePos} intervalMs={updateIntervalMs} />}
       </GoogleMap>
 
       {/* Maneuver banner — trusted ACTION (large) + road (secondary). */}

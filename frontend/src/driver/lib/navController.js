@@ -12,6 +12,7 @@
 import {
   cumulativeDistances, projectToRoute, evaluateReroute, nextHeading,
   lookAheadCenter, zoomForSpeed, shouldRepan, isMateriallyBetter,
+  snapToRoute, slicePath, routeBearingAt, SNAP_CORRIDOR_M,
 } from './navMath.js';
 
 export const NAV_DEFAULTS = {
@@ -22,7 +23,8 @@ export const NAV_DEFAULTS = {
   headingMoveThreshM: 6,   // below this movement, hold heading (no spin)
   aheadFraction: 0.26,
   alternateCheckMs: 120000, // how often to look for a faster route while following
-  alternateMinRemainSec: 300, // do not bother looking inside the last five minutes     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
+  alternateMinRemainSec: 300, // do not bother looking inside the last five minutes
+  snapCorridorM: SNAP_CORRIDOR_M, // how far off the line we still DRAW on it     // camera centre this fraction of the viewport ahead of the driver: always more route ahead than behind; lower-third only when heading is northerly (north-up map)
 };
 
 export class NavController {
@@ -48,8 +50,11 @@ export class NavController {
     this.stableHeading = null;
     this.lastSpeedMph = 0;
     this.lastPos = null;
+    this.lastSnap = null;
     this.lastCenter = null;
     this.lastAlternateCheckAt = -Infinity;
+    this.lastLateralM = Infinity; // how far the last fix sat off the line
+    this.routeVersion = 0; // bumped on every new route, so renderers can cache
   }
 
   setViewport(h) { if (h > 0) this.viewportH = h; }
@@ -61,6 +66,7 @@ export class NavController {
   // stale value from the old route survives.
   setRoute(route, { reroute = false } = {}) {
     this.hasRoute = true;
+    this.routeVersion++;
     this.path = route.path.map((p) => ({ lat: p.lat, lng: p.lng }));
     this.vertexStep = route.path.map((p) => (p.step ?? 0));
     this.cum = cumulativeDistances(this.path);
@@ -74,13 +80,21 @@ export class NavController {
     this.lastCenter = null;
     if (!reroute) this.mode = 'overview';
 
-    // Immediately place the driver on the NEW route so the banner is correct.
-    if (this.lastPos) this._locate(this.lastPos);
+    // Immediately place the driver on the NEW route so the banner is correct —
+    // and recompute where to DRAW them, because the cached one was measured
+    // against geometry that no longer exists. Without this the vehicle sits on
+    // the old line until the next GPS fix, which after a reroute is the exact
+    // moment the driver is looking at the map.
+    if (this.lastPos) {
+      this._locate(this.lastPos);
+      this.lastSnap = this.visualFor(this.lastPos);
+    }
   }
 
   _locate(pos) {
     if (!this.hasRoute || this.path.length < 2) return { deviationM: Infinity, onRoute: false };
     const proj = projectToRoute(pos, this.path, this.cum);
+    this.lastLateralM = proj.lateral;
     const onRoute = proj.lateral <= this.config.deviationThreshM;
     if (onRoute) {
       if (proj.distanceAlong > this.progressM) this.progressM = proj.distanceAlong; // forward-only
@@ -108,11 +122,13 @@ export class NavController {
     // omits it — a GPS sample without speed should not snap the camera to the
     // stopped zoom mid-motorway.
     if (Number.isFinite(pos.speedMph)) this.lastSpeedMph = pos.speedMph;
-    this.stableHeading = nextHeading(this.stableHeading, this.lastPos, p, pos.heading, this.config.headingMoveThreshM);
 
     let needsReroute = false;
     let rerouteOrigin = null;
 
+    // Locate BEFORE heading. Placing the driver on the route first means the
+    // heading step can fall back to the road's own bearing, which is what the
+    // car should point along when it is being drawn on that road.
     if (this.hasRoute && this.path.length >= 2) {
       const { onRoute } = this._locate(p);
       this.offStreak = onRoute ? 0 : this.offStreak + 1;
@@ -127,13 +143,29 @@ export class NavController {
       }
     }
 
+    // Only borrow the road's bearing when the driver is actually being drawn
+    // on it. Off-route, the road under the projection is not the road they are
+    // on, and pointing the car along it would be worse than pointing it nowhere.
+    const snap = this.visualFor(p);
+    this.stableHeading = nextHeading(
+      this.stableHeading, this.lastPos, p, pos.heading,
+      this.config.headingMoveThreshM, snap.snapped ? snap.courseDeg : null,
+    );
+    this.lastSnap = snap;
+
+    // Follow what is DRAWN, not the raw fix. Centring on the raw coordinate
+    // while the car is drawn on the road lets the vehicle wander up to a
+    // corridor's width away from the centre of the screen and back — the map
+    // holds still and the car slides around on it, which is precisely the
+    // "not attached to the road" feel that snapping exists to remove.
+    const drawn = { lat: snap.lat, lng: snap.lng };
     let camera = null;
-    if (this.mode === 'follow' && shouldRepan(this.lastCenter, p, this.config.repanThreshM)) {
-      camera = this.cameraFor(p);
+    if (this.mode === 'follow' && shouldRepan(this.lastCenter, drawn, this.config.repanThreshM)) {
+      camera = this.cameraFor(drawn);
     }
 
     this.lastPos = p;
-    return { camera, needsReroute, rerouteOrigin };
+    return { camera, needsReroute, rerouteOrigin, visual: snap };
   }
 
   // Time to look for a faster route? Only while actually driving a route, and
@@ -165,11 +197,85 @@ export class NavController {
   recenter() {
     this.mode = 'follow';
     this.lastCenter = null;
-    return this.lastPos ? this.cameraFor(this.lastPos) : null;
+    const at = this.lastSnap || this.lastPos;
+    return at ? this.cameraFor({ lat: at.lat, lng: at.lng }) : null;
   }
 
   // Called after the initial overview has been shown.
   startFollowing() { if (this.mode === 'overview') this.mode = 'follow'; }
+
+  // Where to DRAW the driver for a given fix. See snapToRoute: on the road
+  // when the fix is close enough that the offset is credibly GPS error, at the
+  // raw coordinate when it is not.
+  visualFor(pos) {
+    return snapToRoute(pos, this.path, this.cum, this.progressM, this.lastLateralM, this.config.snapCorridorM);
+  }
+
+  // The last computed visual position, for renderers that missed the fix.
+  visualPosition() {
+    if (this.lastSnap) return this.lastSnap;
+    return this.lastPos ? { ...this.lastPos, snapped: false, courseDeg: null } : null;
+  }
+
+  // Where the current maneuver ends, in metres along the route.
+  //
+  // Taken from the PATH's own vertices rather than by summing step distances.
+  // Google's per-step distances and the decoded polyline disagree by a few
+  // metres, and a seam derived from the wrong one drifts further from the
+  // geometry with every step until the highlight no longer matches the road.
+  stepEndDistance(stepIdx = this.stepIndex) {
+    if (!this.path.length) return 0;
+    let last = -1;
+    for (let i = 0; i < this.vertexStep.length; i++) if (this.vertexStep[i] <= stepIdx) last = i;
+    if (last < 0) return 0;
+    return this.cum[Math.min(last, this.cum.length - 1)] || 0;
+  }
+
+  // Where the current maneuver STARTS, in metres along the route.
+  stepStartDistance(stepIdx = this.stepIndex) {
+    return stepIdx <= 0 ? 0 : this.stepEndDistance(stepIdx - 1);
+  }
+
+  // The route split into the states the driver reads at a glance:
+  //
+  //   done     where they have been      — recedes, carries no instruction
+  //   now      the maneuver they are on  — dominant, answers "which road NOW"
+  //   ahead    the rest of the journey   — present, but not competing
+  //
+  // Returned as FOUR pieces rather than three, cut at the current step's
+  // boundaries as well as at the driver:
+  //
+  //   donePast  route start  -> step start   long,  changes only on a new step
+  //   doneNow   step start   -> driver       short, changes every fix
+  //   now       driver       -> step end     short, changes every fix
+  //   ahead     step end     -> route end    long,  changes only on a new step
+  //
+  // The split is about cost, not looks. Cutting only at the driver would make
+  // both halves span the whole route, so every GPS fix would hand the map two
+  // fresh multi-thousand-point arrays to re-tessellate — a few times a minute,
+  // on a phone that is also running GPS and a screen at full brightness. Cut
+  // this way, the arrays that change every fix are bounded by a single step,
+  // and the long ones are handed over only when the driver finishes a maneuver.
+  //
+  // donePast/doneNow are drawn identically, as are now/ahead's casings, so the
+  // seams are invisible: same colour, same width, meeting at a shared point.
+  //
+  // Every cut is interpolated, so the done/now seam sits exactly under the
+  // vehicle instead of at the nearest vertex.
+  traceLanes() {
+    const empty = { donePast: [], doneNow: [], now: [], ahead: [] };
+    if (!this.hasRoute || this.path.length < 2) return empty;
+    const total = this.cum[this.cum.length - 1] || 0;
+    const p = Math.min(Math.max(0, this.progressM), total);
+    const start = Math.min(this.stepStartDistance(), p);
+    const end = Math.min(Math.max(this.stepEndDistance(), p), total);
+    return {
+      donePast: slicePath(this.path, this.cum, 0, start),
+      doneNow: slicePath(this.path, this.cum, start, p),
+      now: slicePath(this.path, this.cum, p, end),
+      ahead: slicePath(this.path, this.cum, end, total),
+    };
+  }
 
   currentStep() { return this.stepMeta[this.stepIndex] || null; }
   nextStep() { return this.stepMeta[this.stepIndex + 1] || null; }
