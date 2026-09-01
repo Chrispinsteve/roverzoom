@@ -11,7 +11,7 @@
 
 import {
   cumulativeDistances, projectToRoute, evaluateReroute, nextHeading,
-  lookAheadCenter, zoomForDistance, shouldRepan,
+  lookAheadCenter, zoomForSpeed, shouldRepan,
 } from './navMath.js';
 
 export const NAV_DEFAULTS = {
@@ -44,6 +44,7 @@ export class NavController {
     this.offStreak = 0;
     this.lastRerouteAt = -Infinity; // first reroute isn't gated by the cooldown
     this.stableHeading = null;
+    this.lastSpeedMph = 0;
     this.lastPos = null;
     this.lastCenter = null;
   }
@@ -88,8 +89,8 @@ export class NavController {
 
   cameraFor(pos) {
     const p = { lat: Number(pos.lat), lng: Number(pos.lng) };
-    const remainingM = Math.max(0, this.totalDistM - this.progressM);
-    const zoom = zoomForDistance(this.hasRoute ? remainingM : 1000);
+    // Speed, not remaining distance. See zoomForSpeed for why.
+    const zoom = zoomForSpeed(this.lastSpeedMph);
     const center = lookAheadCenter(p, this.stableHeading ?? 0, this.viewportH, zoom, this.config.aheadFraction);
     this.lastCenter = { lat: p.lat, lng: p.lng };
     return { center, zoom };
@@ -99,6 +100,11 @@ export class NavController {
   // Returns { camera, needsReroute, rerouteOrigin }.
   onPosition(pos, now = Date.now()) {
     const p = { lat: Number(pos.lat), lng: Number(pos.lng) };
+    // Held so cameraFor() can pick a zoom from how fast the driver is moving.
+    // Kept as the last KNOWN speed rather than defaulting to 0 on a fix that
+    // omits it — a GPS sample without speed should not snap the camera to the
+    // stopped zoom mid-motorway.
+    if (Number.isFinite(pos.speedMph)) this.lastSpeedMph = pos.speedMph;
     this.stableHeading = nextHeading(this.stableHeading, this.lastPos, p, pos.heading, this.config.headingMoveThreshM);
 
     let needsReroute = false;

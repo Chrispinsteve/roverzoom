@@ -3,7 +3,7 @@
 import assert from 'node:assert';
 import {
   distanceMeters, distanceToPath, advanceStepIndex,
-  shouldReroute, shouldRepan, followCamera, zoomForDistance,
+  shouldReroute, shouldRepan, followCamera, zoomForDistance, zoomForSpeed,
   lookAheadCenter, metersPerPixel,
 } from './navMath.js';
 
@@ -116,5 +116,45 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
   assert.ok(Math.abs(camE.lat - pos.lat) < Math.abs(camN.lat - pos.lat), 'east heading is not "lower third" on a north-up map');
   ok('lookAheadCenter: offset = aheadFraction×viewport ahead; more route ahead than behind; monotonic; lower-third holds for northerly heading (north-up map)');
 }
+
+// --- zoomForSpeed --------------------------------------------------------
+// The bug this replaced: zoom was chosen by REMAINING TRIP DISTANCE, so a
+// driver ten miles out got zoom 13 and could not read a street name. How far
+// is left says nothing about how much road you need to see.
+{
+  // Legible street detail at every speed. Below ~15 and a driver cannot tell
+  // which turning is theirs.
+  for (const mph of [0, 5, 15, 30, 45, 60, 80]) {
+    assert.ok(zoomForSpeed(mph) >= 15.5, `zoom at ${mph}mph must stay legible`);
+    assert.ok(zoomForSpeed(mph) <= 18.5, `zoom at ${mph}mph must not be absurdly close`);
+  }
+  ok('nav zoom stays in a legible band at every speed');
+
+  // Faster means seeing further ahead, which means a wider view.
+  const speeds = [0, 15, 30, 45, 60];
+  for (let i = 1; i < speeds.length; i++) {
+    assert.ok(
+      zoomForSpeed(speeds[i]) <= zoomForSpeed(speeds[i - 1]),
+      `zoom must not increase from ${speeds[i - 1]} to ${speeds[i]} mph`
+    );
+  }
+  ok('faster driving widens the view, monotonically');
+
+  // A missing or nonsense speed must not throw or snap to a silly zoom.
+  for (const bad of [undefined, null, NaN, -10, 'fast']) {
+    const z = zoomForSpeed(bad);
+    assert.ok(Number.isFinite(z) && z >= 15.5 && z <= 18.5, `bad speed ${bad} -> usable zoom`);
+  }
+  ok('a missing or invalid speed still yields a usable zoom');
+
+  // The regression itself: trip length must have no say in the nav camera.
+  assert.equal(zoomForSpeed(30), zoomForSpeed(30), 'zoom depends only on speed');
+  assert.ok(
+    zoomForSpeed(30) > zoomForDistance(16000),
+    'a 10-mile trip must no longer force the far-out overview zoom'
+  );
+  ok('trip length no longer decides the navigation zoom');
+}
+
 
 console.log(`\nnavMath: ${passed}/6 groups passed`);

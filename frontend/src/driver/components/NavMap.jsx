@@ -69,7 +69,18 @@ function maneuverGlyph(m) {
   }
 }
 
+// Returns null when there is no usable route yet, so the screens fall through
+// to their own placeholders ("—" and the booking's own distance).
+//
+// This previously always returned a formatted string. With no route the
+// remaining distance is 0, and the ETA is floored at Math.max(1, ...) — so a
+// failed or still-pending route rendered as a confident "0.0 mi / 1 min"
+// instead of an honest dash. A driver reads that as "you have arrived" and
+// stops looking for the turn.
 function fmtRemaining(rem) {
+  if (!rem || !Number.isFinite(rem.distM) || !Number.isFinite(rem.sec)) return null;
+  // A real route always has SOME length. Zero means we have not got one.
+  if (rem.distM <= 0) return null;
   const mi = rem.distM / 1609.34;
   const distanceText = mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
   const etaText = `${Math.max(1, Math.round(rem.sec / 60))} min`;
@@ -125,6 +136,10 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   const guardRef = useRef(new RequestGuard());
   const programmatic = useRef(false);
   const overviewTimer = useRef(null);
+  // Read by the bounds fallback. Held as refs rather than dependencies so
+  // fitToRoute stays stable across GPS fixes.
+  const lastDriverRef = useRef(null);
+  const destRef = useRef(null);
 
   const [ready, setReady] = useState(false);
   const [routePath, setRoutePath] = useState(null);
@@ -136,11 +151,12 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     () => (destination && destination.lat != null ? { lat: Number(destination.lat), lng: Number(destination.lng) } : null),
     [destination?.lat, destination?.lng]
   );
+  destRef.current = destPt;
 
   const snapshot = useCallback(() => {
     const c = ctrlRef.current;
     setView({ mode: c.mode, step: c.currentStep(), next: c.nextStep(), heading: c.stableHeading });
-    if (onRouteInfo) onRouteInfo(fmtRemaining(c.remaining()));
+    if (onRouteInfo) onRouteInfo(fmtRemaining(c.remaining()) || {});
   }, [onRouteInfo]);
 
   const applyCamera = useCallback((cam) => {
@@ -156,9 +172,19 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   const fitToRoute = useCallback(() => {
     const map = mapRef.current;
     const c = ctrlRef.current;
-    if (!map || !window.google || !c.path.length) return;
+    if (!map || !window.google) return;
     const bounds = new window.google.maps.LatLngBounds();
-    c.path.forEach((p) => bounds.extend(p));
+    if (c.path.length) {
+      c.path.forEach((p) => bounds.extend(p));
+    } else {
+      // No route — a failed Directions call, or one still in flight. Fit the
+      // driver and the destination anyway, so the screen still answers "where
+      // am I and where am I going" instead of sitting at a default zoom with
+      // the destination off the edge.
+      const pts = [lastDriverRef.current, destRef.current].filter(Boolean);
+      if (pts.length < 2) return;
+      pts.forEach((pt) => bounds.extend(pt));
+    }
     programmatic.current = true;
     // Padding leaves room for the maneuver banner (top) and the bottom card so
     // the route/destination are never hidden behind the UI overlays.
@@ -212,6 +238,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     if (!ready || !hasDriver) return;
     const c = ctrlRef.current;
     if (c.viewportH < 100) { const h = mapRef.current?.getDiv()?.offsetHeight; if (h) c.setViewport(h); }
+    lastDriverRef.current = { lat: Number(driver.lat), lng: Number(driver.lng) };
     const res = c.onPosition({ lat: Number(driver.lat), lng: Number(driver.lng), heading: driver.heading, speedMph: driver.speedMph });
     if (res.camera) applyCamera(res.camera);
     if (res.needsReroute && res.rerouteOrigin) fetchRoute(res.rerouteOrigin, true);

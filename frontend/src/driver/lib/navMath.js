@@ -39,6 +39,28 @@ export function metersPerPixel(lat, zoom) {
 // Discrete zoom bands by distance-to-destination. Coarse on purpose: fewer,
 // larger bands mean the zoom only changes at meaningful thresholds instead of
 // jittering between levels on every GPS tick.
+// Navigation zoom, chosen by SPEED rather than by how far is left to drive.
+//
+// zoomForDistance below does the opposite, and that was the bug: it zoomed out
+// as a function of trip length, so a driver ten miles from the dropoff got
+// zoom 13 — street names unreadable, no idea which turning is theirs. The
+// length of the trip says nothing about how much road you need to see. What
+// matters is how fast you are covering it: at 25 mph the next 200 metres is
+// enough, at 70 mph you need to see the exit coming.
+//
+// Fractional zooms are deliberate — Google Maps interpolates them, so the
+// camera eases between levels instead of stepping.
+export function zoomForSpeed(mph) {
+  const v = Number.isFinite(mph) ? Math.max(0, mph) : 0;
+  if (v >= 60) return 15.8;   // highway: see the exit well ahead
+  if (v >= 45) return 16.4;
+  if (v >= 30) return 17.0;   // arterial
+  if (v >= 12) return 17.6;   // town streets
+  return 18.2;                // stopped or crawling: maximum street detail
+}
+
+// Kept for the OVERVIEW camera, where fitting the whole route IS the job.
+// Never use this for follow mode.
 export function zoomForDistance(m) {
   if (m > 4000) return 13;
   if (m > 2000) return 14;
