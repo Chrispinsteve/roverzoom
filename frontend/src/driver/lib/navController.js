@@ -148,9 +148,41 @@ export class NavController {
   currentStep() { return this.stepMeta[this.stepIndex] || null; }
   nextStep() { return this.stepMeta[this.stepIndex + 1] || null; }
 
+  // Remaining distance is exact (route length minus progress along it).
+  //
+  // Remaining TIME used to be that fraction applied to the total duration,
+  // which silently assumed every mile takes the same time. On a route that is
+  // mostly highway and then city streets, the ETA barely moves for twenty
+  // minutes and then collapses — because the highway miles were being costed
+  // at the average, and the city miles at the average too.
+  //
+  // Now: the current step is prorated by how far through it the driver is, and
+  // every later step contributes its own duration. Falls back to the old
+  // interpolation when a route arrived without per-step timings.
   remaining() {
     const distM = Math.max(0, this.totalDistM - this.progressM);
-    const sec = this.totalDistM > 0 ? this.totalDurSec * (distM / this.totalDistM) : this.totalDurSec;
+
+    const haveStepTimings = this.stepMeta.some((s) => s && s.durSec > 0);
+    if (!haveStepTimings || !this.stepMeta.length) {
+      const sec = this.totalDistM > 0 ? this.totalDurSec * (distM / this.totalDistM) : this.totalDurSec;
+      return { distM, sec };
+    }
+
+    // Where the current step started along the route, so we know how much of
+    // it is already behind the driver.
+    let startOfStep = 0;
+    for (let i = 0; i < this.stepIndex && i < this.stepMeta.length; i++) {
+      startOfStep += this.stepMeta[i].distM || 0;
+    }
+    const cur = this.stepMeta[this.stepIndex] || { distM: 0, durSec: 0 };
+    const intoStep = Math.max(0, this.progressM - startOfStep);
+    const curLeft = Math.max(0, (cur.distM || 0) - intoStep);
+    const curFrac = cur.distM > 0 ? curLeft / cur.distM : 0;
+
+    let sec = (cur.durSec || 0) * curFrac;
+    for (let i = this.stepIndex + 1; i < this.stepMeta.length; i++) {
+      sec += this.stepMeta[i].durSec || 0;
+    }
     return { distM, sec };
   }
 }

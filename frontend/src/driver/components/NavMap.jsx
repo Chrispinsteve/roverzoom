@@ -94,11 +94,28 @@ function parseDirections(route) {
   const path = [];
   const steps = [];
   (leg?.steps || []).forEach((s, si) => {
-    steps.push(parseManeuver({ maneuver: s.maneuver || null, instruction: stripHtml(s.instructions) }));
+    steps.push(parseManeuver({
+      maneuver: s.maneuver || null,
+      instruction: stripHtml(s.instructions),
+      // Carried per step so remaining time can be SUMMED rather than
+      // interpolated. Interpolating total duration by distance assumes every
+      // mile takes the same time, so a route that is mostly highway then city
+      // reports nonsense the moment the driver leaves the highway.
+      distM: s.distance?.value ?? 0,
+      durSec: s.duration?.value ?? 0,
+    }));
     const pts = s.path || [];
     pts.forEach((pt) => path.push({ lat: pt.lat(), lng: pt.lng(), step: si }));
   });
-  return { path, steps, totalDistM: leg?.distance?.value || 0, totalDurSec: leg?.duration?.value || 0 };
+  return {
+    path,
+    steps,
+    totalDistM: leg?.distance?.value || 0,
+    // duration_in_traffic is present only when drivingOptions was sent and
+    // Google has data for the road. Prefer it; fall back to free-flow.
+    totalDurSec: leg?.duration_in_traffic?.value || leg?.duration?.value || 0,
+    trafficAware: Boolean(leg?.duration_in_traffic?.value),
+  };
 }
 
 function VehicleMarker({ position, intervalMs }) {
@@ -198,7 +215,18 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     const token = guardRef.current.begin();
     const svc = new window.google.maps.DirectionsService();
     svc.route(
-      { origin, destination: destPt, travelMode: window.google.maps.TravelMode.DRIVING },
+      {
+        origin,
+        destination: destPt,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        // Without drivingOptions the Directions API returns FREE-FLOW time —
+        // the road as if empty. On I-95 at 5pm that is fiction, and it was
+        // what the driver's ETA had always been built on.
+        drivingOptions: {
+          departureTime: new Date(),
+          trafficModel: window.google.maps.TrafficModel.BEST_GUESS,
+        },
+      },
       (res, status) => {
         // Race guard: ignore a response that a newer request has superseded.
         if (!guardRef.current.isCurrent(token)) return;

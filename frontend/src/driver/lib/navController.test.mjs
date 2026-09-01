@@ -178,4 +178,60 @@ function dropoffRoute() {
   ok('race guard: a late/stale route response cannot overwrite a newer route');
 }
 
+// --- remaining(): summed, not interpolated -------------------------------
+// A route that is mostly fast highway and then slow city streets. Interpolating
+// total duration by distance costs every mile the same, so the ETA barely moves
+// through the highway leg and then collapses in the city leg. Summing the steps
+// still ahead gives the truth at every point.
+{
+  // 10km of highway in 5 min, then 2km of city in 10 min.
+  const path = [];
+  for (let i = 0; i <= 100; i++) path.push({ lat: 26.0 + i * 0.001, lng: -80.1, step: i < 84 ? 0 : 1 });
+  const steps = [
+    { action: 'Continue', road: 'I-95', distM: 10000, durSec: 300 },
+    { action: 'Turn right', road: 'Main St', distM: 2000, durSec: 600 },
+  ];
+  const c = new NavController();
+  c.setRoute({ path, steps, totalDistM: 12000, totalDurSec: 900 });
+
+  // At the very start, the whole 15 minutes is ahead.
+  let r = c.remaining();
+  assert.ok(Math.abs(r.sec - 900) < 30, `at the start ~900s remain, got ${Math.round(r.sec)}`);
+
+  // Simulate having driven the entire highway leg: 10km done, 2km of city left.
+  c.progressM = 10000;
+  c.stepIndex = 1;
+  r = c.remaining();
+
+  // The truth: the 10-minute city leg is what remains.
+  assert.ok(Math.abs(r.sec - 600) < 30, `after the highway ~600s remain, got ${Math.round(r.sec)}`);
+
+  // What the old interpolation would have claimed: 900 * (2000/12000) = 150s.
+  // Two and a half minutes for a leg that genuinely takes ten.
+  const interpolated = 900 * (2000 / 12000);
+  assert.ok(
+    r.sec > interpolated * 3,
+    `summed estimate (${Math.round(r.sec)}s) must far exceed the interpolated one (${Math.round(interpolated)}s)`
+  );
+  ok('remaining time sums the steps ahead instead of interpolating the total');
+
+  // Distance stays exact either way.
+  assert.ok(Math.abs(r.distM - 2000) < 1, 'remaining distance is route length minus progress');
+  ok('remaining distance is unaffected');
+}
+
+{
+  // A route with no per-step timings (an older response, or a provider that
+  // omits them) must still produce a sane number rather than zero.
+  const path = [];
+  for (let i = 0; i <= 50; i++) path.push({ lat: 26.0 + i * 0.001, lng: -80.1, step: 0 });
+  const c = new NavController();
+  c.setRoute({ path, steps: [{ action: 'Continue', road: 'X' }], totalDistM: 5000, totalDurSec: 600 });
+  c.progressM = 2500;
+  const r = c.remaining();
+  assert.ok(r.sec > 0, 'falls back to interpolation when steps carry no durations');
+  ok('degrades to interpolation when per-step timings are missing');
+}
+
+
 console.log(`\nnavController: ${n}/9 lifecycle groups passed`);

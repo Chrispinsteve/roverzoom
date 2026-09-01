@@ -239,5 +239,10 @@ export function parseManeuver(step) {
     road: roadFromInstruction(step.instruction || ''),
     maneuver: step.maneuver || null,
     instruction: step.instruction || '',
+    // Carried so remaining time can be summed over the steps still ahead
+    // rather than interpolated from the total. Default 0 keeps older callers
+    // (and the tests) working unchanged.
+    distM: Number(step.distM) || 0,
+    durSec: Number(step.durSec) || 0,
   };
 }

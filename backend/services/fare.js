@@ -66,7 +66,9 @@ async function estimate(pickup, dropoff, whenIso) {
   let routedMinutes = null; // real driving minutes when a route is available
 
   if (hasCoords) {
-    const route = await roadRoute(pickup, dropoff);
+    // The scheduled time is passed so the quote reflects traffic at the hour
+    // the ride actually happens, not at the moment of booking.
+    const route = await roadRoute(pickup, dropoff, whenIso);
     if (route && Number.isFinite(route.miles)) {
       distanceMiles = route.miles;      // actual road distance
       routedMinutes = route.minutes;    // actual driving time
