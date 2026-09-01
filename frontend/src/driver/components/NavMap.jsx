@@ -323,7 +323,10 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     const key = `${c.routeVersion}:${c.stepIndex}`;
     if (laneCache.current.key !== key) laneCache.current = { key, donePast: l.donePast, ahead: l.ahead };
     setLanes({ ...l, donePast: laneCache.current.donePast, ahead: laneCache.current.ahead });
-    if (onRouteInfo) onRouteInfo(fmtRemaining(c.remaining()) || {});
+    // The screens need the PHASE too, not just the numbers: arriving is when a
+    // driver stops needing directions and starts needing the thing they do on
+    // arrival.
+    if (onRouteInfo) onRouteInfo({ ...(fmtRemaining(c.remaining()) || {}), phase: c.approachPhase() });
   }, [onRouteInfo]);
 
   // ============================================================

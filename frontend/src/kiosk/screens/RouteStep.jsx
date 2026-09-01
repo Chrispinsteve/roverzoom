@@ -7,7 +7,7 @@ import PriceSlab from '../components/PriceSlab';
 import { combineDayTime } from '../lib/datetime';
 import { api } from '../../lib/api';
 
-export default function RouteStep({ booking, onChange, onNext, onBack }) {
+export default function RouteStep({ booking, onChange, onNext, onBack, step = 1, totalSteps = 3 }) {
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState(false);
 
@@ -66,7 +66,7 @@ export default function RouteStep({ booking, onChange, onNext, onBack }) {
   );
 
   return (
-    <FlowShell title="Where to?" step={1} totalSteps={3} onBack={onBack} footer={footer}>
+    <FlowShell title="Where to?" step={step} totalSteps={totalSteps} onBack={onBack} footer={footer}>
       <span className="k-q">Where are you headed?</span>
       <span className="k-q-sub">Enter your pickup and destination</span>
 

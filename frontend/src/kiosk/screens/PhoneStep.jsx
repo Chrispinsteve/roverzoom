@@ -2,7 +2,7 @@ import FlowShell from '../components/FlowShell';
 import PhoneKeypad from '../components/PhoneKeypad';
 import { fmtPhone } from '../lib/phone';
 
-export default function PhoneStep({ booking, onChange, onNext, onBack }) {
+export default function PhoneStep({ booking, onChange, onNext, onBack, step = 2, totalSteps = 3 }) {
   const digits = booking.phoneDigits || '';
   // Email stays OPTIONAL. It is what lets Stripe Link recognise a returning
   // rider and fill in their saved card, and it is what a receipt is sent to —
@@ -21,7 +21,7 @@ export default function PhoneStep({ booking, onChange, onNext, onBack }) {
   );
 
   return (
-    <FlowShell title="Your details" step={2} totalSteps={3} onBack={onBack} footer={footer}>
+    <FlowShell title="Your details" step={step} totalSteps={totalSteps} onBack={onBack} footer={footer}>
       <span className="k-q">Who's riding?</span>
       <span className="k-q-sub">We'll text your confirmation and tracking link here</span>
 

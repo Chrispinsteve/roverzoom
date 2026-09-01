@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import DriverShell from '../DriverShell';
 import Icon from '../../components/Icon';
 import NavMap from '../components/NavMap';
@@ -6,6 +6,7 @@ import { mapsUrl } from '../lib/maps';
 import { addressLines, houseNumber } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
 import NavSheet from '../components/NavSheet';
+import AirportBand from '../components/AirportBand';
 
 export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error }) {
   const [route, setRoute] = useState({});
@@ -20,6 +21,20 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
   // irreversibly, and it was sitting under the driver's thumb for the whole
   // journey. Now reaching it takes an expand plus a confirm.
   const [expanded, setExpanded] = useState(false);
+  // Once the car is at the drop-off, End Trip is the only thing the driver
+  // wants and it is hidden inside the sheet. Opening it for them removes a
+  // swipe at the moment they are parking, often one-handed with a passenger
+  // getting out.
+  //
+  // ONCE, and only once. If the driver closes it again that is a decision, and
+  // re-opening on the next GPS fix would be the app arguing with them —
+  // repeatedly, every few seconds, while they are trying to do something else.
+  const openedOnArrival = useRef(false);
+  useEffect(() => {
+    if (route.phase !== 'arriving' || openedOnArrival.current) return;
+    openedOnArrival.current = true;
+    setExpanded(true);
+  }, [route.phase]);
   // Ending a trip is irreversible from the driver's side: complete_booking()
   // flips the status, writes the earnings row and increments rides_completed
   // in one transaction. A single mistaken tap while holding the phone is not

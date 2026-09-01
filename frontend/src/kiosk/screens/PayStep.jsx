@@ -11,7 +11,7 @@ import { AGE_ATTESTATION, TERMS_VERSION } from '../lib/terms';
 // Card books first (payment_status stays pending), then Stripe's Payment
 // Element mounts inline and the rider pays without ever leaving the flow.
 // The webhook — not this client — is what finally marks the booking paid.
-export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
+export default function PayStep({ booking, onChange, onConfirmed, onBack, step = 3, totalSteps = 3 }) {
   const [phase, setPhase] = useState('choose'); // 'choose' | 'card'
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -40,6 +40,11 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
       // screen; the server re-stamps the timestamp so a client clock cannot
       // decide when consent happened.
       termsVersion: TERMS_VERSION,
+      // Airport details, when the rider gave any. The server re-derives which
+      // end of the trip is the airport rather than trusting this, because it
+      // decides whether the driver is sent to departures or arrivals —
+      // different roads at every airport.
+      flight: booking.flight || undefined,
     });
     setPendingBooking(result);
     return result;
@@ -123,8 +128,8 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
     return (
       <FlowShell
         title="Card payment"
-        step={3}
-        totalSteps={3}
+        step={step}
+        totalSteps={totalSteps}
         onBack={() => setPhase('choose')}
         footer={(
           <div className="k-footer-bar">
@@ -147,8 +152,8 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack }) {
   return (
     <FlowShell
       title="Payment"
-      step={3}
-      totalSteps={3}
+      step={step}
+      totalSteps={totalSteps}
       onBack={onBack}
       footer={(
         <div className="k-footer-bar">

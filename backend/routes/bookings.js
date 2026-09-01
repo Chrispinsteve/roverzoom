@@ -5,6 +5,7 @@ const { estimate } = require('../services/fare');
 const { makeReference } = require('../services/reference');
 const { sendBookingConfirmation } = require('../services/sms');
 const { notifyDriversOfNewRequest, notifyDriverOfCancellation } = require('../services/driverNotify');
+const { detectAirportLeg, cleanFlightDetails, COMMON_AIRLINES } = require('../services/airport');
 
 const router = express.Router();
 
@@ -43,10 +44,25 @@ function withDriverInfo(booking) {
 }
 
 // POST /api/bookings — create a confirmed booking
+// Is either end of this trip an airport, and if so which zones can the rider
+// pick from? Public and read-only: it takes two address strings and returns a
+// small static description, so it needs no auth and leaks nothing.
+//
+// Server-side rather than a list shipped to the client, so the airports served
+// can change without a release, and so the booking form and the row that gets
+// written can never disagree about what counts as an airport.
+router.get('/airport-leg', (req, res) => {
+  const leg = detectAirportLeg({
+    pickupAddress: req.query.pickup, dropoffAddress: req.query.dropoff,
+  });
+  if (!leg) return res.json({ airport: null });
+  res.json({ airport: { ...leg, airlines: COMMON_AIRLINES } });
+});
+
 router.post('/', async (req, res) => {
   const {
     pickup, dropoff, scheduledAt, paymentMethod,
-    rider, source = 'form', termsVersion,
+    rider, source = 'form', termsVersion, flight,
   } = req.body || {};
 
   if (!pickup?.address || !dropoff?.address || !scheduledAt || !paymentMethod) {
@@ -98,6 +114,13 @@ router.post('/', async (req, res) => {
         // must not be what decides when consent happened. The VERSION comes
         // from the client because only the client knows which wording was
         // actually on screen.
+        // Airport details, when the rider gave them. The ROLE is derived here
+        // from which end of the trip is the airport rather than trusted from
+        // the client — it decides whether the driver is told to go to
+        // departures or arrivals, and those are different roads.
+        ...(cleanFlightDetails(flight, detectAirportLeg({
+          pickupAddress: pickup.address, dropoffAddress: dropoff.address,
+        })) || {}),
         terms_version: typeof termsVersion === 'string' ? termsVersion.slice(0, 64) : null,
         terms_accepted_at: termsVersion ? new Date().toISOString() : null,
     });

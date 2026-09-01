@@ -6,6 +6,7 @@ import { mapsUrl } from '../lib/maps';
 import { addressLines, houseNumber } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
 import NavSheet from '../components/NavSheet';
+import AirportBand from '../components/AirportBand';
 
 export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
   const [route, setRoute] = useState({});

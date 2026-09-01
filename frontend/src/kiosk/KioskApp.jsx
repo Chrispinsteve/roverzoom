@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Attract from './screens/Attract';
 import RouteStep from './screens/RouteStep';
+import FlightStep from './screens/FlightStep';
 import PhoneStep from './screens/PhoneStep';
 import PayStep from './screens/PayStep';
 import Confirm from './screens/Confirm';
@@ -9,12 +10,14 @@ import MyRides from './screens/MyRides';
 import VoiceAssistant from './components/VoiceAssistant';
 import { reportBookingConversion } from '../lib/gtag';
 import { track as trackEvent } from '../lib/track';
+import { req } from '../lib/api';
 
 const EMPTY_BOOKING = {
   pickup: null, dropoff: null,
   dayIso: null, dayLabel: null, timeLabel: null,
   quote: null,
   name: '', phoneDigits: '', phone: '', email: '',
+  flight: null,
   payment: null,
 };
 
@@ -25,6 +28,27 @@ export default function KioskApp({ onDriverMode }) {
   const [trackToken, setTrackToken] = useState(null); // booking UUID id (unguessable)
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantBooking, setAssistantBooking] = useState(null);
+  // Whether either end of this trip is an airport, answered by the server so
+  // the question is asked on exactly the trips the driver would otherwise have
+  // to ask about. Null means "not an airport ride" and the step is skipped.
+  const [airport, setAirport] = useState(null);
+  // The flow gains a step on airport rides, so the progress dots have to say
+  // four rather than lying about three.
+  const totalSteps = airport ? 4 : 3;
+
+  useEffect(() => {
+    const pickup = booking.pickup?.address;
+    const dropoff = booking.dropoff?.address;
+    if (!pickup || !dropoff) { setAirport(null); return undefined; }
+    let live = true;
+    const q = new URLSearchParams({ pickup, dropoff });
+    req(`/bookings/airport-leg?${q}`)
+      .then((r) => { if (live) setAirport(r?.airport || null); })
+      // A failed lookup must never block a booking. The rider simply does not
+      // get asked, which is exactly where things stand today.
+      .catch(() => { if (live) setAirport(null); });
+    return () => { live = false; };
+  }, [booking.pickup?.address, booking.dropoff?.address]);
 
   // Funnel steps fire at most once per visit. Without this, `patch` would
   // re-report pickup_set on every keystroke that touches the address.

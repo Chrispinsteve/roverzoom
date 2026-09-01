@@ -851,6 +851,18 @@ input, textarea { font-family: inherit; }
   box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.30);
 }
 .drv-nav-stats { display: flex; gap: 26px; margin-bottom: 10px; }
+/* Airport band. Sits above the numbers and outside the collapsible sheet: it
+   is the one fact that changes where the vehicle physically goes, so it is
+   never something the driver has to open a drawer to find. */
+.drv-air { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 0 12px; border: 1.5px solid; border-radius: 14px; background: rgba(255, 255, 255, 0.04); }
+.drv-air-glyph { flex-shrink: 0; display: flex; }
+.drv-air-main { flex: 1; min-width: 0; }
+.drv-air-role { font-size: 10.5px; font-weight: 800; letter-spacing: 0.11em; }
+.drv-air-zone { display: flex; align-items: baseline; gap: 7px; margin-top: 1px; }
+.drv-air-zone-k { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink-3); }
+/* Deliberately the biggest type in the card. */
+.drv-air-zone-v { font-size: 27px; font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); }
+.drv-air-sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Collapsed, the card is two numbers and a grip. The map gets the rest of the
    screen, which is the only part of this view a driver is reading at speed. */
 .drv-nav-card--collapsed { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
