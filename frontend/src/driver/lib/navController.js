@@ -19,7 +19,12 @@ export const NAV_DEFAULTS = {
   deviationThreshM: 65,    // beyond this from the route = off-route (tunable)
   sustainedTicks: 3,       // consecutive off-route fixes before a reroute
   cooldownMs: 8000,        // min gap between reroutes
-  repanThreshM: 8,         // min driver movement before the camera re-pans
+  // Min driver movement before the camera takes a new target. Was 8m, which
+  // combined with ~5s fixes is why the map moved in visible steps. The camera
+  // now eases between targets every frame, and snapping already removes
+  // stationary jitter, so this only has to be large enough to ignore a parked
+  // car's drift — not to hide the lack of interpolation.
+  repanThreshM: 2,
   headingMoveThreshM: 6,   // below this movement, hold heading (no spin)
   aheadFraction: 0.26,
   alternateCheckMs: 120000, // how often to look for a faster route while following
@@ -133,7 +138,18 @@ export class NavController {
     return 'cruise';
   }
 
+  // cameraFor with the bookkeeping; cameraAt without it.
+  //
+  // The renderer calls cameraAt once per animation frame with an interpolated
+  // position, so it must not mutate anything — sixty writes a second to
+  // lastCenter would break the repan check it feeds.
   cameraFor(pos) {
+    const cam = this.cameraAt(pos);
+    this.lastCenter = { lat: Number(pos.lat), lng: Number(pos.lng) };
+    return cam;
+  }
+
+  cameraAt(pos) {
     const p = { lat: Number(pos.lat), lng: Number(pos.lng) };
     const phase = this.approachPhase();
     // Speed, not remaining distance. See zoomForSpeed for why.
@@ -173,7 +189,6 @@ export class NavController {
       if (distanceMeters(p, dest) > 8) aim = bearing(p, dest);
     }
     const center = lookAheadCenter(p, aim, this.viewportH, zoom, ahead);
-    this.lastCenter = { lat: p.lat, lng: p.lng };
     // Carried so a vector map can rotate to heading-up. Ignored on raster.
     return { center, zoom, phase, heading: this.stableHeading ?? 0 };
   }

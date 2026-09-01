@@ -5,6 +5,7 @@ import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
 import { addressLines, houseNumber } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
+import NavSheet from '../components/NavSheet';
 
 export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error }) {
   const [route, setRoute] = useState({});
@@ -42,33 +43,28 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
         </div>
 
         <div className={`drv-nav-card${expanded ? '' : ' drv-nav-card--collapsed'}`}>
-          <button
-            type="button"
-            className="drv-nav-expand"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            aria-label={expanded ? 'Hide trip details' : 'Show trip details'}
+
+          <NavSheet
+            expanded={expanded}
+            onToggle={setExpanded}
+            label="Show or hide trip details"
+            header={(
+            <div className="drv-nav-stats">
+              <div>
+                <div className="drv-nav-stat-k">ETA</div>
+                <div className="drv-nav-stat-v">{route.etaText || '—'}</div>
+              </div>
+              <div>
+                <div className="drv-nav-stat-k">Distance</div>
+                <div className="drv-nav-stat-v">{route.distanceText || `${booking.distance_miles} mi`}</div>
+              </div>
+              {/* No earnings here, deliberately. The figure is the driver's
+                  private business and the back seat can read this screen; it also
+                  keeps them doing arithmetic instead of driving. It is shown on
+                  TripComplete, where it is the point rather than a distraction. */}
+            </div>
+            )}
           >
-            <span className="drv-nav-grip" />
-          </button>
-
-          <div className="drv-nav-stats">
-            <div>
-              <div className="drv-nav-stat-k">ETA</div>
-              <div className="drv-nav-stat-v">{route.etaText || '—'}</div>
-            </div>
-            <div>
-              <div className="drv-nav-stat-k">Distance</div>
-              <div className="drv-nav-stat-v">{route.distanceText || `${booking.distance_miles} mi`}</div>
-            </div>
-            {/* No earnings here, deliberately. The figure is the driver's
-                private business and the back seat can read this screen; it also
-                keeps them doing arithmetic instead of driving. It is shown on
-                TripComplete, where it is the point rather than a distraction. */}
-          </div>
-
-          {expanded && (
-            <>
               {booking.rider_name && (
                 <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
               )}
@@ -108,8 +104,7 @@ export default function OnTrip({ booking, driverPosition, onEndTrip, busy, error
                   End Trip
                 </button>
               )}
-            </>
-          )}
+          </NavSheet>
 
           {/* An error must never be hidden behind a collapsed card. */}
           {!expanded && error && <p className="error-text center" style={{ margin: '8px 0 0' }}>{error}</p>}

@@ -326,31 +326,89 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     if (onRouteInfo) onRouteInfo(fmtRemaining(c.remaining()) || {});
   }, [onRouteInfo]);
 
-  const applyCamera = useCallback((cam) => {
-    const map = mapRef.current;
-    if (!map || !cam) return;
-    programmatic.current = true;
-    if (map.getZoom() !== cam.zoom) map.setZoom(cam.zoom);
-    map.panTo(cam.center);
+  // ============================================================
+  // Camera loop — the map GLIDES, it does not step
+  // ============================================================
+  // Before this the camera moved only when a GPS fix arrived AND the driver had
+  // travelled 8m. Fixes are ~5s apart, so the map sat perfectly still for
+  // several seconds and then jumped to a new position. Meanwhile the vehicle
+  // marker was being interpolated smoothly between fixes by useAnimatedPosition
+  // — so the car glided over a map that lurched underneath it, which is the
+  // worst of both and exactly what "moving case by case to fit the screen"
+  // describes.
+  //
+  // iOS glides because its camera follows an INTERPOLATED position, not the raw
+  // fixes. Same here: each fix sets a target, and a requestAnimationFrame loop
+  // eases the camera toward it every frame using the same easing and duration
+  // the marker uses, so the two stay locked together.
+  //
+  // Runs entirely through refs. Sixty setState calls a second would re-render
+  // the whole map subtree; nothing here touches React state.
+  const camFrom = useRef(null);   // where the camera position started easing from
+  const camTo = useRef(null);     // the latest fix, where it is easing toward
+  const camAt = useRef(null);     // where it is right now
+  const camStart = useRef(0);
+  const camRaf = useRef(null);
+  const camZoom = useRef(null);   // eased separately and much more slowly
+  const expectedZoom = useRef(null);
 
-    // Vector maps only — a raster map ignores both of these outright.
-    if (IS_VECTOR) {
-      // HEADING-UP. Rotating the map so travel direction is screen-up is what
-      // finally puts the vehicle in the lower third for EVERY heading. On a
-      // north-up map the look-ahead offset points geographically ahead, so it
-      // only reads as "below centre" when the driver happens to be going north;
-      // heading east it pushed them to the left edge instead.
-      if (Number.isFinite(cam.heading)) map.setHeading(cam.heading);
-      // Tilt flattens on arrival. Perspective helps read a street you are
-      // travelling along; it hurts when the task is picking out which of four
-      // doors to stop at, where a plan view is strictly better.
-      const tilt = cam.phase === 'arriving' ? 0 : NAV_TILT_DEG;
-      if (map.getTilt() !== tilt) map.setTilt(tilt);
+  const setCameraTarget = useCallback((pos) => {
+    if (!pos) return;
+    const next = { lat: Number(pos.lat), lng: Number(pos.lng) };
+    if (!camAt.current) { camAt.current = next; camFrom.current = next; camTo.current = next; return; }
+    // A jump this large is a signal recovery or a bad fix, not driving. Easing
+    // across it would slide the map for seconds; snapping is honest.
+    if (Math.abs(next.lat - camAt.current.lat) > 0.009 || Math.abs(next.lng - camAt.current.lng) > 0.009) {
+      camAt.current = next; camFrom.current = next; camTo.current = next; return;
     }
-
-    window.clearTimeout(applyCamera._t);
-    applyCamera._t = window.setTimeout(() => { programmatic.current = false; }, 420);
+    camFrom.current = { ...camAt.current };
+    camTo.current = next;
+    camStart.current = performance.now();
   }, []);
+
+  useEffect(() => {
+    if (!ready) return undefined;
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+    const tick = (now) => {
+      camRaf.current = requestAnimationFrame(tick);
+      const map = mapRef.current;
+      const c = ctrlRef.current;
+      // 'free' means the driver is looking somewhere on purpose. Leave it alone.
+      if (!map || !c || c.mode !== 'follow' || !camTo.current || !camFrom.current) return;
+
+      const t = Math.min(1, (now - camStart.current) / Math.max(250, updateIntervalMs));
+      const e = easeOut(t);
+      const at = {
+        lat: camFrom.current.lat + (camTo.current.lat - camFrom.current.lat) * e,
+        lng: camFrom.current.lng + (camTo.current.lng - camFrom.current.lng) * e,
+      };
+      camAt.current = at;
+
+      const cam = c.cameraAt(at);
+      // Zoom eases far more slowly than position. It changes only when the
+      // driver's speed band changes, and a zoom that raced the pan would read
+      // as the map lunging at them.
+      if (camZoom.current == null) camZoom.current = cam.zoom;
+      camZoom.current += (cam.zoom - camZoom.current) * 0.05;
+      if (Math.abs(camZoom.current - cam.zoom) < 0.005) camZoom.current = cam.zoom;
+
+      expectedZoom.current = camZoom.current;
+      if (map.moveCamera) {
+        map.moveCamera({ center: cam.center, zoom: camZoom.current });
+      } else {
+        map.setCenter(cam.center);
+        map.setZoom(camZoom.current);
+      }
+
+      if (IS_VECTOR) {
+        if (Number.isFinite(cam.heading)) map.setHeading(cam.heading);
+        const tilt = cam.phase === 'arriving' ? 0 : NAV_TILT_DEG;
+        if (map.getTilt() !== tilt) map.setTilt(tilt);
+      }
+    };
+    camRaf.current = requestAnimationFrame(tick);
+    return () => { if (camRaf.current) cancelAnimationFrame(camRaf.current); camRaf.current = null; };
+  }, [ready, updateIntervalMs]);
 
   // Frame the journey inside the part of the map that is actually VISIBLE.
   //
@@ -488,10 +546,13 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     if (c.viewportH < 100) { const h = mapRef.current?.getDiv()?.offsetHeight; if (h) c.setViewport(h); }
     lastDriverRef.current = { lat: Number(driver.lat), lng: Number(driver.lng) };
     const res = c.onPosition({ lat: Number(driver.lat), lng: Number(driver.lng), heading: driver.heading, speedMph: driver.speedMph });
-    if (res.camera) applyCamera(res.camera);
+    // Hand the loop a new target; it eases there over the next interval. The
+    // controller's own repan threshold still decides WHETHER the camera should
+    // track this fix at all, so a parked car with drifting GPS stays put.
+    if (res.camera) setCameraTarget(res.visual || res.camera.center);
     if (res.needsReroute && res.rerouteOrigin) fetchRoute(res.rerouteOrigin, true);
     snapshot();
-  }, [ready, hasDriver, driver?.lat, driver?.lng, driver?.heading, applyCamera, fetchRoute, snapshot, driver]);
+  }, [ready, hasDriver, driver?.lat, driver?.lng, driver?.heading, setCameraTarget, fetchRoute, snapshot, driver]);
 
   useEffect(() => () => { window.clearTimeout(overviewTimer.current); }, []);
 
@@ -512,7 +573,20 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
     return () => window.clearInterval(t);
   }, [ready, hasDriver, fetchRoute]);
 
-  const onGesture = useCallback(() => {
+  // setCenter/moveCamera never fire dragstart, so a drag is unambiguously the
+  // driver's hand.
+  const onDrag = useCallback(() => {
+    if (programmatic.current) return;
+    ctrlRef.current.onUserGesture();
+    setView((v) => ({ ...v, mode: ctrlRef.current.mode }));
+  }, []);
+
+  // zoom_changed fires for our own per-frame writes too, so it cannot be
+  // trusted on its own. A pinch is a zoom the loop did not ask for.
+  const onZoomGesture = useCallback(() => {
+    const z = mapRef.current?.getZoom();
+    if (!Number.isFinite(z)) return;
+    if (expectedZoom.current != null && Math.abs(z - expectedZoom.current) < 0.05) return;
     if (programmatic.current) return;
     ctrlRef.current.onUserGesture();
     setView((v) => ({ ...v, mode: ctrlRef.current.mode }));
@@ -523,10 +597,14 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   const retryRoute = useCallback(() => { setRouteError(null); }, []);
 
   const recenter = useCallback(() => {
-    const cam = ctrlRef.current.recenter();
-    if (cam) applyCamera(cam);
+    const c = ctrlRef.current;
+    c.recenter();
+    // Ease from wherever the map is now rather than teleporting: the driver
+    // just chose to come back, and a jump loses their sense of where they were.
+    const back = c.visualPosition() || c.lastPos;
+    if (back) { camFrom.current = camAt.current || back; camTo.current = { lat: back.lat, lng: back.lng }; camStart.current = performance.now(); }
     setView((v) => ({ ...v, mode: 'follow' }));
-  }, [applyCamera]);
+  }, []);
 
   const initialCenter = useMemo(() => {
     if (hasDriver) return { lat: Number(driver.lat), lng: Number(driver.lng) };
@@ -563,8 +641,8 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
         options={MAP_OPTIONS}
         onLoad={onLoad}
         onUnmount={onUnmount}
-        onDragStart={onGesture}
-        onZoomChanged={onGesture}
+        onDragStart={onDrag}
+        onZoomChanged={onZoomGesture}
         onIdle={onZoom}
       >
         {/* ---- Trace Lane ------------------------------------------------

@@ -5,6 +5,7 @@ import NavMap from '../components/NavMap';
 import { mapsUrl } from '../lib/maps';
 import { addressLines, houseNumber } from '../lib/address';
 import PassengerRow from '../components/PassengerRow';
+import NavSheet from '../components/NavSheet';
 
 export default function NavigateToPickup({ booking, driverPosition, onArrived, busy, error }) {
   const [route, setRoute] = useState({});
@@ -32,29 +33,24 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
         </div>
 
         <div className={`drv-nav-card${expanded ? '' : ' drv-nav-card--collapsed'}`}>
-          <button
-            type="button"
-            className="drv-nav-expand"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            aria-label={expanded ? 'Hide pickup details' : 'Show pickup details'}
+
+          <NavSheet
+            expanded={expanded}
+            onToggle={setExpanded}
+            label="Show or hide pickup details"
+            header={(
+            <div className="drv-nav-stats">
+              <div>
+                <div className="drv-nav-stat-k">ETA</div>
+                <div className="drv-nav-stat-v">{route.etaText || '—'}</div>
+              </div>
+              <div>
+                <div className="drv-nav-stat-k">Distance</div>
+                <div className="drv-nav-stat-v">{route.distanceText || `${booking.distance_miles} mi`}</div>
+              </div>
+            </div>
+            )}
           >
-            <span className="drv-nav-grip" />
-          </button>
-
-          <div className="drv-nav-stats">
-            <div>
-              <div className="drv-nav-stat-k">ETA</div>
-              <div className="drv-nav-stat-v">{route.etaText || '—'}</div>
-            </div>
-            <div>
-              <div className="drv-nav-stat-k">Distance</div>
-              <div className="drv-nav-stat-v">{route.distanceText || `${booking.distance_miles} mi`}</div>
-            </div>
-          </div>
-
-          {expanded && (
-            <>
               {booking.rider_name && (
                 <PassengerRow name={booking.rider_name} phone={booking.rider_phone} compact />
               )}
@@ -72,8 +68,7 @@ export default function NavigateToPickup({ booking, driverPosition, onArrived, b
                   Open in Maps <span aria-hidden="true">↗</span>
                 </a>
               </div>
-            </>
-          )}
+          </NavSheet>
 
           {error && <p className="error-text center" style={{ margin: '0 0 10px' }}>{error}</p>}
           <button className="btn" onClick={onArrived} disabled={busy} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
