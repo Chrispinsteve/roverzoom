@@ -12,7 +12,11 @@
 //   node backend/scripts/backfill-pickup-coords.js --apply    # write
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const { geocodeOne } = require('../services/geocode');
+// Places DIRECTLY, not geocodeOne. geocodeOne falls back to OpenStreetMap when
+// Places is unavailable, which is right for live traffic — a rider booking must
+// not wait on a retry — and exactly wrong here, where OSM is the source being
+// corrected and a fallback result is indistinguishable from a good one.
+const { googlePlacesGeocode } = require('../services/geocode');
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -33,12 +37,40 @@ const metres = (a, b) => {
 
 const ACTIVE = ['pending', 'accepted', 'driver_assigned', 'driver_en_route', 'arrived'];
 
+// Places rate-limits a tight loop with HTTP 429, and geocodeOne catches that
+// and falls back to OpenStreetMap — the very source being corrected. The
+// source/precision guard below means a fallback result is skipped rather than
+// written, so a throttled run is safe but INCOMPLETE, and silently so. Pacing
+// the loop is what makes a single pass actually finish the job.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PACE_MS = 220;
+
+// Places rate-limits a tight loop with HTTP 429. Retried with backoff rather
+// than skipped: a run that quietly leaves rows unchecked because it went too
+// fast is worse than a slow one, because the output looks like success.
+async function placesWithBackoff(addr, tries = 5) {
+  let wait = 600;
+  for (let i = 0; i < tries; i++) {
+    await sleep(i === 0 ? PACE_MS : wait);
+    try {
+      return await googlePlacesGeocode(addr);
+    } catch (err) {
+      if (!String(err.message).includes('429') || i === tries - 1) throw err;
+      wait *= 2;
+    }
+  }
+  return null;
+}
+
 async function resolve(addr, lat, lng) {
   if (!addr || lat == null || lng == null) return null;
   const stored = { lat: Number(lat), lng: Number(lng) };
   let g;
-  try { g = await geocodeOne(addr); } catch { return null; }
-  if (!g || g.source !== 'google_places' || g.precision !== 'rooftop') {
+  try { g = await placesWithBackoff(addr); }
+  catch (err) { return { stored, skip: `places unavailable: ${err.message}` }; }
+  if (!g || g.precision !== 'rooftop') {
+    // Reported, not silent: a row skipped because Places was rate-limited
+    // looks identical to a row that is genuinely fine unless it is named.
     return { stored, skip: g ? `precision=${g.precision || '?'} source=${g.source || '?'}` : 'no result' };
   }
   const drift = metres(stored, { lat: g.lat, lng: g.lng });
@@ -64,7 +96,14 @@ async function resolve(addr, lat, lng) {
     const notes = [];
     for (const kind of ['pickup', 'dropoff']) {
       const r = await resolve(b[`${kind}_address`], b[`${kind}_lat`], b[`${kind}_lng`]);
-      if (!r || r.skip) continue;
+      if (!r) continue;
+      if (r.skip) {
+        // OSM is the source being corrected, so a fallback result is never a
+        // reason to rewrite a row — but it IS a reason to say the row was not
+        // checked properly.
+        if (r.skip.startsWith('places unavailable')) notes.push(`${kind} NOT CHECKED — ${r.skip}`);
+        continue;
+      }
       if (r.drift < MIN_DRIFT_M) continue;
       if (r.drift > MAX_AUTO_M) {
         notes.push(`${kind} ${r.drift.toFixed(0)}m TOO FAR — needs a human`);
