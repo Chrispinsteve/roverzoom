@@ -47,7 +47,7 @@ const ROUTE_BLUE_EDGE = '#0B57C4';  // deeper edge, holds the colour off the gre
 const TRACE_NOW = ROUTE_BLUE;
 const TRACE_AHEAD = '#7CBEFF';      // still to drive: present, not competing
 const TRACE_EDGE = ROUTE_BLUE_EDGE;
-const TRACE_DONE = '#BCC6C1';       // behind you: recedes
+const TRACE_DONE = '#C3BBB0';       // behind you: recedes, warm to match the ground
 
 // Framing insets, in CSS pixels. Named because fitBounds pads around
 // COORDINATES while the driver sees MARKERS, and the difference between the
@@ -520,10 +520,10 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
   }, [hasDriver, destPt, driver]);
 
   if (loadError || !hasApiKey) {
-    return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f5f2', color: '#5b615c', fontSize: 13, textAlign: 'center', padding: 20 }}>Map unavailable — use “Open in Maps” to navigate.</div>;
+    return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F1EEE9', color: '#6E675E', fontSize: 13, textAlign: 'center', padding: 20 }}>Map unavailable — use “Open in Maps” to navigate.</div>;
   }
   if (!isLoaded) {
-    return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f5f2', color: '#93a5a0', fontSize: 13 }}>Loading map…</div>;
+    return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F1EEE9', color: '#9A9186', fontSize: 13 }}>Loading map…</div>;
   }
 
   const step = view.step;

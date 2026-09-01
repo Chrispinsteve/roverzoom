@@ -20,8 +20,17 @@
 // what is useful is also why this survives Google adding new label classes.
 export const NAV_STYLES = [
   // --- surfaces ---------------------------------------------------------
-  { elementType: 'geometry', stylers: [{ color: '#E8EBE8' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#E4E9E4' }] },
+  // WARM, not cool. The palette was a grey-green, which reads as overcast and
+  // sits close in hue to both the parks and the mint the app uses elsewhere.
+  // Apple's ground is a warm off-white, and it works for two reasons worth
+  // copying: warm neutrals look like paper rather than like a screen, and they
+  // are the complement of the blue route, so the lane gains contrast from the
+  // background instead of fighting it.
+  { elementType: 'geometry', stylers: [{ color: '#F1EEE9' }] },
+  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#EFECE6' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#D9E6CF' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#AECFE3' }] },
+
   // Buildings, and the reason they were invisible twice over.
   //
   // First attempt set the FILL two points off the land, so footprints were
@@ -34,20 +43,26 @@ export const NAV_STYLES = [
   // So the lever that works is the STROKE, not the fill: a 1px outline dark
   // enough to read at a glance. It costs almost no visual weight — the shapes
   // appear, the ground stays quiet, and the route is untouched.
-  { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#E4E8E4' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#828C85' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#DFE7DF' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#D5E3E0' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#EAE7E1' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#A9A399' }] },
 
-  // --- road hierarchy, by value rather than by brightness ---------------
-  // Each tier is a few percent darker than the one below it. Enough to read
-  // the network at a glance; not enough to compete with mint.
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#D4D8D5' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#D4D8D5' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#C1C7C4' }] },
-  { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#AEB6B2' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#9EA7A3' }] },
-  { featureType: 'road.highway.controlled_access', elementType: 'geometry.fill', stylers: [{ color: '#A6AFAB' }] },
+  // --- roads are CHANNELS, not stripes ----------------------------------
+  // Inverted from what was here. Roads used to be painted DARKER than the
+  // land, which is backwards from how every map a driver has ever read works,
+  // and it made the network sit on top of the ground rather than being cut
+  // into it.
+  //
+  // Now roads are white with a grey casing — the surface is the lightest thing
+  // on the map and the casing gives it an edge. That is Apple's system, and it
+  // is what makes a street legible at a glance without the road needing to be
+  // dark. Hierarchy is carried by the casing weight and by the highway's warm
+  // tint, not by making the tarmac progressively grubbier.
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#C2BAAE' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.fill', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#B9B0A3' }] },
+  { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#FBEFD2' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#D9C99E' }] },
 
   // --- everything is silent until proven useful --------------------------
   { elementType: 'labels', stylers: [{ visibility: 'off' }] },
@@ -60,8 +75,8 @@ export const NAV_STYLES = [
   // --- and then: road names, because that is what the banner names -------
   // The banner says "Deerfield Pl"; the driver has to be able to find
   // Deerfield Pl on the map. Everything else stays off.
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ visibility: 'on' }, { color: '#6C746F' }] },
-  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ visibility: 'on' }, { color: '#E8EBE8' }, { weight: 3 }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ visibility: 'on' }, { color: '#6E675E' }] },
+  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ visibility: 'on' }, { color: '#F1EEE9' }, { weight: 3 }] },
   { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   // Local street names only from close in; at route zoom they are clutter.
   { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
@@ -89,7 +104,7 @@ export const NAV_STYLES = [
 export function mapOptionsFor(mapId) {
   const base = {
     disableDefaultUI: true, clickableIcons: false, gestureHandling: 'greedy',
-    keyboardShortcuts: false, backgroundColor: '#E8EBE8', minZoom: 4, maxZoom: 20,
+    keyboardShortcuts: false, backgroundColor: '#F1EEE9', minZoom: 4, maxZoom: 20,
   };
   // Passing BOTH mapId and styles logs a console warning and drops styles.
   return mapId ? { ...base, mapId } : { ...base, styles: NAV_STYLES };
