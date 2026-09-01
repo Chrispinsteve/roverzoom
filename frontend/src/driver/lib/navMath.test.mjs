@@ -3,7 +3,7 @@
 import assert from 'node:assert';
 import {
   distanceMeters, distanceToPath, advanceStepIndex,
-  shouldReroute, shouldRepan, followCamera, zoomForDistance, zoomForSpeed,
+  shouldReroute, shouldRepan, followCamera, zoomForDistance, zoomForSpeed, parseLaneHint,
   lookAheadCenter, metersPerPixel,
 } from './navMath.js';
 
@@ -154,6 +154,57 @@ const ok = (name) => { passed++; console.log('  ✓', name); };
     'a 10-mile trip must no longer force the far-out overview zoom'
   );
   ok('trip length no longer decides the navigation zoom');
+}
+
+
+// --- lane hints ----------------------------------------------------------
+// Real lane guidance (the row of permitted-lane arrows) is Navigation SDK
+// only — native, not web. What the web APIs sometimes give is lane advice
+// inside the instruction TEXT. Parsing that is honest; inferring a lane when
+// Google did not give one would put a driver in the wrong lane at speed.
+{
+  const cases = [
+    ['Use the right 2 lanes to turn right onto NW 2nd Ave', 'right', 2],
+    ['Use the left lane to turn left onto Glades Rd', 'left', 1],
+    ['Use the right three lanes to take exit 52', 'right', 3],
+    ['Use the middle lane to continue on I-95 S', 'middle', 1],
+    ['Use the center lane', 'middle', 1],
+  ];
+  for (const [text, side, count] of cases) {
+    const h = parseLaneHint(text);
+    assert.ok(h, `should parse: ${text}`);
+    assert.equal(h.side, side, `side for: ${text}`);
+    assert.equal(h.count, count, `count for: ${text}`);
+  }
+  ok('lane advice is read out of the instruction text');
+
+  // A fork is the same decision without the word "lane".
+  const fork = parseLaneHint('Keep left at the fork to continue on I-95 S');
+  assert.ok(fork && fork.side === 'left', 'keep-left is a usable hint');
+  assert.equal(fork.count, null, 'no count claimed when Google gave none');
+  ok('fork instructions yield a side but never an invented count');
+
+  // Anything without lane advice must yield NOTHING. This is the safety
+  // property: absent data has to look absent.
+  for (const text of [
+    'Turn right onto Congress Ave',
+    'Merge onto I-95 S',
+    'Continue straight',
+    'Take the exit toward Miami',
+    '', null, undefined,
+  ]) {
+    assert.equal(parseLaneHint(text), null, `must not invent a hint for: ${text}`);
+  }
+  ok('never invents a lane when Google did not give one');
+
+  // Absurd counts are rejected rather than rendered.
+  assert.equal(parseLaneHint('Use the right 47 lanes to turn right'), null, 'implausible count rejected');
+  ok('implausible lane counts are discarded');
+
+  // HTML from the legacy Directions API must not leak into the parse.
+  const html = parseLaneHint('Use the <b>right 2 lanes</b> to turn right onto <b>NW 2nd Ave</b>');
+  assert.ok(html && html.side === 'right' && html.count === 2, 'HTML instructions parse');
+  ok('handles the HTML instruction format');
 }
 
 

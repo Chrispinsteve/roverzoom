@@ -87,6 +87,34 @@ function fmtRemaining(rem) {
   return { etaText, distanceText };
 }
 
+// Lane advice, drawn only when Google actually gave some.
+//
+// A real lane diagram — the row showing every lane on the road with the valid
+// ones lit — needs the road's total lane count, which the web APIs never
+// return. Drawing five slots and lighting two would be inventing the road's
+// width, and a driver reading it at speed would believe it. So this renders
+// exactly what is known and no more: how many lanes, and which side.
+//
+// When there is no lane advice, the component renders nothing. Absent data
+// must look absent, not like a road with no lane restrictions.
+function LaneHint({ lane }) {
+  if (!lane) return null;
+  const arrow = lane.side === 'left' ? '\u2196' : lane.side === 'right' ? '\u2197' : '\u2191';
+  const label = lane.count
+    ? `${lane.side === 'middle' ? 'Middle' : lane.side === 'left' ? 'Left' : 'Right'} ${lane.count} lane${lane.count > 1 ? 's' : ''}`
+    : `Keep ${lane.side}`;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+      <span style={{ display: 'flex', gap: 2 }} aria-hidden="true">
+        {Array.from({ length: lane.count || 1 }).map((_, i) => (
+          <span key={i} style={{ fontSize: 13, lineHeight: 1, color: MINT, background: 'rgba(45,212,167,0.14)', borderRadius: 4, padding: '2px 3px' }}>{arrow}</span>
+        ))}
+      </span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: MINT, letterSpacing: '-0.01em' }}>{label}</span>
+    </div>
+  );
+}
+
 // Turn Directions' route into the controller's shape: a detailed path with each
 // vertex tagged by its step, plus parsed { action, road } maneuvers.
 function parseDirections(route) {
@@ -389,6 +417,7 @@ export default function NavMap({ driver, destination, destinationLabel = 'PICKUP
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{step.action}</div>
             {step.road && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.road}</div>}
+            <LaneHint lane={step.lane} />
             {view.next && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>then {maneuverGlyph(view.next.maneuver)} {view.next.action}{view.next.road ? ` · ${view.next.road}` : ''}</div>}
           </div>
         </div>

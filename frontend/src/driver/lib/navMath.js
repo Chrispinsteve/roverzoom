@@ -230,10 +230,56 @@ export function roadFromInstruction(instruction) {
   return road;
 }
 
+// Lane guidance, as far as it can honestly be provided.
+//
+// WHAT THIS IS NOT
+// Google's real lane guidance — the row of arrows showing which lanes are
+// valid — comes only from the Navigation SDK, which is native iOS/Android.
+// The web APIs do not expose lane counts, lane arrows, or which lanes are
+// permitted. The Routes API returns a maneuver and an instruction string and
+// nothing else.
+//
+// WHAT THIS IS
+// Google sometimes puts the lane advice INTO the instruction text: "Use the
+// right 2 lanes to turn right onto NW 2nd Ave". When it does, that is real
+// guidance from Google and worth showing properly instead of burying it in a
+// sentence. When it does not, this returns null and the UI shows nothing.
+//
+// The rule that matters: never infer, never guess a lane count, never fall
+// back to "probably the right lane". A driver who trusts an invented lane hint
+// at 60mph on I-95 is in danger. Absent data must look absent.
+const WORD_NUMBERS = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+
+export function parseLaneHint(instruction) {
+  if (!instruction) return null;
+  const text = String(instruction).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // "keep left/right" carries no "lane" but is the same decision at a fork or
+  // an exit, which is exactly where a driver needs it most.
+  if (!/\blanes?\b/i.test(text) && !/\bkeep (left|right)\b/i.test(text)) return null;
+
+  // "Use the right 2 lanes", "Use the left lane", "Use the middle lane"
+  const use = text.match(/\buse the (left|right|middle|center|centre)\s*(\d+|one|two|three|four|five)?\s*lanes?\b/i);
+  if (use) {
+    const side = use[1].toLowerCase().replace(/^(center|centre)$/, 'middle');
+    const raw = (use[2] || '').toLowerCase();
+    const count = raw ? (WORD_NUMBERS[raw] ?? parseInt(raw, 10)) : 1;
+    if (!Number.isFinite(count) || count < 1 || count > 6) return null;
+    return { side, count, source: 'google', text };
+  }
+
+  // "Keep left"/"Keep right" phrased with lanes — a side, but no count. Report
+  // the side and leave the count null rather than assuming one lane.
+  const keep = text.match(/\bkeep (left|right)\b/i);
+  if (keep) return { side: keep[1].toLowerCase(), count: null, source: 'google', text };
+
+  return null;
+}
+
+
 // { action, road } — action is from Google's maneuver field (trusted); road is
 // best-effort from the instruction text. Never a live distance.
 export function parseManeuver(step) {
-  if (!step) return { action: '', road: '', maneuver: null, instruction: '' };
+  if (!step) return { action: '', road: '', maneuver: null, instruction: '', lane: null };
   return {
     action: step.maneuver ? actionForManeuver(step.maneuver) : 'Continue straight',
     road: roadFromInstruction(step.instruction || ''),
@@ -244,6 +290,10 @@ export function parseManeuver(step) {
     // (and the tests) working unchanged.
     distM: Number(step.distM) || 0,
     durSec: Number(step.durSec) || 0,
+    // Lane advice IF Google put any in the instruction text, null otherwise.
+    // Parsed here so every consumer gets it from one place and none of them
+    // has to decide for itself what to do when there is no lane data.
+    lane: parseLaneHint(step.instruction || ''),
   };
 }
 
