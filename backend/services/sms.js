@@ -45,7 +45,14 @@ function toE164(phone) {
 }
 
 function baseUrl() {
-  return (process.env.PUBLIC_BASE_URL || 'https://roverzoom.com').replace(/\/+$/, '');
+  // Accepts either name. backend/.env defines PUBLIC_APP_URL while this read
+  // PUBLIC_BASE_URL, so the variable that looked like it configured the
+  // tracking link did nothing, and the link was correct only because the
+  // hardcoded fallback happened to match. That is the kind of config that
+  // works until someone moves domains and then silently texts riders a link to
+  // the wrong host.
+  return (process.env.PUBLIC_BASE_URL || process.env.PUBLIC_APP_URL || 'https://roverzoom.com')
+    .replace(/\/+$/, '');
 }
 
 // The tracking deep-link the rider opens on their own phone. Keyed by the
