@@ -69,8 +69,11 @@ async function notifyDriversOfNewRequest(booking) {
         continue;
       }
 
-      // No push subscription — SMS fallback, throttled per driver.
-      if (d.phone) {
+      // No push subscription: SMS fallback, throttled per driver, and only
+      // for drivers who opted in. The A2P campaign covers these messages, so
+      // a driver is a recipient like a rider is and needs the same
+      // demonstrable consent. NULL means no.
+      if (d.phone && d.sms_consent_at) {
         const last = lastSmsAt.get(d.id) || 0;
         if (now - last >= SMS_THROTTLE_MS) {
           lastSmsAt.set(d.id, now);

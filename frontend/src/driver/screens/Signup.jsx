@@ -108,6 +108,11 @@ export default function Signup({ onSwitchToLogin, onSignedUp }) {
           vehicle_model: form.vehicleModel.trim(),
           vehicle_color: form.vehicleColor.trim(),
           vehicle_plate: form.vehiclePlate.trim(),
+          // Operational SMS consent. A string because auth metadata is JSON the
+          // trigger reads with ->>, and recorded there rather than here so the
+          // timestamp comes from the database, not a device clock.
+          sms_consent: form.smsConsent ? 'true' : 'false',
+          sms_consent_version: DRIVER_SMS_CONSENT_VERSION,
         },
       },
     });
