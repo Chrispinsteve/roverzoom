@@ -24,7 +24,14 @@ export default function PhoneStep({ booking, onChange, onNext, onBack, step = 2,
   return (
     <FlowShell title="Your details" step={step} totalSteps={totalSteps} onBack={onBack} footer={footer}>
       <span className="k-q">Who's riding?</span>
-      <span className="k-q-sub">We'll text your confirmation and tracking link here</span>
+      {/* Says why the number is needed WITHOUT promising a text.
+          It previously read "We'll text your confirmation and tracking link
+          here" — an unconditional promise of SMS sitting directly above an
+          optional consent checkbox. A reviewer reads that as messaging being
+          part of the service, which is the very thing error 30923 is about,
+          and it is simply untrue for a rider who declines.
+          The driver calling is true either way. */}
+      <span className="k-q-sub">So your driver can reach you about this ride</span>
 
       <div className="field" style={{ marginTop: 16 }}>
         <label className="label">Name</label>
