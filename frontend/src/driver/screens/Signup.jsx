@@ -23,8 +23,16 @@ function mapSignupError(message) {
   return 'Something went wrong creating your account. Please try again in a moment.';
 }
 
+// Versioned like the rider's, and separately: a driver's consent and a rider's
+// are different agreements covering different message types.
+const DRIVER_SMS_CONSENT_VERSION = 'driver-sms-2026-09-02.v1';
+const DRIVER_SMS_CONSENT_LABEL =
+  'Text me about ride requests and schedule changes.';
+const DRIVER_SMS_CONSENT_FINE =
+  'Only when push notifications are unavailable on your phone. Message and data rates may apply. Reply STOP to opt out, HELP for help.';
+
 const emptyForm = {
-  name: '', email: '', password: '', phone: '',
+  name: '', email: '', password: '', phone: '', smsConsent: false,
   vehicleMake: '', vehicleModel: '', vehicleColor: '', vehiclePlate: '',
 };
 
@@ -127,6 +135,27 @@ export default function Signup({ onSwitchToLogin, onSignedUp }) {
             <div className="rise-2">
               <IconField icon="user" label="Full name" placeholder="Alex Rivera" value={form.name} onChange={set('name')} />
               <IconField icon="phone" label="Phone number" type="tel" placeholder="+1 555 555 0100" value={form.phone} onChange={set('phone')} />
+
+              {/* Operational SMS opt-in — separate, unchecked, and not required
+                  to apply. The A2P campaign is MIXED and covers driver messages
+                  ("new ride request", "the rider canceled"), so drivers are
+                  message recipients like riders are and need the same
+                  demonstrable consent. Ride requests still arrive by push
+                  notification either way, so declining costs a driver nothing
+                  except the fallback for a phone with push switched off. */}
+              <label className="drv-optin">
+                <input
+                  type="checkbox"
+                  className="drv-optin-box"
+                  checked={Boolean(form.smsConsent)}
+                  onChange={(e) => setForm((f) => ({ ...f, smsConsent: e.target.checked }))}
+                />
+                <span className="drv-optin-text">
+                  <span className="drv-optin-label">{DRIVER_SMS_CONSENT_LABEL}</span>
+                  <span className="drv-optin-fine">{DRIVER_SMS_CONSENT_FINE}</span>
+                  <span className="drv-optin-optional">Optional. You can drive without this — ride requests still arrive as push notifications.</span>
+                </span>
+              </label>
             </div>
           </>
         )}

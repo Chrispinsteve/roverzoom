@@ -299,7 +299,11 @@ ALTER TABLE drivers ADD CONSTRAINT drivers_auth_user_id_fkey
 CREATE OR REPLACE FUNCTION handle_new_driver()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO drivers (auth_user_id, name, phone, email, vehicle_make, vehicle_model, vehicle_color, vehicle_plate, status)
+  INSERT INTO drivers (
+    auth_user_id, name, phone, email,
+    vehicle_make, vehicle_model, vehicle_color, vehicle_plate, status,
+    sms_consent_at, sms_consent_version
+  )
   VALUES (
     NEW.id,
     NEW.raw_user_meta_data->>'name',
@@ -309,7 +313,12 @@ BEGIN
     NEW.raw_user_meta_data->>'vehicle_model',
     NEW.raw_user_meta_data->>'vehicle_color',
     NEW.raw_user_meta_data->>'vehicle_plate',
-    'active'
+    'active',
+    -- Operational SMS consent, ticked at signup. now() rather than a client
+    -- timestamp: a device clock must not decide when consent happened.
+    CASE WHEN NEW.raw_user_meta_data->>'sms_consent' = 'true' THEN now() ELSE NULL END,
+    CASE WHEN NEW.raw_user_meta_data->>'sms_consent' = 'true'
+         THEN NEW.raw_user_meta_data->>'sms_consent_version' ELSE NULL END
   );
   RETURN NEW;
 EXCEPTION

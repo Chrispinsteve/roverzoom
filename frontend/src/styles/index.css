@@ -1129,3 +1129,13 @@ input, textarea { font-family: inherit; }
 .drv-confirm-row { display: flex; gap: 10px; }
 .drv-confirm-row .btn { flex: 1; margin-top: 0; }
 .drv-confirm-no { background: var(--canvas-2); border: 1px solid var(--line); color: var(--ink); }
+
+/* Driver SMS opt-in at signup. Same shape as the rider's: a real checkbox,
+   unchecked, with a target big enough that ticking it is clearly a choice. */
+.drv-optin { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 13px; border: 1.5px solid var(--line-2); border-radius: 14px; cursor: pointer; }
+.drv-optin:has(.drv-optin-box:checked) { border-color: var(--accent); background: rgba(62, 224, 160, 0.08); }
+.drv-optin-box { flex-shrink: 0; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); cursor: pointer; }
+.drv-optin-text { display: flex; flex-direction: column; gap: 4px; }
+.drv-optin-label { font-size: 14.5px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.drv-optin-fine { font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.drv-optin-optional { font-size: 12px; font-weight: 700; color: var(--ink-3); }

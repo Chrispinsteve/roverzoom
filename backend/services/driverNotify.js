@@ -28,7 +28,7 @@ async function notifyDriversOfNewRequest(booking) {
     // Eligible = active drivers (the pool that can claim in the open marketplace).
     const { data: drivers, error } = await supabase
       .from('drivers')
-      .select('id, phone')
+      .select('id, phone, sms_consent_at')
       .eq('status', 'active');
     if (error || !drivers || drivers.length === 0) return;
 
@@ -91,7 +91,7 @@ async function notifyDriverOfCancellation(booking) {
   try {
     const { data: driver } = await supabase
       .from('drivers')
-      .select('id, phone')
+      .select('id, phone, sms_consent_at')
       .eq('id', booking.driver_id)
       .maybeSingle();
     if (!driver) return;
@@ -116,7 +116,9 @@ async function notifyDriverOfCancellation(booking) {
         if (r.expired) await supabase.from('push_subscriptions').delete().eq('id', s.id).then(() => {}, () => {});
       }
     } else if (driver.phone) {
-      sendSms(driver.phone, `RoverZoom: The rider canceled the ${area} ride you had. It’s been removed from your schedule.`)
+      driver.sms_consent_at
+        ? sendSms(driver.phone, `RoverZoom: The rider canceled the ${area} ride you had. It’s been removed from your schedule.`)
+        : Promise.resolve({ sent: false, reason: 'no_consent' })
         .catch(() => {});
     }
   } catch (err) {
