@@ -62,7 +62,7 @@ router.get('/airport-leg', (req, res) => {
 router.post('/', async (req, res) => {
   const {
     pickup, dropoff, scheduledAt, paymentMethod,
-    rider, source = 'form', termsVersion, flight,
+    rider, source = 'form', termsVersion, flight, smsConsent, smsConsentVersion,
   } = req.body || {};
 
   if (!pickup?.address || !dropoff?.address || !scheduledAt || !paymentMethod) {
@@ -121,6 +121,15 @@ router.post('/', async (req, res) => {
         ...(cleanFlightDetails(flight, detectAirportLeg({
           pickupAddress: pickup.address, dropoffAddress: dropoff.address,
         })) || {}),
+        // SMS consent. Recorded only when actually granted — an unchecked box
+        // stores NULL rather than false, so "this rider said no" and "this
+        // rider was never asked" stay distinguishable. The timestamp is taken
+        // here for the same reason the attestation's is: a client clock must
+        // not be what decides when consent happened, and this is the record a
+        // carrier audit asks for.
+        sms_consent_at: smsConsent === true ? new Date().toISOString() : null,
+        sms_consent_version: smsConsent === true && typeof smsConsentVersion === 'string'
+          ? smsConsentVersion.slice(0, 64) : null,
         terms_version: typeof termsVersion === 'string' ? termsVersion.slice(0, 64) : null,
         terms_accepted_at: termsVersion ? new Date().toISOString() : null,
     });

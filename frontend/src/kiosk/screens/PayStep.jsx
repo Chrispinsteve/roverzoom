@@ -4,7 +4,7 @@ import FlowShell from '../components/FlowShell';
 import PaymentCards from '../components/PaymentCards';
 import { api } from '../../lib/api';
 import { combineDayTime } from '../lib/datetime';
-import { AGE_ATTESTATION, TERMS_VERSION } from '../lib/terms';
+import { AGE_ATTESTATION, TERMS_VERSION, SMS_CONSENT_VERSION } from '../lib/terms';
 
 // Two-phase step. Phase "choose": pick card / Zelle / cash. Cash and Zelle
 // book immediately (money moves outside the app — driver's hand, bank app).
@@ -40,6 +40,11 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack, step =
       // screen; the server re-stamps the timestamp so a client clock cannot
       // decide when consent happened.
       termsVersion: TERMS_VERSION,
+      // SMS consent, kept separate from the age attestation because they are
+      // different agreements. Sent as a boolean plus the version of the wording
+      // that was on screen; the server stamps the time.
+      smsConsent: Boolean(booking.smsConsent),
+      smsConsentVersion: SMS_CONSENT_VERSION,
       // Airport details, when the rider gave any. The server re-derives which
       // end of the trip is the airport rather than trusting this, because it
       // decides whether the driver is sent to departures or arrivals —

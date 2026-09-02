@@ -1,6 +1,7 @@
 import FlowShell from '../components/FlowShell';
 import PhoneKeypad from '../components/PhoneKeypad';
 import { fmtPhone } from '../lib/phone';
+import { SMS_CONSENT_LABEL, SMS_CONSENT_FINE_PRINT, SMS_CONSENT_OPTIONAL_NOTE } from '../lib/terms';
 
 export default function PhoneStep({ booking, onChange, onNext, onBack, step = 2, totalSteps = 3 }) {
   const digits = booking.phoneDigits || '';
@@ -38,17 +39,33 @@ export default function PhoneStep({ booking, onChange, onNext, onBack, step = 2,
       <span className="k-field-label">Phone number</span>
       <PhoneKeypad digits={digits} onChange={(d) => onChange({ phoneDigits: d, phone: fmtPhone(d) })} />
 
-      {/* SMS consent, at the point the number is collected — which is where
-          carriers and A2P reviewers require it to be, and where it is actually
-          useful to the rider. States what we send, how often, that rates apply,
-          and how to stop. */}
-      <p className="k-consent">
-        By booking, you agree to receive text messages about your ride — a confirmation, and a
-        live tracking link when a driver accepts. About two messages per booking. Message and
-        data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
-        <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy&nbsp;Policy</a> and{' '}
-        <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>.
-      </p>
+      {/* SMS CONSENT — a distinct checkbox, for messaging only, unchecked.
+
+          What was here was a paragraph reading "By booking, you agree to
+          receive text messages…". That is what got the A2P 10DLC campaign
+          rejected under error 30923: it made consent a condition of using the
+          service. Carriers require the opposite — a separate, deliberate,
+          skippable action, and a booking that completes fine without it.
+
+          It stays at the point the phone number is collected, because that is
+          where the consent is meaningful and where reviewers look for it. */}
+      <label className="k-optin">
+        <input
+          type="checkbox"
+          className="k-optin-box"
+          checked={Boolean(booking.smsConsent)}
+          onChange={(e) => onChange({ smsConsent: e.target.checked })}
+        />
+        <span className="k-optin-text">
+          <span className="k-optin-label">{SMS_CONSENT_LABEL}</span>
+          <span className="k-optin-fine">
+            {SMS_CONSENT_FINE_PRINT} See our{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy&nbsp;Policy</a> and{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>.
+          </span>
+          <span className="k-optin-optional">{SMS_CONSENT_OPTIONAL_NOTE}</span>
+        </span>
+      </label>
 
       <div className="field" style={{ marginTop: 16 }}>
         <label className="label">Email <span className="k-hint-inline">optional</span></label>

@@ -25,6 +25,13 @@ const OPTIONAL_GROUPS = [
     present: true,
   },
   {
+    name: 'sms consent',
+    columns: ['sms_consent_at', 'sms_consent_version'],
+    migration: 'backend/db/migration-sms-consent.sql',
+    consequence: 'the booking is taken but the messaging consent is not recorded, so no SMS can be sent for it',
+    present: true,
+  },
+  {
     name: 'airport',
     columns: ['airport_role', 'airport_code', 'airport_zone', 'airport_airline', 'airport_flight'],
     migration: 'backend/db/migration-airport.sql',

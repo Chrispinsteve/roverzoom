@@ -97,7 +97,7 @@ export default function Confirm({ confirmedBooking, onTrack, onReset }) {
             </div>
             <div className="k-qr-text">
               <h2>Scan to track on your phone</h2>
-              <p>Take your ride with you — watch your driver accept and arrive, live. We'll text this link too.</p>
+              <p>Take your ride with you — watch your driver accept and arrive, live.{confirmedBooking?.sms_consent_at ? " We'll text this link too." : ''}</p>
             </div>
           </div>
 

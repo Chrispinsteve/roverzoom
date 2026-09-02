@@ -87,10 +87,29 @@ function formatWhen(iso) {
   }
 }
 
+// Has this rider actually agreed to be texted?
+//
+// The A2P 10DLC campaign was rejected under error 30923 because consent was a
+// condition of booking rather than a choice. Making the checkbox optional in
+// the form and then texting everyone anyway would be worse than what was there
+// before: it would be a written record of consent we did not have.
+//
+// NULL means no. Bookings taken before the opt-in existed have no consent
+// recorded, and that is the correct reading — nobody was ever given the choice.
+// The rider still gets everything that matters: the confirmation screen, the
+// QR code and the tracking link are all on screen and none of them need SMS.
+function hasSmsConsent(booking) {
+  return Boolean(booking && booking.sms_consent_at);
+}
+
 // --- The two rider-journey messages ----------------------------------------
 // 1. Sent right after a booking is created.
 async function sendBookingConfirmation(booking) {
   if (!booking?.rider_phone) return { sent: false, reason: 'no_phone' };
+  if (!hasSmsConsent(booking)) {
+    console.log(`[sms:skipped-no-consent] booking ${booking.reference || booking.id}`);
+    return { sent: false, reason: 'no_consent' };
+  }
   const when = formatWhen(booking.scheduled_at);
   // Carries the opt-out because this is the FIRST message a rider ever
   // receives from us. Wording kept tight so it still fits one 160-character
@@ -106,6 +125,10 @@ async function sendBookingConfirmation(booking) {
 // 2. Sent the instant a driver claims the ride — carries the tracking link.
 async function sendDriverAcceptedNotification(booking, driver) {
   if (!booking?.rider_phone) return { sent: false, reason: 'no_phone' };
+  if (!hasSmsConsent(booking)) {
+    console.log(`[sms:skipped-no-consent] booking ${booking.reference || booking.id}`);
+    return { sent: false, reason: 'no_consent' };
+  }
   const first = driver?.name ? String(driver.name).split(' ')[0] : 'A driver';
   const vehicle = driver && (driver.vehicle_color || driver.vehicle_make)
     ? ` (${[driver.vehicle_color, driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(' ')})`
@@ -122,5 +145,4 @@ module.exports = {
   sendDriverAcceptedNotification,
   trackingUrl,
   toE164,
-  isConfigured,
-};
+  isConfigured, hasSmsConsent };
