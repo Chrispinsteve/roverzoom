@@ -120,7 +120,7 @@ async function notifyDriverOfCancellation(booking) {
       }
     } else if (driver.phone) {
       driver.sms_consent_at
-        ? sendSms(driver.phone, `RoverZoom: The rider canceled the ${area} ride you had. It’s been removed from your schedule.`)
+        ? sendSms(driver.phone, `RoverZoom: The rider canceled the ${area} ride you had. It's been removed from your schedule.`)
         : Promise.resolve({ sent: false, reason: 'no_consent' })
         .catch(() => {});
     }
