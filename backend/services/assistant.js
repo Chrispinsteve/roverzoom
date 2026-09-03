@@ -180,6 +180,16 @@ async function toolCreateBooking(input) {
       // heard, not read — and ops should be able to tell them apart.
       terms_version: input.age_confirmed === true ? 'age-2026-08-29.v1-voice' : null,
       terms_accepted_at: input.age_confirmed === true ? new Date().toISOString() : null,
+      // Spoken SMS consent, recorded the same way the web checkbox is.
+      //
+      // Without this the assistant asks the rider out loud, hears yes, and then
+      // sendBookingConfirmation refuses to send — the gate added for the A2P fix
+      // reads sms_consent_at, and a voice booking wrote nothing. The rider would
+      // be asked a question that changed nothing.
+      //
+      // Explicit TRUE only: a missing field must never be read as agreement.
+      sms_consent_at: input.sms_consent === true ? new Date().toISOString() : null,
+      sms_consent_version: input.sms_consent === true ? 'sms-2026-09-02.v1-voice' : null,
   });
   if (error) return { error: 'Booking could not be saved: ' + error.message };
 
@@ -187,10 +197,14 @@ async function toolCreateBooking(input) {
   // be worse than never asking: it turns a truthful opt-in record into a false
   // one. Silence is not consent — only an explicit false blocks the send, and
   // the model is instructed to pass false rather than omit it when they say no.
-  if (input.sms_consent !== false) {
+  // Driven by what was RECORDED, not a second looser test. The previous
+  // condition sent on anything that was not an explicit false, so an omitted
+  // field counted as agreement — a weaker standard than the web checkbox, and
+  // one the stored row could not support if a carrier ever asked.
+  if (data.sms_consent_at) {
     try { await sendBookingConfirmation(data); } catch { /* best-effort */ }
   } else {
-    console.log(`[assistant] booking ${data.reference}: rider declined SMS, confirmation not sent`);
+    console.log(`[assistant] booking ${data.reference}: no spoken SMS consent, confirmation not sent`);
   }
 
   return {
