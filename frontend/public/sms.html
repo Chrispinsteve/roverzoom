@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SMS Messaging Program — RoverZoom</title>
+<meta name="description" content="How RoverZoom's SMS notifications work: what we send, how riders and drivers opt in, and how to stop." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/legal.css" />
+<style>
+  .shot { margin: 18px 0 26px; }
+  .shot img { width: 100%; max-width: 340px; border: 1px solid #d8d4cd; border-radius: 14px; display: block; }
+  .shot figcaption { font-size: 13.5px; color: #6e675e; margin-top: 8px; max-width: 480px; }
+  .msg { background: #f4f2ee; border-left: 3px solid #0a84ff; padding: 11px 14px; border-radius: 0 8px 8px 0;
+         margin: 10px 0; font-size: 14.5px; line-height: 1.45; }
+  .note { background: #f4f2ee; border-radius: 10px; padding: 14px 16px; margin: 20px 0; font-size: 14.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/logo-wordmark.png" alt="RoverZoom" />
+    <a href="/">Back to booking</a>
+  </header>
+
+  <h1>SMS Messaging Program</h1>
+  <p class="updated">Last updated 3 September 2026 · RoverZoom is a service of Bibior, Inc.</p>
+
+  <p>RoverZoom books scheduled rides in Palm Beach County, Florida. This page describes every
+  text message the service sends, who receives them, and exactly how consent is collected.</p>
+
+  <div class="note">
+    <strong>Consent is never required to use RoverZoom.</strong> Riders can book, and drivers can
+    apply, without agreeing to receive any text messages. Nothing about the service is withheld
+    from someone who declines.
+  </div>
+
+  <h2>How riders opt in</h2>
+  <p>On the booking form at <a href="https://www.roverzoom.com">www.roverzoom.com</a>, choose
+  <em>Book my ride</em>, enter a pickup and destination, choose a date and time, then continue to
+  the <em>Your details</em> step. Directly below the phone number field is a separate checkbox,
+  unchecked by default:</p>
+
+  <figure class="shot">
+    <img src="/sms-optin-rider.png" alt="The RoverZoom booking form showing an unchecked SMS consent checkbox below the phone number field." />
+    <figcaption>The rider opt-in as it appears, unchecked. The booking completes whether or not it
+    is ticked; riders who decline still receive their confirmation and live tracking link on the
+    confirmation screen.</figcaption>
+  </figure>
+
+  <p>Riders who book using the voice assistant are asked aloud, before the ride is created,
+  whether it is okay to text them. If they decline, the ride is still booked and no messages
+  are sent.</p>
+
+  <h2>How drivers opt in</h2>
+  <p>On the driver application at
+  <a href="https://www.roverzoom.com/?driver=1">www.roverzoom.com/?driver=1</a>, a separate
+  checkbox sits below the phone number field, unchecked by default:</p>
+
+  <figure class="shot">
+    <img src="/sms-optin-driver.png" alt="The RoverZoom driver application showing an unchecked SMS consent checkbox below the phone number field." />
+    <figcaption>The driver opt-in as it appears, unchecked. Declining does not affect an
+    application: ride requests are delivered as push notifications, and SMS is only a fallback for
+    a device where push is unavailable.</figcaption>
+  </figure>
+
+  <h2>What we send</h2>
+  <p>To riders who have opted in, about two messages per booking:</p>
+  <div class="msg">RoverZoom: Your ride is booked for [date and time]. Confirmation [reference]. We'll text a tracking link when a driver accepts. Reply STOP to opt out.</div>
+  <div class="msg">RoverZoom: [Driver first name] ([vehicle]) accepted your ride! Track them live: https://www.roverzoom.com/?track=[booking id]</div>
+
+  <p>To drivers who have opted in, only when a ride affects them:</p>
+  <div class="msg">RoverZoom: New ride request ([pickup area]). Open to claim: https://www.roverzoom.com/?driver=1 Reply STOP to opt out.</div>
+  <div class="msg">RoverZoom: The rider canceled the [pickup area] ride you had. It's been removed from your schedule.</div>
+
+  <p>Every message relates to a specific ride the recipient booked or accepted. RoverZoom does not
+  send marketing or promotional text messages, and does not buy, rent, or otherwise obtain phone
+  numbers from any third party.</p>
+
+  <h2>Frequency, rates and stopping</h2>
+  <p>Message frequency varies by how often you ride or drive — typically about two messages per
+  booking. Message and data rates may apply.</p>
+  <p>Reply <strong>STOP</strong> to any message to stop receiving them. Reply <strong>HELP</strong>
+  for help. You can also stop at any time by leaving the checkbox unticked on your next booking.</p>
+
+  <h2>More</h2>
+  <p><a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Service</a></p>
+</div>
+</body>
+</html>
