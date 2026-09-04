@@ -102,10 +102,20 @@ export default function DriverApp({ onExit }) {
   const [authStage, setAuthStage] = useState('login'); // 'login' | 'signup' | 'checkEmail'
   const [signedUpEmail, setSignedUpEmail] = useState('');
 
-  // Land on Profile when returning from Stripe payout onboarding (…/?driver=payouts).
+  // Where a notification asked us to land. See the whitelist below.
   const [tab, setTab] = useState(() => {
     try {
-      return new URLSearchParams(window.location.search).get('driver') === 'payouts' ? 'profile' : 'home';
+      // ?driver=<tab> is how a notification says where it wants to land. A ride
+      // request alert that opens the dashboard makes the driver hunt for the
+      // thing they were just told about, with a clock running against every
+      // other driver who got the same alert.
+      //
+      // Whitelisted, not passed through: ?driver= comes from a URL anyone can
+      // edit, and an unknown value must land on the dashboard rather than
+      // rendering nothing.
+      const want = new URLSearchParams(window.location.search).get('driver');
+      if (want === 'payouts') return 'profile'; // returning from Stripe onboarding
+      return ['requests', 'schedule', 'earnings', 'profile'].includes(want) ? want : 'home';
     } catch {
       return 'home';
     }

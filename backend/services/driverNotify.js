@@ -17,9 +17,13 @@ const SMS_THROTTLE_MS = Number(process.env.NOTIFY_SMS_THROTTLE_MS) || 3 * 60 * 1
 // this is a soft cap, not a hard guarantee — good enough to stop obvious spam.
 const lastSmsAt = new Map();
 
-function appUrl() {
+// Deep link into the driver app. `tab` decides where it opens: a ride-request
+// alert that dumps the driver on the dashboard makes them hunt for the thing
+// they were just told about, while every other driver who got the same alert is
+// racing them to claim it.
+function appUrl(tab = '1') {
   const base = (process.env.PUBLIC_APP_URL || process.env.PUBLIC_BASE_URL || 'https://www.roverzoom.com').replace(/\/+$/, '');
-  return `${base}/?driver=1`;
+  return `${base}/?driver=${tab}`;
 }
 
 async function notifyDriversOfNewRequest(booking) {
@@ -49,7 +53,7 @@ async function notifyDriversOfNewRequest(booking) {
     const payload = {
       title: 'New ride request',
       body: `${area}${fare ? ' · ' + fare : ''} — tap to view`,
-      url: appUrl(),
+      url: appUrl('requests'),
       tag: 'ride-request',
     };
 
@@ -77,7 +81,7 @@ async function notifyDriversOfNewRequest(booking) {
         const last = lastSmsAt.get(d.id) || 0;
         if (now - last >= SMS_THROTTLE_MS) {
           lastSmsAt.set(d.id, now);
-          sendSms(d.phone, `RoverZoom: New ride request (${area}). Open to claim: ${appUrl()} Reply STOP to opt out.`)
+          sendSms(d.phone, `RoverZoom: New ride request (${area}). Open to claim: ${appUrl('requests')} Reply STOP to opt out.`)
             .catch(() => {});
         }
       }
@@ -108,7 +112,7 @@ async function notifyDriverOfCancellation(booking) {
     const payload = {
       title: 'Ride canceled',
       body: `The rider canceled the ${area} ride. It’s off your schedule.`,
-      url: appUrl(),
+      url: appUrl('schedule'),
       tag: `cancel-${booking.id}`,
     };
 
