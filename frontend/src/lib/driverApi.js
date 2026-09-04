@@ -63,6 +63,10 @@ export const driverApi = {
 
   // Web Push: VAPID key + subscribe/unsubscribe for ride-request alerts.
   getPushKey: () => authedReq('/driver/push/key'),
+
+  // The driver granting or withdrawing their own SMS consent.
+  setSmsConsent: (consent) =>
+    authedReq('/driver/sms-consent', { method: 'POST', body: JSON.stringify({ consent }) }),
   subscribePush: (subscription) =>
     authedReq('/driver/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription }) }),
   unsubscribePush: (endpoint) =>

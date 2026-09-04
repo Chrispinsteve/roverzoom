@@ -7,15 +7,43 @@ import { pushStatus, enablePush, disablePush } from '../../lib/push';
 import { mapsUrl } from '../lib/maps';
 import { shortAddress } from '../lib/address';
 
-// Ride-request alerts (Web Push). Push where the device allows it, and the
-// server texts drivers who don't have it on — so this is an upgrade ("get
-// pinged even when the app is closed"), never the only way to hear about a ride.
-function NotificationToggle() {
+// Ride-request alerts. Two independent channels, and a driver needs at least
+// one of them or they simply never hear about a ride.
+//
+// PUSH is the good one: instant, free, works with the app closed. On iPhone it
+// requires the app be added to the Home Screen first, which many drivers have
+// not done.
+//
+// TEXT is the fallback, and it now requires explicit consent — the A2P opt-in
+// added at signup. Every driver who registered before that has none, and had no
+// way to give it: the checkbox only exists on the signup form they already
+// passed. So the toggle is here too, or they are unreachable forever.
+//
+// The comment this replaces said "the server texts drivers who don't have it
+// on", which stopped being true the moment consent was enforced.
+function NotificationToggle({ driver, onDriverUpdate }) {
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [smsBusy, setSmsBusy] = useState(false);
+  const smsOn = Boolean(driver?.sms_consent_at);
 
   useEffect(() => { pushStatus().then(setState).catch(() => setState({ supported: false })); }, []);
+
+  // Granted and withdrawn by the driver themselves. Setting this for them would
+  // fabricate the consent record the A2P rejection was about.
+  const toggleSms = async () => {
+    setSmsBusy(true); setMsg('');
+    try {
+      await driverApi.setSmsConsent(!smsOn);
+      // A whole object, not a functional update: driverOverride starts as null,
+      // so spreading the previous value would replace the entire driver record
+      // with a two-field stub and blank the rest of the screen.
+      if (onDriverUpdate) onDriverUpdate({ ...driver, sms_consent_at: smsOn ? null : new Date().toISOString() });
+      setMsg(smsOn ? 'Text alerts off.' : 'Text alerts on — used only when push cannot reach you.');
+    } catch (e) { setMsg(e.message || 'Could not change text alerts.'); }
+    finally { setSmsBusy(false); }
+  };
 
   const turnOn = async () => {
     setBusy(true); setMsg('');
@@ -60,6 +88,28 @@ function NotificationToggle() {
           </button>
         </>
       )}
+      {/* The text fallback, as its own control. A driver who cannot use push —
+          an iPhone that is not installed to the Home Screen, notifications
+          denied — has nothing at all without this. */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Text me as backup</div>
+            <div className="drv-card-sub" style={{ marginTop: 2 }}>
+              Only when push can’t reach you. Msg &amp; data rates may apply. Reply STOP to opt out.
+            </div>
+          </div>
+          <button
+            className="btn btn-ghost"
+            onClick={toggleSms}
+            disabled={smsBusy}
+            style={{ flexShrink: 0, minWidth: 78 }}
+          >
+            {smsBusy ? '…' : smsOn ? 'On' : 'Turn on'}
+          </button>
+        </div>
+      </div>
+
       {msg && <p className="drv-card-sub" style={{ marginTop: 8, lineHeight: 1.5 }}>{msg}</p>}
     </div>
   );
@@ -185,7 +235,7 @@ function ProfileGateBanner({ driver, onOpenTab }) {
   );
 }
 
-export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, onChangeTab }) {
+export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, onChangeTab, onDriverUpdate }) {
   const [earnings, setEarnings] = useState(null);
   const [nextRide, setNextRide] = useState(null);
 
@@ -246,7 +296,7 @@ export default function Home({ driver, onExit, onLogout, onOpenTab, activeTab, o
         <StatCard icon="shieldCheck" label="Driver Score" value={`${driver.rating} ★`} sub={`${driver.rides_completed} rides completed`} />
         <StatCard icon="wallet" label="This Week" value={earnings ? `$${earnings.weekTotal.toFixed(2)}` : '—'} />
 
-        {profileComplete && <NotificationToggle />}
+        {profileComplete && <NotificationToggle driver={driver} onDriverUpdate={onDriverUpdate} />}
 
         <div className="spacer" />
 

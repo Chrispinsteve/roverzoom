@@ -816,6 +816,35 @@ router.post('/push/subscribe', requireDriver, async (req, res) => {
   }
 });
 
+// POST /api/driver/sms-consent — { consent: true|false }
+//
+// The signup checkbox only helps drivers who sign up from now on. Everyone
+// already registered has no consent recorded and no way to give it, so the SMS
+// fallback can never reach them — they are permanently unreachable when push is
+// unavailable, which on an iPhone that has not been added to the Home Screen is
+// always.
+//
+// Consent has to come from the driver. Setting it for them in the database
+// would fabricate exactly the record the A2P rejection was about, so this
+// endpoint exists to let them grant it themselves, and to withdraw it.
+//
+// requireDriver scopes it to the caller's own row: a driver can only ever
+// change their own consent.
+router.post('/sms-consent', requireDriver, async (req, res) => {
+  const granting = req.body?.consent === true;
+  const { error } = await supabase
+    .from('drivers')
+    .update({
+      // Cleared to NULL on withdrawal rather than set false, so "declined" and
+      // "never asked" stay the same thing to every reader: no consent on file.
+      sms_consent_at: granting ? new Date().toISOString() : null,
+      sms_consent_version: granting ? 'driver-sms-2026-09-02.v1' : null,
+    })
+    .eq('id', req.driver.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, consent: granting });
+});
+
 // POST /api/driver/push/unsubscribe — { endpoint }
 router.post('/push/unsubscribe', requireDriver, async (req, res) => {
   const endpoint = req.body && req.body.endpoint;

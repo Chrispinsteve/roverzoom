@@ -342,7 +342,7 @@ export default function DriverApp({ onExit }) {
       />
     );
   } else if (tab === 'home') {
-    content = <Home driver={driver} onExit={onExit} onLogout={logout} onOpenTab={setTab} {...tabProps} />;
+    content = <Home onDriverUpdate={setDriverOverride} driver={driver} onExit={onExit} onLogout={logout} onOpenTab={setTab} {...tabProps} />;
   } else if (tab === 'requests') {
     content = <Requests driver={driver} onClaimed={goToSchedule} {...tabProps} />;
   } else if (tab === 'schedule') {
