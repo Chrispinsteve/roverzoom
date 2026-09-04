@@ -44,7 +44,10 @@ export async function enablePush() {
   if (!pushSupported()) {
     const e = new Error(
       isIOS() && !isStandalone()
-        ? 'On iPhone, add RoverZoom to your Home Screen first: tap Share → “Add to Home Screen”, open it from there, then turn on alerts. (You’ll still get a text for new rides in the meantime.)'
+        // This previously ended "(You will still get a text for new rides in the
+        // meantime.)" — untrue once SMS required consent. A driver who read it
+        // would wait for a message that was never coming.
+        ? 'On iPhone, add RoverZoom to your Home Screen first: tap Share \u2192 "Add to Home Screen", open it from there, then turn on alerts. In the meantime, switch on "Text me as backup" below.'
         : 'Notifications aren’t supported on this browser.'
     );
     e.code = 'unsupported';
