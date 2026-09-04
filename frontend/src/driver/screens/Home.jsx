@@ -92,8 +92,8 @@ function NotificationToggle({ driver, onDriverUpdate }) {
           an iPhone that is not installed to the Home Screen, notifications
           denied — has nothing at all without this. */}
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line-2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Text me as backup</div>
             <div className="drv-card-sub" style={{ marginTop: 2 }}>
               Only when push can’t reach you. Msg &amp; data rates may apply. Reply STOP to opt out.
@@ -103,7 +103,11 @@ function NotificationToggle({ driver, onDriverUpdate }) {
             className="btn btn-ghost"
             onClick={toggleSms}
             disabled={smsBusy}
-            style={{ flexShrink: 0, minWidth: 78 }}
+            // .btn is width:100% by default — every other button in this card
+            // is full-width and wants to be. Beside text it has to be sized to
+            // its label instead, or it claims the whole row and the text column
+            // collapses to one word per line.
+            style={{ width: 'auto', flexShrink: 0, minWidth: 84, padding: '12px 16px', minHeight: 44, fontSize: 14 }}
           >
             {smsBusy ? '…' : smsOn ? 'On' : 'Turn on'}
           </button>
