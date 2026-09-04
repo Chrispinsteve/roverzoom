@@ -27,6 +27,9 @@ function NotificationToggle({ driver, onDriverUpdate }) {
   const [msg, setMsg] = useState('');
   const [smsBusy, setSmsBusy] = useState(false);
   const smsOn = Boolean(driver?.sms_consent_at);
+  // Either channel is enough. Neither means ride requests arrive and the driver
+  // never learns of them.
+  const reachable = Boolean(state?.enabled) || smsOn;
 
   useEffect(() => { pushStatus().then(setState).catch(() => setState({ supported: false })); }, []);
 
@@ -66,7 +69,19 @@ function NotificationToggle({ driver, onDriverUpdate }) {
   return (
     <div className="drv-card rise" style={{ marginTop: 4 }}>
       <div className="drv-card-top">
-        <span className="drv-card-label">Ride request alerts</span>
+        {/* One dot for the only question a driver actually has: will a ride
+            request reach me? Green when SOMETHING can — push or text. Amber when
+            nothing can, which is a state they need to notice, not a neutral
+            default. Both channels being off is silence, and silence looks
+            identical to no rides being available. */}
+        <span className="drv-card-label" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+            background: reachable ? 'var(--positive)' : 'var(--warn, #F5B301)',
+            boxShadow: reachable ? '0 0 0 3px rgba(52,199,89,0.18)' : 'none',
+          }} />
+          Ride request alerts
+        </span>
         <span className="drv-card-icon"><Icon name="car" size={17} color="var(--ink-3)" /></span>
       </div>
       {state.enabled ? (
@@ -94,7 +109,19 @@ function NotificationToggle({ driver, onDriverUpdate }) {
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line-2)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Text me as backup</div>
+            {/* State and action are separated on purpose. A single button reading
+                "On" is ambiguous — it looks like an instruction to turn something
+                on, not a report that it already is. The STATE is a coloured label;
+                the BUTTON always says what tapping it will do. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Text me as backup</span>
+              <span style={{
+                fontSize: 10.5, fontWeight: 800, letterSpacing: '0.07em',
+                padding: '2px 7px', borderRadius: 999,
+                color: smsOn ? '#fff' : 'var(--ink-3)',
+                background: smsOn ? 'var(--positive)' : 'var(--canvas-2)',
+              }}><span style={{ width: 6, height: 6, borderRadius: '50%', display: 'inline-block', marginRight: 5, verticalAlign: 'middle', background: smsOn ? '#fff' : 'var(--ink-3)' }} />{smsOn ? 'ON' : 'OFF'}</span>
+            </div>
             <div className="drv-card-sub" style={{ marginTop: 2 }}>
               Only when push can’t reach you. Msg &amp; data rates may apply. Reply STOP to opt out.
             </div>
@@ -107,9 +134,9 @@ function NotificationToggle({ driver, onDriverUpdate }) {
             // is full-width and wants to be. Beside text it has to be sized to
             // its label instead, or it claims the whole row and the text column
             // collapses to one word per line.
-            style={{ width: 'auto', flexShrink: 0, minWidth: 84, padding: '12px 16px', minHeight: 44, fontSize: 14 }}
+            style={{ width: 'auto', flexShrink: 0, minWidth: 92, padding: '12px 16px', minHeight: 44, fontSize: 14 }}
           >
-            {smsBusy ? '…' : smsOn ? 'On' : 'Turn on'}
+            {smsBusy ? '…' : smsOn ? 'Turn off' : 'Turn on'}
           </button>
         </div>
       </div>
