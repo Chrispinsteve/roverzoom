@@ -101,7 +101,11 @@ export default function KioskApp({ onDriverMode }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('track');
-    if (token) track(token);
+    const series = params.get('series');
+    // A commuter opening their own recurring schedule. Checked before ?track
+    // because a series link is about the whole arrangement, not one ride.
+    if (series) { setSeriesId(series); setScreen('schedule'); }
+    else if (token) track(token);
     else if (params.get('talk') !== null) setAssistantOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
