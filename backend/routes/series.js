@@ -34,7 +34,10 @@ router.get('/:id', async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const { data: rides, error } = await supabase
     .from('bookings')
-    .select('id,reference,series_date,scheduled_at,status,fare,canceled_by,cancel_reason')
+    // series_id is selected because canSkip() READS it. Left out, the guard sees
+    // undefined, decides this is not a recurring ride, and hides every button —
+    // a permanently-false gate that looks exactly like working code.
+    .select('id,series_id,reference,series_date,scheduled_at,status,fare,canceled_by,cancel_reason')
     .eq('series_id', series.id)
     .gte('series_date', today)
     .order('series_date');
