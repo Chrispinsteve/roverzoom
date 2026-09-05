@@ -4,6 +4,7 @@ const cors = require('cors');
 
 const quoteRoutes = require('./routes/quote');
 const bookingRoutes = require('./routes/bookings');
+const seriesRoutes = require('./routes/series');
 const driverRoutes = require('./routes/driver');
 const paymentsRoutes = require('./routes/payments');
 const assistantRoutes = require('./routes/assistant');
@@ -44,6 +45,7 @@ app.get('/api/health', (req, res) => {
 });
 app.use('/api', quoteRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/series', seriesRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/assistant', assistantRoutes);

@@ -100,6 +100,57 @@ function missingDates(series, existingDates, fromDate, throughDate) {
 }
 
 // ---------------------------------------------------------------------------
+// Skipping a single day
+// ---------------------------------------------------------------------------
+// An irregular WEEK is already handled by days_of_week — someone who works
+// Monday, Wednesday, Thursday and Friday is [1,3,4,5] and needs nothing else.
+// This is the other case: a normal week with one day off.
+//
+// A skip is a cancelled booking, not a new kind of record. The unique index on
+// (series_id, series_date) means the cancelled row keeps its date, so the
+// generator cannot resurrect it on the next run.
+
+// How close to pickup a rider may still call off. Past this the driver is
+// likely already routing to them, and cancelling from a web link is the wrong
+// way to tell someone who is nearly outside your door — they should call.
+const SKIP_CUTOFF_MINUTES = 60;
+
+// A sentinel, not free text. Distinguishes "the rider is not working that day"
+// from "the rider cancelled this ride for good" and from an ops cancellation,
+// which is what makes un-skipping safe to offer: only a skip can be undone.
+const SKIP_REASON = 'series_skip';
+
+function minutesUntil(scheduledAt, now = new Date()) {
+  return (new Date(scheduledAt).getTime() - now.getTime()) / 60000;
+}
+
+function canSkip(booking, now = new Date()) {
+  if (!booking) return { ok: false, reason: 'not_found' };
+  if (!booking.series_id) return { ok: false, reason: 'not_a_recurring_ride' };
+  if (booking.status === 'canceled') return { ok: false, reason: 'already_skipped' };
+  // Anything past 'confirmed' means a driver has begun acting on it.
+  if (booking.status !== 'confirmed') return { ok: false, reason: 'ride_already_started' };
+  if (minutesUntil(booking.scheduled_at, now) < SKIP_CUTOFF_MINUTES) {
+    return { ok: false, reason: 'too_close_to_pickup' };
+  }
+  return { ok: true };
+}
+
+function canUnskip(booking, now = new Date()) {
+  if (!booking) return { ok: false, reason: 'not_found' };
+  if (booking.status !== 'canceled') return { ok: false, reason: 'not_skipped' };
+  // Only the rider's own skip can be undone. A cancellation by dispatch or by a
+  // driver was someone else's decision and must not be reversible from a link.
+  if (booking.canceled_by !== 'rider' || booking.cancel_reason !== SKIP_REASON) {
+    return { ok: false, reason: 'canceled_by_someone_else' };
+  }
+  if (minutesUntil(booking.scheduled_at, now) < SKIP_CUTOFF_MINUTES) {
+    return { ok: false, reason: 'too_close_to_pickup' };
+  }
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Materialising the bookings
 // ---------------------------------------------------------------------------
 const supabase = require('../db/supabase');
@@ -213,4 +264,5 @@ module.exports = {
   ymd, parseYmd, weekdayOf, addDays, todayIn, localInstant,
   datesForSeries, missingDates,
   generateForSeries, generateDueSeries,
+  canSkip, canUnskip, SKIP_CUTOFF_MINUTES, SKIP_REASON,
 };

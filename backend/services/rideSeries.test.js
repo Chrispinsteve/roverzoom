@@ -106,4 +106,57 @@ const series = (over = {}) => ({
   ok('month, year and leap-day rollovers are correct');
 }
 
-console.log(`\n  rideSeries: ${n}/7 groups passed\n`);
+// --- irregular working weeks ---------------------------------------------
+// Not everyone works five straight days. Monday on, Tuesday off, back Wednesday
+// to Friday is an ordinary pattern and needs no special handling — it is just a
+// different set of weekdays.
+{
+  const NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const pattern = (days) => S.datesForSeries(series({ days_of_week: days }), '2026-09-07', '2026-09-13')
+    .map((d) => NAMES[S.weekdayOf(d)]).join(' ');
+
+  assert.equal(pattern([1, 3, 4, 5]), 'Mon Wed Thu Fri', 'Monday on, Tuesday off, back Wednesday');
+  assert.equal(pattern([1, 3, 5]), 'Mon Wed Fri');
+  assert.equal(pattern([2, 4]), 'Tue Thu');
+  assert.equal(pattern([0, 6]), 'Sat Sun');
+  assert.equal(pattern([6]), 'Sat', 'a single day a week is a valid series');
+  ok('irregular working weeks need no special case — they are just weekday sets');
+}
+
+// --- skipping a single day ------------------------------------------------
+// A skip is a cancelled booking. What matters is WHO cancelled: a rider must be
+// able to undo their own day off, and must never be able to undo a
+// cancellation made by dispatch or a driver.
+{
+  const now = new Date('2026-09-07T12:00:00Z');
+  const ride = (over = {}) => ({
+    series_id: 's1', status: 'confirmed',
+    scheduled_at: '2026-09-08T11:30:00Z', ...over,
+  });
+  const skipped = ride({ status: 'canceled', canceled_by: 'rider', cancel_reason: S.SKIP_REASON });
+
+  assert.equal(S.canSkip(ride(), now).ok, true);
+  assert.equal(S.canSkip(skipped, now).reason, 'already_skipped');
+  assert.equal(S.canSkip(ride({ series_id: null }), now).reason, 'not_a_recurring_ride');
+  ok('a future recurring ride can be skipped; a one-off or an already-skipped day cannot');
+
+  // Once a driver is acting on it, a web link is the wrong way to call it off.
+  for (const st of ['driver_assigned', 'driver_en_route', 'arrived', 'in_progress', 'completed']) {
+    assert.equal(S.canSkip(ride({ status: st }), now).reason, 'ride_already_started', st);
+  }
+  const soon = ride({ scheduled_at: new Date(now.getTime() + 30 * 60000).toISOString() });
+  assert.equal(S.canSkip(soon, now).reason, 'too_close_to_pickup');
+  ok('a ride already under way, or minutes from pickup, cannot be skipped from a link');
+
+  // The property that makes un-skipping safe to offer at all.
+  assert.equal(S.canUnskip(skipped, now).ok, true);
+  for (const [by, reason] of [['system', 'No driver available'], ['driver', 'sick'], ['rider', 'changed my mind']]) {
+    const other = ride({ status: 'canceled', canceled_by: by, cancel_reason: reason });
+    assert.equal(S.canUnskip(other, now).reason, 'canceled_by_someone_else',
+      `${by}/${reason} must not be revivable by the rider`);
+  }
+  assert.equal(S.canUnskip(ride(), now).reason, 'not_skipped');
+  ok('only the rider\'s own skip can be undone, never a dispatch or driver cancellation');
+}
+
+console.log(`\n  rideSeries: ${n}/9 groups passed\n`);
