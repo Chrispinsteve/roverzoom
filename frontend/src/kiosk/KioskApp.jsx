@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Attract from './screens/Attract';
 import RouteStep from './screens/RouteStep';
+import MySchedule from './screens/MySchedule';
 import FlightStep from './screens/FlightStep';
 import PhoneStep from './screens/PhoneStep';
 import PayStep from './screens/PayStep';
@@ -28,6 +29,8 @@ export default function KioskApp({ onDriverMode }) {
   const [trackToken, setTrackToken] = useState(null); // booking UUID id (unguessable)
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantBooking, setAssistantBooking] = useState(null);
+  // `…/?series=<uuid>` — a commuter opening their own recurring schedule.
+  const [seriesId, setSeriesId] = useState(null);
   // Whether either end of this trip is an airport, answered by the server so
   // the question is asked on exactly the trips the driver would otherwise have
   // to ask about. Null means "not an airport ride" and the step is skipped.
@@ -188,6 +191,17 @@ export default function KioskApp({ onDriverMode }) {
         onBack={reset}
         onNewRide={reset}
       />
+    );
+  }
+  if (screen === 'schedule' && seriesId) {
+    return (
+      <>
+        <MySchedule
+          seriesId={seriesId}
+          onExit={() => { setSeriesId(null); reset(); }}
+        />
+        {assistantLayer}
+      </>
     );
   }
   if (screen === 'rides') {

@@ -33,6 +33,14 @@ export const api = {
   createBooking: (payload) =>
     req('/bookings', { method: 'POST', body: JSON.stringify(payload) }),
   getBooking: (ref) => req(`/bookings/${ref}`),
+
+  // Recurring rides, managed from a token link. The series id IS the token —
+  // no account, same trust model as the tracking link.
+  getSeries: (id) => req(`/series/${encodeURIComponent(id)}`),
+  skipSeriesDate: (id, date) =>
+    req(`/series/${encodeURIComponent(id)}/skip`, { method: 'POST', body: JSON.stringify({ date }) }),
+  unskipSeriesDate: (id, date) =>
+    req(`/series/${encodeURIComponent(id)}/unskip`, { method: 'POST', body: JSON.stringify({ date }) }),
   cancelBooking: (ref) => req(`/bookings/${encodeURIComponent(ref)}/cancel`, { method: 'POST' }),
   getBookingsByPhone: (phone) => req(`/bookings/by-phone/${encodeURIComponent(phone)}`),
   getPaymentsConfig: () => req('/payments/config'),

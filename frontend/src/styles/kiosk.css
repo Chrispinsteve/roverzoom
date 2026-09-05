@@ -480,3 +480,32 @@
 .k-optin-label { font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--ink); }
 .k-optin-fine { font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
 .k-optin-optional { font-size: 12.5px; font-weight: 700; color: var(--ink-3); }
+
+/* A commuter's two-week schedule. One row per ride, with the day named rather
+   than just dated — someone checking on Sunday night is thinking "Tuesday",
+   not "the 15th". */
+.k-sched { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.k-sched-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px; border: 1.5px solid var(--line-2); border-radius: 14px;
+}
+/* A skipped day stays visible and legible, just clearly off. Hiding it would
+   leave a rider unable to tell "I skipped that" from "the system lost it". */
+.k-sched-row--off { opacity: 0.62; border-style: dashed; }
+.k-sched-when { flex: 1; min-width: 0; }
+.k-sched-day { font-size: 15.5px; font-weight: 700; color: var(--ink); }
+.k-sched-date { font-size: 13px; color: var(--ink-3); margin-top: 1px; }
+.k-sched-tag {
+  display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink-3); background: var(--canvas-2);
+}
+/* Sized to its label, not full width: it sits beside text. */
+.k-sched-btn {
+  flex-shrink: 0; width: auto; min-width: 84px; min-height: 44px; padding: 11px 16px;
+  border-radius: 12px; border: 1.5px solid var(--line-2); background: transparent;
+  color: var(--ink); font-size: 14.5px; font-weight: 600; cursor: pointer;
+}
+.k-sched-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Says WHY, rather than showing a dead button. */
+.k-sched-locked { flex-shrink: 0; max-width: 128px; text-align: right; font-size: 12px; line-height: 1.35; color: var(--ink-3); }
