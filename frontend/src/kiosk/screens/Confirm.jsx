@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '../../components/Icon';
 import QrCode from '../components/QrCode';
-import { trackUrl } from '../../lib/publicUrl';
+import { trackUrl, seriesUrl } from '../../lib/publicUrl';
 
 const RESET_SECONDS = 45;
 
@@ -29,6 +29,40 @@ export default function Confirm({ confirmedBooking, onTrack, onReset }) {
   }, []);
 
   if (!confirmedBooking) return null;
+
+  // A recurring ride confirms differently, because there is nothing single to
+  // confirm: no reference, no one pickup time, no fare of its own. What the
+  // rider needs is the LINK — it is the only way back to their schedule, and
+  // the only way to call off a day.
+  if (confirmedBooking.isSeries) {
+    const url = seriesUrl(confirmedBooking.id);
+    return (
+      <div className="kiosk-root">
+        <section className="kiosk-screen k-confirm">
+          <div className="k-confirm-wrap">
+            <div className="k-check-ring">
+              <Icon name="check" size={48} color="var(--paper)" stroke={2.5} />
+            </div>
+            <h1>Your regular ride is set</h1>
+            <p className="k-confirm-sub">
+              {confirmedBooking.created} rides booked, through{' '}
+              {new Date(confirmedBooking.through + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}.
+              We keep booking two weeks ahead.
+            </p>
+            <div className="k-qr-block">
+              <QrCode value={url} />
+              <h2>Scan to keep your schedule</h2>
+              <p>
+                Save this link. It is how you skip a day you are not working —
+                free, up to an hour before pickup.
+              </p>
+            </div>
+            <button className="k-next-btn" onClick={onReset}>Done</button>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="kiosk-root">

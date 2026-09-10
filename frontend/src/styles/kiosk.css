@@ -509,3 +509,28 @@
 .k-sched-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Says WHY, rather than showing a dead button. */
 .k-sched-locked { flex-shrink: 0; max-width: 128px; text-align: right; font-size: 12px; line-height: 1.35; color: var(--ink-3); }
+
+/* "Make this a regular ride" — the commuter entry point, directly under the
+   date and time because that is the moment the question makes sense. */
+.k-repeat { margin-top: 18px; padding: 14px; border: 1.5px solid var(--line-2); border-radius: 16px; }
+.k-repeat--on { border-color: var(--accent); background: rgba(62, 224, 160, 0.06); }
+.k-repeat-head { display: flex; align-items: center; gap: 14px; }
+.k-repeat-text { flex: 1; min-width: 0; }
+.k-repeat-title { font-size: 15.5px; font-weight: 700; color: var(--ink); }
+.k-repeat-sub { font-size: 13px; color: var(--ink-3); margin-top: 2px; }
+/* Sized to its label: .btn is width:100% and would eat the row. */
+.k-repeat-btn {
+  flex-shrink: 0; width: auto; min-width: 88px; min-height: 44px; padding: 11px 16px;
+  border-radius: 12px; border: 1.5px solid var(--line-2); background: transparent;
+  color: var(--ink); font-size: 14.5px; font-weight: 600; cursor: pointer;
+}
+/* Chips, not a range. Working weeks are not contiguous — Monday, Wednesday,
+   Thursday, Friday cannot be expressed as "Mon to Fri". */
+.k-repeat-days { display: flex; gap: 8px; margin-top: 14px; }
+.k-repeat-day {
+  flex: 1; min-width: 0; min-height: 46px; border-radius: 12px;
+  border: 1.5px solid var(--line-2); background: var(--card);
+  color: var(--ink-3); font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.k-repeat-day--on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.k-repeat-note { font-size: 12.5px; line-height: 1.45; color: var(--ink-3); margin-top: 12px; }

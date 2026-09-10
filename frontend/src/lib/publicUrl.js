@@ -12,3 +12,7 @@ export const PUBLIC_ORIGIN = 'https://www.roverzoom.com';
 // A private tracking deep-link. `token` is the booking's UUID id (unguessable),
 // not the short human reference — so only whoever holds the link can view the ride.
 export const trackUrl = (token) => `${PUBLIC_ORIGIN}/?track=${encodeURIComponent(token)}`;
+
+// A commuter's own schedule. Same shape as trackUrl: the id IS the token, so
+// the link works from any device with no account behind it.
+export const seriesUrl = (seriesId) => `${PUBLIC_ORIGIN}/?series=${encodeURIComponent(seriesId)}`;

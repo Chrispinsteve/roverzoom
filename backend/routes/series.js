@@ -1,6 +1,6 @@
 const express = require('express');
 const supabase = require('../db/supabase');
-const { canSkip, canUnskip, SKIP_REASON, SKIP_CUTOFF_MINUTES } = require('../services/rideSeries');
+const { canSkip, canUnskip, SKIP_REASON, SKIP_CUTOFF_MINUTES, generateForSeries } = require('../services/rideSeries');
 
 const router = express.Router();
 
@@ -25,6 +25,48 @@ async function loadSeries(id) {
   const { data } = await supabase.from('ride_series').select(RIDER_FIELDS).eq('id', id).maybeSingle();
   return data || null;
 }
+
+// POST /api/series — create a recurring ride and materialise the first rides.
+//
+// Separate from POST /api/bookings rather than a flag on it. A series is not a
+// booking with an extra field: it has no single scheduled_at, no reference, and
+// no fare of its own — it is the thing that PRODUCES those. Folding it into the
+// booking endpoint would mean every caller of that endpoint learning which half
+// of the payload applies.
+router.post('/', async (req, res) => {
+  const { rider, pickup, dropoff, daysOfWeek, pickupTime, startsOn, paymentMethod } = req.body || {};
+
+  if (!rider?.name || !rider?.phone) return res.status(400).json({ error: 'Name and phone are required.' });
+  if (!pickup?.address || !dropoff?.address) return res.status(400).json({ error: 'Pickup and destination are required.' });
+  const days = Array.isArray(daysOfWeek) ? [...new Set(daysOfWeek.map(Number))].filter((d) => d >= 0 && d <= 6) : [];
+  if (!days.length) return res.status(400).json({ error: 'Choose at least one day.' });
+  if (!/^\d{2}:\d{2}$/.test(String(pickupTime || ''))) return res.status(400).json({ error: 'A pickup time is required.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(startsOn || ''))) return res.status(400).json({ error: 'A start date is required.' });
+
+  const { data: series, error } = await supabase.from('ride_series').insert({
+    rider_name: rider.name, rider_phone: rider.phone, rider_email: rider.email || null,
+    pickup_address: pickup.address, pickup_lat: pickup.lat ?? null, pickup_lng: pickup.lng ?? null,
+    dropoff_address: dropoff.address, dropoff_lat: dropoff.lat ?? null, dropoff_lng: dropoff.lng ?? null,
+    days_of_week: days.sort(), pickup_time: pickupTime, starts_on: startsOn,
+    // Cash until the off-session card work exists. A card series would create
+    // rides nobody can charge without the rider present, which is worse than
+    // saying plainly that we take payment per ride for now.
+    payment_method: paymentMethod === 'card' ? 'card' : 'cash',
+    status: 'active',
+  }).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Generate immediately: a rider who has just set this up should see their
+  // schedule, not an empty page waiting on a cron that may be hours away.
+  const gen = await generateForSeries(series);
+  if (gen.error) {
+    // Nothing was materialised, so the series would sit inert and confusing.
+    await supabase.from('ride_series').delete().eq('id', series.id);
+    return res.status(400).json({ error: gen.error });
+  }
+
+  res.status(201).json({ id: series.id, created: gen.created, through: gen.through });
+});
 
 // GET /api/series/:id — the schedule, and which days are already off.
 router.get('/:id', async (req, res) => {

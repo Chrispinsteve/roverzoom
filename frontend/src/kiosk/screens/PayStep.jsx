@@ -27,6 +27,31 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack, step =
     api.getPaymentsConfig().then(setConfig).catch(() => setConfig({ cardEnabled: false, zelle: null }));
   }, []);
 
+  // A recurring ride creates a SERIES, which then produces the bookings.
+  //
+  // Not a flag on createBooking: a series has no single scheduled_at, no
+  // reference and no fare of its own — it is the thing that produces those.
+  // The server materialises the first fortnight immediately, so the rider
+  // lands on a schedule with rides in it rather than an empty page waiting
+  // on a job that may be hours away.
+  const createSeriesOnce = async () => {
+    if (pendingBooking) return pendingBooking;
+    const [hh, mm] = combineDayTime(booking.dayIso, booking.timeLabel)
+      .toTimeString().slice(0, 5).split(':');
+    const result = await api.createSeries({
+      rider: { name: booking.name, phone: booking.phone, email: (booking.email || '').trim() || undefined },
+      pickup: booking.pickup,
+      dropoff: booking.dropoff,
+      daysOfWeek: booking.repeat.days,
+      pickupTime: `${hh}:${mm}`,
+      startsOn: String(booking.dayIso).slice(0, 10),
+      paymentMethod: booking.payment,
+    });
+    const shaped = { ...result, isSeries: true };
+    setPendingBooking(shaped);
+    return shaped;
+  };
+
   const createBookingOnce = async () => {
     if (pendingBooking) return pendingBooking;
     const scheduledAt = combineDayTime(booking.dayIso, booking.timeLabel).toISOString();
@@ -60,8 +85,12 @@ export default function PayStep({ booking, onChange, onConfirmed, onBack, step =
     setSubmitting(true);
     setError('');
     try {
-      const result = await createBookingOnce();
-      if (booking.payment !== 'card') {
+      const recurring = Boolean(booking.repeat?.on && booking.repeat?.days?.length);
+      const result = recurring ? await createSeriesOnce() : await createBookingOnce();
+      // A series has no PaymentIntent of its own — each ride it produces is
+      // billed on its own terms. Until off-session card charging exists, that
+      // means the rider settles per ride, so there is nothing to collect here.
+      if (recurring || booking.payment !== 'card') {
         onConfirmed({ ...result, paymentsConfig: config });
         return;
       }

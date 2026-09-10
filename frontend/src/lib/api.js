@@ -36,6 +36,7 @@ export const api = {
 
   // Recurring rides, managed from a token link. The series id IS the token —
   // no account, same trust model as the tracking link.
+  createSeries: (payload) => req('/series', { method: 'POST', body: JSON.stringify(payload) }),
   getSeries: (id) => req(`/series/${encodeURIComponent(id)}`),
   skipSeriesDate: (id, date) =>
     req(`/series/${encodeURIComponent(id)}/skip`, { method: 'POST', body: JSON.stringify({ date }) }),

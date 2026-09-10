@@ -19,6 +19,7 @@ const EMPTY_BOOKING = {
   quote: null,
   name: '', phoneDigits: '', phone: '', email: '',
   flight: null,
+  repeat: null,
   payment: null,
 };
 

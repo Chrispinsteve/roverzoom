@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import FlowShell from '../components/FlowShell';
+import RepeatPicker from '../components/RepeatPicker';
 import RouteCard from '../components/RouteCard';
 import DestinationChips from '../components/DestinationChips';
 import DateTimeCases from '../components/DateTimeCases';
@@ -90,6 +91,13 @@ export default function RouteStep({ booking, onChange, onNext, onBack, step = 1,
         timeLabel={booking.timeLabel}
         onDayChange={(dayIso, dayLabel) => onChange({ dayIso, dayLabel })}
         onTimeChange={(timeLabel) => onChange({ timeLabel })}
+      />
+
+      <RepeatPicker
+        dayIso={booking.dayIso}
+        timeLabel={booking.timeLabel}
+        repeat={booking.repeat}
+        onChange={(repeat) => onChange({ repeat })}
       />
 
       <PriceSlab
