@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import DriverShell from '../DriverShell';
+import IconField from '../components/IconField';
 import Icon from '../../components/Icon';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -40,18 +41,6 @@ const emptyForm = {
 // host onboarding: small focused steps, a progress bar, warm copy, and a
 // clear "here's what happens next" before the final submit.
 const STEPS = ['identity', 'account', 'vehicle'];
-
-function IconField({ icon, label, ...inputProps }) {
-  return (
-    <div className="field">
-      <label className="label">{label}</label>
-      <div className="drv-input-icon-wrap">
-        <Icon name={icon} size={16} color="var(--ink-4)" />
-        <input className="input drv-input-with-icon" {...inputProps} />
-      </div>
-    </div>
-  );
-}
 
 function StepHero({ icon }) {
   return (

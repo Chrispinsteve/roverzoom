@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import DriverShell from '../DriverShell';
+import GoogleButton from '../components/GoogleButton';
 import { supabase } from '../../lib/supabaseClient';
 
 export default function Login({ onSwitchToSignup, notice }) {
@@ -105,6 +106,11 @@ export default function Login({ onSwitchToSignup, notice }) {
         <button className="btn" disabled={!email.trim() || !password || submitting} onClick={submitLogin} style={{ marginTop: 8 }}>
           {submitting ? 'Logging in…' : 'Log In'}
         </button>
+
+        {/* Beside the password form, never instead of it: every existing driver
+            registered with an email and password and must still get in. */}
+        <div className="drv-or">or</div>
+        <GoogleButton label="Continue with Google" />
 
         <div className="center" style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button onClick={() => setMode('reset')} style={{ color: 'var(--ink-2)', fontSize: 13.5 }}>

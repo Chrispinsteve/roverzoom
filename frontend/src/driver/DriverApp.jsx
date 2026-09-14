@@ -9,6 +9,7 @@ import { driverApi } from '../lib/driverApi';
 import Login from './screens/Login';
 import { AUTH_LANDING, clearAuthLanding } from './lib/authLanding';
 import Signup from './screens/Signup';
+import CompleteProfile from './screens/CompleteProfile';
 import CheckEmail from './screens/CheckEmail';
 import PendingVerification from './screens/PendingVerification';
 import Suspended from './screens/Suspended';
@@ -40,19 +41,6 @@ function AuthLoading() {
     <DriverShell>
       <div className="body">
         <p className="muted center" style={{ marginTop: 60 }}>Loading…</p>
-      </div>
-    </DriverShell>
-  );
-}
-
-function NoDriverProfile({ onLogout }) {
-  return (
-    <DriverShell>
-      <div className="body">
-        <p className="error-text center" style={{ marginTop: 60 }}>
-          We couldn’t find a driver profile for this account. Contact support if this keeps happening.
-        </p>
-        <button className="btn btn-ghost" onClick={onLogout} style={{ marginTop: 16 }}>Log Out</button>
       </div>
     </DriverShell>
   );
@@ -259,7 +247,20 @@ export default function DriverApp({ onExit }) {
     return <Login onSwitchToSignup={() => setAuthStage('signup')} />;
   }
 
-  if (!driver) return <NoDriverProfile onLogout={logout} />;
+  // Authenticated with no driver row. For a Google signup that is the NORMAL
+  // state — the trigger deliberately leaves the row uncreated because Google
+  // supplies no phone — so this asks for what is missing instead of showing the
+  // old "contact support" dead end. It repairs a genuinely broken account too:
+  // the driver fills in their details and the row is created.
+  if (!driver) {
+    return (
+      <CompleteProfile
+        session={session}
+        onDone={setDriverOverride}
+        onLogout={logout}
+      />
+    );
+  }
   if (driver.status === 'pending_verification') return <PendingVerification onLogout={logout} />;
   if (driver.status === 'suspended') return <Suspended onLogout={logout} />;
 

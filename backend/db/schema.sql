@@ -299,6 +299,14 @@ ALTER TABLE drivers ADD CONSTRAINT drivers_auth_user_id_fkey
 CREATE OR REPLACE FUNCTION handle_new_driver()
 RETURNS trigger AS $$
 BEGIN
+  -- OAuth signup (Google): the identity is real but there is no phone yet, and
+  -- drivers.phone is NOT NULL. Raising here would roll back the auth user too,
+  -- so the driver would bounce through Google and land on an error with no
+  -- account. Leave the row to the app's "finish your profile" step instead.
+  IF COALESCE(NEW.raw_user_meta_data->>'phone', '') = '' THEN
+    RETURN NEW;
+  END IF;
+
   INSERT INTO drivers (
     auth_user_id, name, phone, email,
     vehicle_make, vehicle_model, vehicle_color, vehicle_plate, status,

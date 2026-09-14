@@ -1139,3 +1139,9 @@ input, textarea { font-family: inherit; }
 .drv-optin-label { font-size: 14.5px; font-weight: 600; line-height: 1.35; color: var(--ink); }
 .drv-optin-fine { font-size: 12px; line-height: 1.4; color: var(--ink-3); }
 .drv-optin-optional { font-size: 12px; font-weight: 700; color: var(--ink-3); }
+
+/* Google sign-in. Sits beside the email form rather than replacing it: drivers
+   already registered with a password must still be able to use it. */
+.drv-google { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.drv-or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--ink-3); font-size: 12.5px; }
+.drv-or::before, .drv-or::after { content: ''; flex: 1; height: 1px; background: var(--line-2); }
