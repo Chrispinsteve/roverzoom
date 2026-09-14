@@ -82,7 +82,19 @@ export default function CompleteProfile({ session, onDone, onLogout }) {
           Signed in as {session?.user?.email}. We need a few details before you can drive.
         </p>
 
-        <IconField icon="user" label="Full name" value={form.name} onChange={set('name')} placeholder="Alex Rivera" />
+        <IconField
+          icon="user"
+          label="Full name — as it appears on your licence"
+          value={form.name}
+          onChange={set('name')}
+          placeholder="Alex Rivera"
+        />
+        {googleName && form.name === googleName && (
+          <p className="drv-card-sub" style={{ marginTop: -8, marginBottom: 14 }}>
+            From your Google account. Change it if that is not your legal name —
+            riders see it, and it has to match your licence.
+          </p>
+        )}
         <IconField icon="phone" label="Phone number" type="tel" value={form.phone} onChange={set('phone')} placeholder="+1 555 555 0100" />
 
         <label className="drv-optin">
