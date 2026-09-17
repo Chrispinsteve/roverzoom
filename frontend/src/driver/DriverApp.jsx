@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import DriverShell from './DriverShell';
 import { shortAddress } from './lib/address';
 import { useDriverAuth } from './useDriverAuth';
+import useBackGesture from './useBackGesture';
 import { useDriverLocation, useWakeLock } from './useDriverLocation';
 import { GoogleMapsProvider } from '../lib/GoogleMapsProvider';
 import { supabase } from '../lib/supabaseClient';
@@ -124,6 +125,20 @@ export default function DriverApp({ onExit }) {
   // A ride the rider just canceled — drives the blocking popup. seenCanceledRef
   // remembers cancellations already accounted for so we only pop up for NEW ones.
   const [canceledNotice, setCanceledNotice] = useState(null);
+
+  // Make the device Back button — and the iOS left-edge swipe, which is how
+  // most people navigate a phone — mean "go back a screen" instead of "leave
+  // the app". Each of these is a screen a driver can open and should be able to
+  // close the same way they close anything else.
+  //
+  // Deliberately NOT applied to the active-trip screens. A driver mid-ride
+  // swiping back should not be able to navigate out of the trip they are
+  // driving; that flow advances only through its own explicit buttons.
+  useBackGesture(Boolean(viewingBooking), () => setViewingBooking(null));
+  useBackGesture(Boolean(justCompleted), () => { setJustCompleted(null); setTab('home'); });
+  // From any tab other than home, Back goes home — the behaviour a phone user
+  // expects, and the one that stops Back exiting the app from a tab.
+  useBackGesture(tab !== 'home', () => setTab('home'));
   const seenCanceledRef = useRef(null);
 
   // Capture and upload GPS while a trip is actually underway (en route ->
